@@ -102,6 +102,33 @@ async function syncFromCloud(profile, year) {
   }
 }
 
+// Deep merge: for each top-level key, pick the richer value (more data wins)
+function mergeYearData(local, cloud) {
+  if (!local) return cloud;
+  if (!cloud) return local;
+  const merged = { ...local };
+  for (const key of Object.keys(cloud)) {
+    const lv = local[key], cv = cloud[key];
+    if (lv === undefined || lv === null) {
+      merged[key] = cv;
+    } else if (typeof lv === 'object' && typeof cv === 'object' && !Array.isArray(lv) && !Array.isArray(cv)) {
+      // Merge objects (calendar, fatture, accantonamento, settings): keep keys from both, cloud fills gaps
+      merged[key] = { ...cv, ...lv };
+      // For nested objects like calendar/fatture, also merge at second level
+      for (const subKey of Object.keys(cv)) {
+        if (lv[subKey] === undefined || lv[subKey] === null || lv[subKey] === '' || lv[subKey] === 0) {
+          merged[key][subKey] = cv[subKey];
+        }
+      }
+    } else if (Array.isArray(lv) && Array.isArray(cv)) {
+      // Arrays (budget, spese): keep the longer one
+      merged[key] = lv.length >= cv.length ? lv : cv;
+    }
+    // For primitives: local wins (already in merged)
+  }
+  return merged;
+}
+
 // ── Sync all years for a profile ──
 async function syncAllFromCloud(profile) {
   if (!firebaseReady || !db || !_fs) return;
@@ -115,7 +142,10 @@ async function syncAllFromCloud(profile) {
       const year = docSnap.id;
       const cloudData = docSnap.data();
       const key = 'calcoliPIVA_' + profile + '_' + year;
-      localStorage.setItem(key, JSON.stringify(cloudData));
+      const localRaw = localStorage.getItem(key);
+      const localData = localRaw ? JSON.parse(localRaw) : null;
+      const merged = mergeYearData(localData, cloudData);
+      localStorage.setItem(key, JSON.stringify(merged));
       count++;
     });
 
