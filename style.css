@@ -445,6 +445,9 @@ input:focus { outline: none; border-color: var(--accent); }
   color: var(--text); border-radius: 5px; padding: 4px 6px; font-size: .78rem;
   width: 68px;
 }
+.pag-mese option {
+  background: #2a2a2a; color: #eee;
+}
 .pag-mese:disabled, .pag-anno:disabled, .btn-oggi:disabled {
   opacity: .3; cursor: not-allowed;
 }

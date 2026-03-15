@@ -739,7 +739,18 @@ function getFattureForAccantonamento() {
   const items = [];
   const perc = getEffectiveTaxRate();
 
-  // 1. Fatture emesse quest'anno e pagate quest'anno (o senza data pagamento = assunto quest'anno)
+  // 1. Fatture dall'anno precedente pagate quest'anno (cross-year) — in testa
+  const crossYear = getCrossYearInvoices();
+  for (const inv of crossYear) {
+    items.push({
+      label: MONTHS[inv.mese-1] + ' ' + inv.anno + (inv.desc ? ' - ' + inv.desc : ''),
+      mese: inv.mese, anno: inv.anno, importo: inv.importo, rate: perc,
+      isCrossYear: true,
+      key: 'cross_' + inv.anno + '_' + inv.mese + '_' + items.length
+    });
+  }
+
+  // 2. Fatture emesse quest'anno e pagate quest'anno (o senza data pagamento = assunto quest'anno)
   for (let m = 1; m <= 12; m++) {
     for (const f of getFatture(m)) {
       if (f.importo <= 0) continue;
@@ -750,17 +761,6 @@ function getFattureForAccantonamento() {
         key: 'cur_' + m + '_' + items.length // unique key for accantonamento input
       });
     }
-  }
-
-  // 2. Fatture dall'anno precedente pagate quest'anno (cross-year)
-  const crossYear = getCrossYearInvoices();
-  for (const inv of crossYear) {
-    items.push({
-      label: MONTHS[inv.mese-1] + ' ' + inv.anno + (inv.desc ? ' - ' + inv.desc : ''),
-      mese: inv.mese, anno: inv.anno, importo: inv.importo, rate: perc,
-      isCrossYear: true,
-      key: 'cross_' + inv.anno + '_' + inv.mese + '_' + items.length
-    });
   }
 
   return items;
