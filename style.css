@@ -487,32 +487,142 @@ input:focus { outline: none; border-color: var(--accent); }
 
 /* ═══════════════════ Mobile ═══════════════════ */
 @media (max-width: 768px) {
+  /* ── Header ── */
   header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
   header h1 { font-size: 1.1rem; width: 100%; }
   .header-right { width: 100%; justify-content: space-between; }
   .profile-badge { font-size: .65rem; padding: 2px 8px; }
-  nav { flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
-  nav button { padding: 10px 14px; font-size: .78rem; }
+
+  /* ── Bottom navbar ── */
+  body { padding-bottom: 68px; }
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    background: var(--surface);
+    border-top: 1px solid rgba(255,255,255,.1);
+    border-bottom: none;
+    box-shadow: 0 -2px 10px rgba(0,0,0,.3);
+    overflow-x: visible;
+  }
+  nav button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px; padding: 8px 2px; font-size: .62rem;
+    border-bottom: none; white-space: normal; text-align: center; line-height: 1.15;
+    min-height: 52px;
+  }
+  nav button.active {
+    border-bottom: none;
+    color: var(--accent);
+    background: rgba(233,69,96,.1);
+  }
+
   .container { padding: 12px 8px; }
   .calc-grid { grid-template-columns: 1fr; gap: 12px; }
   .calendar-grid { grid-template-columns: 1fr; gap: 10px; }
   .panel { padding: 14px 12px; border-radius: 10px; }
 
-  /* Tables: horizontal scroll */
-  .fatture-table, .accant-table, .monthly-breakdown {
+  /* ── Accantonamento table → card layout ── */
+  .accant-table { display: block; overflow-x: visible; }
+  .accant-table thead { display: none; }
+  .accant-table tbody, .accant-table tfoot { display: block; }
+  .accant-table tr {
+    display: block;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+  .accant-table td {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; text-align: right;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    white-space: normal; font-size: .82rem;
+  }
+  .accant-table td:last-child { border-bottom: none; }
+  .accant-table td::before {
+    content: attr(data-label);
+    font-weight: 500; color: var(--text2); font-size: .78rem;
+    text-align: left; flex-shrink: 0; margin-right: 12px;
+  }
+  .accant-table td:first-child {
+    font-weight: 600; font-size: .9rem; color: var(--text);
+    justify-content: flex-start;
+    padding-bottom: 8px; margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .accant-table td:first-child::before { display: none; }
+  .accant-table input[type="number"] { width: 100%; max-width: 140px; }
+  .accant-table tfoot tr {
+    background: rgba(74,158,255,.08);
+    border: 1px solid rgba(74,158,255,.15);
+  }
+
+  /* ── Fatture table → card layout ── */
+  .fatture-table { display: block; overflow-x: visible; }
+  .fatture-table thead { display: none; }
+  .fatture-table tbody, .fatture-table tfoot { display: block; }
+  .fatture-table tr {
+    display: block;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+  .fatture-table td {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; text-align: right;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    white-space: normal; font-size: .85rem;
+  }
+  .fatture-table td:last-child { border-bottom: none; }
+  .fatture-table td::before {
+    content: attr(data-label);
+    font-weight: 500; color: var(--text2); font-size: .78rem;
+    text-align: left; flex-shrink: 0; margin-right: 12px;
+  }
+  .fatture-table td:first-child {
+    font-weight: 600; font-size: .95rem; color: var(--accent);
+    justify-content: flex-start;
+    padding-bottom: 8px; margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .fatture-table td:first-child::before { display: none; }
+  .fatture-table input[type="number"],
+  .fatture-table input[type="text"] {
+    width: 100%; max-width: 180px;
+  }
+  .fatture-table tr.fatt-subrow {
+    margin-top: -8px;
+    border-top-left-radius: 0; border-top-right-radius: 0;
+    border-top: 1px dashed rgba(255,255,255,.1);
+  }
+  .fatture-table tr.fatt-total-row {
+    background: rgba(233,69,96,.06);
+    padding: 8px 14px;
+    border-radius: 0 0 10px 10px;
+    margin-top: -10px;
+  }
+  .fatture-table tr.fatt-total-row td { border-bottom: none; }
+  .fatture-table tr.fatt-total-row td::before { display: none; }
+  .fatture-table tfoot tr {
+    background: rgba(74,158,255,.08);
+    border: 1px solid rgba(74,158,255,.15);
+  }
+
+  /* Fatture payment cell */
+  .pag-cell { flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .pag-mese { width: 70px; font-size: .78rem; }
+  .pag-anno { width: 64px !important; font-size: .78rem; }
+
+  /* Monthly breakdown: horizontal scroll (smaller table) */
+  .monthly-breakdown {
     display: block; overflow-x: auto; -webkit-overflow-scrolling: touch;
     font-size: .78rem;
   }
-  .fatture-table th, .fatture-table td { padding: 6px 8px; white-space: nowrap; }
-  .accant-table th, .accant-table td { padding: 4px 6px; white-space: nowrap; font-size: .75rem; }
-  .accant-table input[type="number"] { width: 80px; }
 
-  /* Fatture payment cell */
-  .pag-cell { flex-wrap: wrap; gap: 3px; }
-  .pag-mese { width: 56px; font-size: .7rem; }
-  .pag-anno { width: 64px !important; font-size: .7rem; }
-
-  /* Budget & Spese: stack on mobile */
+  /* ── Budget & Spese: stack on mobile ── */
   .budget-row, .budget-row.budget-row-5, .budget-header {
     grid-template-columns: 1fr 1fr;
     gap: 6px;
@@ -528,28 +638,42 @@ input:focus { outline: none; border-color: var(--accent); }
     grid-column: 1 / -1;
   }
 
-  /* Donut chart */
+  /* ── Charts ── */
   .chart-container { gap: 16px; }
   .chart-legend-item { font-size: .78rem; gap: 6px; }
   .chart-legend-val { min-width: 80px; }
-
-  /* Mini bars */
   .mini-bars { height: 90px; }
   .mini-bar-label { font-size: .5rem; }
 
-  /* Settings */
+  /* ── Settings ── */
   .settings-group input { width: 100%; }
   .settings-group select { width: 100%; }
-
-  /* Regime selector */
   .regime-selector { flex-wrap: wrap; gap: 6px; }
   .daily-rate-inline { flex-wrap: wrap; }
 
-  /* Status boxes */
+  /* ── Status boxes ── */
   .status-box { flex-direction: column; text-align: center; padding: 12px; }
   .status-icon { font-size: 1.5rem; }
 
-  /* Bar chart */
+  /* ── Bar chart ── */
   .bar-row { font-size: .7rem; }
   .bar-label { width: 40px; font-size: .65rem; }
+
+  /* ── Tap targets & iOS zoom fix ── */
+  .btn-add-fatt, .btn-del-fatt { width: 36px; height: 36px; font-size: 1rem; }
+  .btn-del { width: 36px; height: 36px; }
+  select, input[type="number"], input[type="text"] {
+    min-height: 38px; font-size: 16px;
+  }
+  .year-selector button { width: 38px; height: 38px; }
+}
+
+/* ── Extra small screens ── */
+@media (max-width: 480px) {
+  header h1 { font-size: .95rem; }
+  .container { padding: 8px 4px; }
+  .panel { padding: 10px 8px; }
+  nav button { font-size: .58rem; padding: 6px 1px; }
+  .accant-table td, .fatture-table td { font-size: .8rem; }
+  .accant-table td::before, .fatture-table td::before { font-size: .72rem; }
 }

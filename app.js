@@ -160,10 +160,9 @@ function applySettings() {
   }
   const rid = document.getElementById('settRiduzione');
   if (rid) rid.value = s.riduzione35;
-  const navBtn = document.querySelector('[data-tab="calcolo"]');
-  if (navBtn) navBtn.textContent = s.regime === 'forfettario' ? 'Regime Forfettario' : 'Regime Ordinario';
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
+  if (typeof updateNavLabels === 'function') updateNavLabels();
 }
 
 function saveSetting(key, val) {
@@ -804,23 +803,24 @@ function renderAccantonamento() {
 
     const bgStyle = f.isCrossYear ? ' style="background:rgba(245,166,35,.06)"' : '';
     h += `<tr${bgStyle}>
-      <td style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? ' <span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
-      <td>${fmt(f.importo)}</td>
-      <td style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
-      <td style="color:var(--yellow)">${fmt(dovuto)}</td>
-      <td><input type="number" value="${messo||''}" placeholder="0" step="0.01"
+      <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? ' <span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
+      <td data-label="Lordo">${fmt(f.importo)}</td>
+      <td data-label="Aliq." style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
+      <td data-label="Da accant." style="color:var(--yellow)">${fmt(dovuto)}</td>
+      <td data-label="Accantonato"><input type="number" value="${messo||''}" placeholder="0" step="0.01"
         onchange="data.accantonamento['${accKey}']=parseFloat(this.value)||0;saveData();recalcAll()"></td>
-      <td class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
-      <td style="color:var(--yellow)">${fmt(cD)}</td><td>${fmt(cM)}</td>
-      <td class="${dc>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${(dc>=0?'+':'')+fmt(dc)}</td></tr>`;
+      <td data-label="Delta" class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
+      <td data-label="Dovuto cum." style="color:var(--yellow)">${fmt(cD)}</td>
+      <td data-label="Accant. cum.">${fmt(cM)}</td>
+      <td data-label="Delta cum." class="${dc>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${(dc>=0?'+':'')+fmt(dc)}</td></tr>`;
   }
 
   const totLordo = fatture.reduce((s, f) => s + f.importo, 0);
   const fd = cM - cD;
-  h += `</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>${fmt(totLordo)}</td><td></td>
-    <td style="color:var(--yellow)">${fmt(cD)}</td><td>${fmt(cM)}</td>
-    <td class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
-    <td></td><td></td><td></td></tr></tfoot></table>`;
+  h += `</tbody><tfoot><tr><td data-label="Fattura" style="text-align:left">Totale</td><td data-label="Lordo">${fmt(totLordo)}</td><td data-label="Aliq."></td>
+    <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td><td data-label="Accantonato">${fmt(cM)}</td>
+    <td data-label="Delta" class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
+    <td data-label="Dovuto cum."></td><td data-label="Accant. cum."></td><td data-label="Delta cum."></td></tr></tfoot></table>`;
 
   if (cM > 0 || cD > 0) {
     if (fd >= 0) {
@@ -913,14 +913,14 @@ function renderAccantonamento() {
       const rate = getEffectiveTaxRateForYear(d.pagAnno);
       const accant = d.importo * rate;
       totDef += accant;
-      h += `<tr><td style="text-align:left">${MONTHS[d.mese-1]}${d.desc ? ' - ' + d.desc : ''}</td>
-        <td>${fmt(d.importo)}</td>
-        <td>${d.pagAnno}</td>
-        <td style="color:var(--accent)">${fmtPct(rate)}</td>
-        <td style="color:var(--yellow);font-weight:600">${fmt(accant)}</td></tr>`;
+      h += `<tr><td data-label="Fattura" style="text-align:left">${MONTHS[d.mese-1]}${d.desc ? ' - ' + d.desc : ''}</td>
+        <td data-label="Importo">${fmt(d.importo)}</td>
+        <td data-label="Anno incasso">${d.pagAnno}</td>
+        <td data-label="Aliquota" style="color:var(--accent)">${fmtPct(rate)}</td>
+        <td data-label="Da accantonare" style="color:var(--yellow);font-weight:600">${fmt(accant)}</td></tr>`;
     }
-    h += `</tbody><tfoot><tr><td style="text-align:left">Totale</td><td></td><td></td><td></td>
-      <td style="color:var(--yellow);font-weight:600">${fmt(totDef)}</td></tr></tfoot></table></div>`;
+    h += `</tbody><tfoot><tr><td data-label="Fattura" style="text-align:left">Totale</td><td data-label="Importo"></td><td data-label="Anno incasso"></td><td data-label="Aliquota"></td>
+      <td data-label="Da accantonare" style="color:var(--yellow);font-weight:600">${fmt(totDef)}</td></tr></tfoot></table></div>`;
   }
 
   el.innerHTML = h;
@@ -935,10 +935,16 @@ function openPicker(m, d, evt) {
   const popup = document.getElementById('pickerPopup');
   const overlay = document.getElementById('pickerOverlay');
   const rect = evt.target.getBoundingClientRect();
-  let left = rect.right + 6, top = rect.top;
-  if (left + 170 > window.innerWidth) left = rect.left - 170;
-  if (top + 300 > window.innerHeight) top = window.innerHeight - 310;
-  popup.style.left = left + 'px'; popup.style.top = top + 'px';
+  if (window.innerWidth <= 768) {
+    popup.style.left = '50%'; popup.style.top = '50%';
+    popup.style.transform = 'translate(-50%, -50%)';
+  } else {
+    popup.style.transform = '';
+    let left = rect.right + 6, top = rect.top;
+    if (left + 170 > window.innerWidth) left = rect.left - 170;
+    if (top + 300 > window.innerHeight) top = window.innerHeight - 310;
+    popup.style.left = left + 'px'; popup.style.top = top + 'px';
+  }
   const current = getActivity(m, d);
   let html = '';
   for (const [code, info] of Object.entries(ACTIVITY_INFO)) {
@@ -1029,13 +1035,13 @@ function renderFatture() {
       const hasPag = f.pagMese && f.pagAnno;
       const isDiffYear = hasPag && f.pagAnno !== currentYear;
 
-      h += `<tr><td>${MONTHS[m-1]}</td>
-        <td><input type="number" value="${f.importo||''}" placeholder="—"
+      h += `<tr><td data-label="Mese">${MONTHS[m-1]}</td>
+        <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
           onchange="setFatturaImporto(${m},0,this.value);recalcAll()" style="width:110px"></td>
-        <td><input type="text" value="${f.desc||''}" placeholder="—"
+        <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
           onchange="setFatturaDesc(${m},0,this.value)" style="width:90px;text-align:left;font-size:.78rem"></td>
-        <td style="color:var(--text2)">${fmt(stim)}</td>
-        <td><div class="pag-cell">
+        <td data-label="Stimato" style="color:var(--text2)">${fmt(stim)}</td>
+        <td data-label="Tassato nel"><div class="pag-cell">
           <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
             <option value="">Mese...</option>
             ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
@@ -1045,7 +1051,7 @@ function renderFatture() {
           <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
           ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
         </div></td>
-        <td><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura">+</button></td></tr>`;
+        <td data-label=""><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura">+</button></td></tr>`;
     } else {
       for (let fi = 0; fi < nFatt; fi++) {
         const f = fatture[fi];
@@ -1055,13 +1061,13 @@ function renderFatture() {
         const isLast = fi === nFatt - 1;
 
         h += `<tr class="${!isFirst?'fatt-subrow':''}">
-          <td>${isFirst ? MONTHS[m-1] : ''}</td>
-          <td><input type="number" value="${f.importo||''}" placeholder="—"
+          <td data-label="Mese">${isFirst ? MONTHS[m-1] : ''}</td>
+          <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
             onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" style="width:110px"></td>
-          <td><input type="text" value="${f.desc||''}" placeholder="—"
+          <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
             onchange="setFatturaDesc(${m},${fi},this.value)" style="width:90px;text-align:left;font-size:.78rem"></td>
-          <td style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
-          <td><div class="pag-cell">
+          <td data-label="Stimato" style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
+          <td data-label="Tassato nel"><div class="pag-cell">
             <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
               <option value="">Mese...</option>
               ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
@@ -1071,18 +1077,18 @@ function renderFatture() {
             <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
             ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
           </div></td>
-          <td class="fatt-actions">
+          <td data-label="" class="fatt-actions">
             ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi">+</button>` : ''}
             <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi">&times;</button>
           </td></tr>`;
       }
-      h += `<tr class="fatt-total-row"><td></td>
-        <td colspan="2" style="font-weight:600;font-size:.78rem;color:var(--accent)">Totale mese: ${fmt(totalFatt)}</td>
-        <td></td><td></td><td></td></tr>`;
+      h += `<tr class="fatt-total-row"><td data-label=""></td>
+        <td data-label="" colspan="2" style="font-weight:600;font-size:.78rem;color:var(--accent)">Totale mese: ${fmt(totalFatt)}</td>
+        <td data-label=""></td><td data-label=""></td><td data-label=""></td></tr>`;
     }
   }
 
-  h += `</tbody><tfoot><tr><td>Totale</td><td colspan="2">${fmt(tF)}</td><td>${fmt(tS)}</td><td></td><td></td></tr></tfoot>`;
+  h += `</tbody><tfoot><tr><td data-label="Mese">Totale</td><td data-label="Importo" colspan="2">${fmt(tF)}</td><td data-label="Stimato">${fmt(tS)}</td><td data-label=""></td><td data-label=""></td></tr></tfoot>`;
   table.innerHTML = h;
 
   // Cross-year invoices info
@@ -1402,7 +1408,34 @@ document.getElementById('nav').addEventListener('click', e => {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   e.target.classList.add('active');
   document.getElementById('tab-' + e.target.dataset.tab).classList.add('active');
+  window.scrollTo(0, 0);
 });
+
+// ═══════════════════ Mobile nav labels ═══════════════════
+const NAV_LABELS = {
+  calcolo:        { full: null, short: 'Regime' }, // full set by applySettings
+  accantonamento: { full: 'Tasse Accantonate', short: 'Tasse' },
+  calendar:       { full: 'Calendario', short: 'Calend.' },
+  fatture:        { full: 'Fatture', short: 'Fatture' },
+  budget:         { full: 'Budget', short: 'Budget' },
+  spese:          { full: 'Spese', short: 'Spese' },
+  settings:       { full: 'Impostazioni', short: 'Impost.' }
+};
+function updateNavLabels() {
+  const mobile = window.innerWidth <= 768;
+  document.querySelectorAll('nav button[data-tab]').forEach(btn => {
+    const tab = btn.dataset.tab;
+    const lbl = NAV_LABELS[tab];
+    if (!lbl) return;
+    if (tab === 'calcolo') {
+      const regime = S().regime === 'forfettario' ? 'Forfettario' : 'Ordinario';
+      btn.textContent = mobile ? 'Regime' : 'Regime ' + regime;
+    } else {
+      btn.textContent = mobile ? lbl.short : lbl.full;
+    }
+  });
+}
+window.addEventListener('resize', updateNavLabels);
 
 // ═══════════════════ Export / Import ═══════════════════
 function exportData() {
