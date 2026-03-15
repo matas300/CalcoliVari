@@ -557,20 +557,7 @@ function renderCalcoloForfettario(h, el) {
 
   // Quick budget summary
   h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
-  const netM = netto / 12;
-  let totB = 0;
-  for (const b of (data.budget || [])) totB += parseFloat(b.importo) || 0;
-  const rimB = netM - totB;
-  h += row('Netto mensile', fmt(netM));
-  if (data.budget && data.budget.length > 0) {
-    for (const b of data.budget) {
-      const v = parseFloat(b.importo) || 0;
-      if (v > 0) h += row(b.nome || 'Voce', fmt(v));
-    }
-    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
-  } else {
-    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
-  }
+  h += buildBudgetSummary();
   h += `</div>`;
 
   h += buildMonthlyTable(perc);
@@ -625,25 +612,40 @@ function renderCalcoloOrdinario(h, el) {
 
   // Quick budget summary
   h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
-  const netM = c.netto / 12;
-  let totB = 0;
-  for (const b of (data.budget || [])) totB += parseFloat(b.importo) || 0;
-  const rimB = netM - totB;
-  h += row('Netto mensile', fmt(netM));
-  if (data.budget && data.budget.length > 0) {
-    for (const b of data.budget) {
-      const v = parseFloat(b.importo) || 0;
-      if (v > 0) h += row(b.nome || 'Voce', fmt(v));
-    }
-    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
-  } else {
-    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
-  }
+  h += buildBudgetSummary();
   h += `</div>`;
 
   h += buildMonthlyTable(perc);
 
   el.innerHTML = h;
+}
+
+function buildBudgetSummary() {
+  const base = getBudgetNettoMensile();
+  const netM = base.netto;
+  let h = '';
+  h += row('Netto mensile' + (base.month ? ` (${MONTHS_SHORT[base.month-1]} ${base.year})` : ''), fmt(netM));
+  if (data.budget && data.budget.length > 0) {
+    // Compute auto amounts same as renderBudget
+    let totManual = 0, autoCount = 0;
+    for (const b of data.budget) {
+      if (b.auto && !(parseFloat(b.importo) > 0)) autoCount++;
+      else totManual += parseFloat(b.importo) || 0;
+    }
+    const autoAmount = autoCount > 0 && netM > totManual ? (netM - totManual) / autoCount : 0;
+    let totB = 0;
+    for (const b of data.budget) {
+      const isAuto = b.auto && !(parseFloat(b.importo) > 0);
+      const v = isAuto ? autoAmount : (parseFloat(b.importo) || 0);
+      totB += v;
+      if (v > 0) h += row((b.nome || 'Voce') + (isAuto ? ' (auto)' : ''), fmt(v));
+    }
+    const rimB = netM - totB;
+    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
+  } else {
+    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
+  }
+  return h;
 }
 
 function buildMonthlyTable(perc) {
@@ -1078,13 +1080,79 @@ function setPagOggi(month, idx) {
 }
 
 // ═══════════════════ Budget helpers ═══════════════════
+
+// Find all fatture across years for the current profile, sorted newest first
+function getAllFattureForBudget() {
+  const results = [];
+  const yearsToCheck = [];
+  for (let y = currentYear + 1; y >= currentYear - 5; y--) yearsToCheck.push(y);
+
+  for (const y of yearsToCheck) {
+    const yd = y === currentYear ? data : loadYearData(y);
+    if (!yd || !yd.fatture) continue;
+    const s = yd.settings || getDefaultSettings();
+    const rate = y === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(y);
+
+    for (let m = 12; m >= 1; m--) {
+      const raw = yd.fatture[m];
+      if (!raw) continue;
+      const arr = Array.isArray(raw) ? raw : [raw];
+      const total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
+      if (total > 0) {
+        results.push({ year: y, month: m, lordo: total, netto: total * (1 - rate), rate });
+      }
+    }
+  }
+
+  // Sort: newest first (year desc, month desc)
+  results.sort((a, b) => b.year - a.year || b.month - a.month);
+  return results;
+}
+
+function getBudgetNettoMensile() {
+  const baseY = data.budgetBaseYear;
+  const baseM = data.budgetBaseMonth;
+
+  if (baseY && baseM) {
+    // User selected a specific month
+    const yd = baseY === currentYear ? data : loadYearData(baseY);
+    if (yd && yd.fatture) {
+      const raw = yd.fatture[baseM];
+      const arr = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
+      const total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
+      if (total > 0) {
+        const rate = baseY === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(baseY);
+        return { netto: total * (1 - rate), lordo: total, rate, year: baseY, month: baseM, source: 'manual' };
+      }
+    }
+  }
+
+  // Auto: find latest fattura
+  const all = getAllFattureForBudget();
+  if (all.length > 0) {
+    const latest = all[0];
+    return { netto: latest.netto, lordo: latest.lordo, rate: latest.rate, year: latest.year, month: latest.month, source: 'auto' };
+  }
+
+  // Fallback: annual average
+  const nettoAnnuo = getEffectiveNetto();
+  return { netto: nettoAnnuo / 12, lordo: 0, rate: getEffectiveTaxRate(), year: null, month: null, source: 'media' };
+}
+
+function setBudgetBase(year, month) {
+  data.budgetBaseYear = year ? parseInt(year) : null;
+  data.budgetBaseMonth = month ? parseInt(month) : null;
+  saveData();
+  renderBudget();
+}
+
 function budgetSetImporto(idx, val) {
   data.budget[idx].importo = parseFloat(val) || 0;
   saveData(); renderBudget();
 }
 
 function budgetSetPercent(idx, val) {
-  const nettoMensile = getEffectiveNetto() / 12;
+  const { netto: nettoMensile } = getBudgetNettoMensile();
   const pct = parseFloat(val) || 0;
   data.budget[idx].importo = Math.round(nettoMensile * pct / 100 * 100) / 100;
   saveData(); renderBudget();
@@ -1093,11 +1161,53 @@ function budgetSetPercent(idx, val) {
 // ═══════════════════ Render: Budget ═══════════════════
 function renderBudget() {
   const el = document.getElementById('budgetContent');
-  const nettoAnnuo = getEffectiveNetto();
-  const nettoMensile = nettoAnnuo / 12;
+  const base = getBudgetNettoMensile();
+  const nettoMensile = base.netto;
+  const allFatture = getAllFattureForBudget();
 
-  let h = `<div style="margin-bottom:16px;font-size:.88rem;color:var(--text2)">
-    Netto mensile stimato: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
+  // Budget base selector
+  let h = `<div class="budget-base-selector">
+    <div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">Fattura di riferimento per il budget:</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <select id="budgetBaseYear" onchange="setBudgetBase(this.value, document.getElementById('budgetBaseMonth').value)">
+        <option value="">Auto (ultima)</option>`;
+
+  // Collect available years
+  const availYears = [...new Set(allFatture.map(f => f.year))].sort((a, b) => b - a);
+  for (const y of availYears) {
+    h += `<option value="${y}" ${data.budgetBaseYear === y ? 'selected' : ''}>${y}</option>`;
+  }
+  h += `</select>
+      <select id="budgetBaseMonth" onchange="setBudgetBase(document.getElementById('budgetBaseYear').value, this.value)"
+        ${!data.budgetBaseYear ? 'disabled' : ''}>
+        <option value="">Mese...</option>`;
+  // Show months that have fatture for the selected year (or all if auto)
+  const filterYear = data.budgetBaseYear || (allFatture.length > 0 ? allFatture[0].year : currentYear);
+  const availMonths = allFatture.filter(f => f.year === filterYear).map(f => f.month);
+  for (let m = 1; m <= 12; m++) {
+    const hasFatt = availMonths.includes(m);
+    if (hasFatt) {
+      const fatt = allFatture.find(f => f.year === filterYear && f.month === m);
+      h += `<option value="${m}" ${data.budgetBaseMonth === m ? 'selected' : ''}>${MONTHS_SHORT[m-1]} — ${fmt(fatt.lordo)}</option>`;
+    }
+  }
+  h += `</select>`;
+
+  // Show current base info
+  if (base.month) {
+    h += `<span style="font-size:.82rem;color:var(--text2)">
+      ${MONTHS_SHORT[base.month-1]} ${base.year}: ${fmt(base.lordo)} lordo
+      &rarr; <b style="color:var(--green)">${fmt(nettoMensile)}</b> netto
+      <span style="font-size:.72rem">(aliq. ${fmtPct(base.rate)})</span>
+    </span>`;
+  } else {
+    h += `<span style="font-size:.82rem;color:var(--text2)">Media annuale: <b style="color:var(--green)">${fmt(nettoMensile)}</b></span>`;
+  }
+
+  h += `</div></div>`;
+
+  h += `<div style="margin:16px 0 12px;font-size:.88rem;color:var(--text2)">
+    Netto mensile: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
 
   h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
 
@@ -1138,28 +1248,33 @@ function renderBudget() {
   h += `</div>`;
 
   if (data.budget.length > 0 && nettoMensile > 0) {
+    // Build computed values array (including auto items)
+    const budgetVals = data.budget.map(b => {
+      const isAuto = b.auto && !(parseFloat(b.importo) > 0);
+      return { nome: b.nome, val: isAuto ? autoAmount : (parseFloat(b.importo) || 0), isAuto };
+    });
     const colors = ['#4ecca3','#4a9eff','#f5a623','#e94560','#533483','#e67e22','#2ecc71','#9b59b6','#1abc9c','#e74c3c'];
     h += `<div style="margin-top:20px"><div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">Distribuzione sul netto mensile</div>`;
     h += `<div style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:12px">`;
-    for (let i = 0; i < data.budget.length; i++) {
-      const val = parseFloat(data.budget[i].importo) || 0;
+    for (let i = 0; i < budgetVals.length; i++) {
+      const { val, isAuto } = budgetVals[i];
       if (val <= 0) continue;
       const w = (val / nettoMensile * 100);
-      h += `<div style="width:${w}%;background:${colors[i%colors.length]};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:#000;min-width:2px"
-        title="${data.budget[i].nome}: ${fmt(val)}">${w > 8 ? Math.round(w)+'%' : ''}</div>`;
+      h += `<div style="width:${w}%;background:${colors[i%colors.length]}${isAuto?';opacity:.6':''};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:#000;min-width:2px"
+        title="${budgetVals[i].nome}: ${fmt(val)}${isAuto?' (auto)':''}">${w > 8 ? Math.round(w)+'%' : ''}</div>`;
     }
     if (rimanente > 0) {
       h += `<div style="width:${(rimanente/nettoMensile*100)}%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--text2)">
         ${rimanente/nettoMensile > 0.08 ? Math.round(rimanente/nettoMensile*100)+'%' : ''}</div>`;
     }
     h += `</div>`;
-    for (let i = 0; i < data.budget.length; i++) {
-      const val = parseFloat(data.budget[i].importo) || 0;
+    for (let i = 0; i < budgetVals.length; i++) {
+      const { val, nome, isAuto } = budgetVals[i];
       if (val <= 0) continue;
       const pct = (val / nettoMensile * 100).toFixed(1);
       h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px">
-        <span style="width:12px;height:12px;border-radius:3px;background:${colors[i%colors.length]};flex-shrink:0"></span>
-        <span style="color:var(--text2)">${data.budget[i].nome || 'Voce '+(i+1)}</span>
+        <span style="width:12px;height:12px;border-radius:3px;background:${colors[i%colors.length]}${isAuto?';opacity:.6':''};flex-shrink:0"></span>
+        <span style="color:var(--text2)">${nome || 'Voce '+(i+1)}${isAuto?' (auto)':''}</span>
         <span style="margin-left:auto;font-weight:600">${fmt(val)}</span>
         <span style="color:var(--text2);font-size:.75rem">(${pct}%)</span></div>`;
     }

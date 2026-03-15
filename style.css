@@ -399,6 +399,15 @@ input:focus { outline: none; border-color: var(--accent); }
   gap: 8px; font-size: .8rem; color: var(--text2); font-weight: 600;
   padding: 6px 0; border-bottom: 2px solid rgba(255,255,255,.1);
 }
+.budget-base-selector {
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;
+}
+.budget-base-selector select {
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+  color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: .82rem;
+}
+.budget-base-selector select:disabled { opacity: .4; }
 .budget-auto-check {
   display: flex; align-items: center; justify-content: center;
 }
