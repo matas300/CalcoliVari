@@ -741,24 +741,28 @@ function getFattureForAccantonamento() {
 
   // 1. Fatture dall'anno precedente pagate quest'anno (cross-year) — in testa
   const crossYear = getCrossYearInvoices();
+  const crossCounts = {}; // per-month index for stable keys
   for (const inv of crossYear) {
+    const idx = crossCounts[inv.mese] = (crossCounts[inv.mese] || 0) + 1;
     items.push({
       label: MONTHS[inv.mese-1] + ' ' + inv.anno + (inv.desc ? ' - ' + inv.desc : ''),
       mese: inv.mese, anno: inv.anno, importo: inv.importo, rate: perc,
       isCrossYear: true,
-      key: 'cross_' + inv.anno + '_' + inv.mese + '_' + items.length
+      key: 'cross_' + inv.anno + '_' + inv.mese + '_' + idx
     });
   }
 
   // 2. Fatture emesse quest'anno e pagate quest'anno (o senza data pagamento = assunto quest'anno)
   for (let m = 1; m <= 12; m++) {
+    let idx = 0;
     for (const f of getFatture(m)) {
+      idx++;
       if (f.importo <= 0) continue;
       if (f.pagAnno && f.pagAnno !== currentYear) continue; // deferred to another year
       items.push({
         label: MONTHS[m-1] + (f.desc ? ' - ' + f.desc : ''),
         mese: m, anno: currentYear, importo: f.importo, rate: perc,
-        key: 'cur_' + m + '_' + items.length // unique key for accantonamento input
+        key: 'cur_' + m + '_' + idx // stable key: month + index within month
       });
     }
   }
