@@ -1117,10 +1117,12 @@ function renderFatture() {
         &mdash; Totale: <b>${fmt(defTot)}</b></p></div></div>`;
   }
 
-  const lim = S().limiteForfettario, pct = lim > 0 ? Math.min(tF/lim*100, 100) : 0;
+  const crossTotAll = getCrossYearInvoices().reduce((s, i) => s + i.importo, 0);
+  const tFTotal = tF + crossTotAll; // include cross-year invoices in yearly total
+  const lim = S().limiteForfettario, pct = lim > 0 ? Math.min(tFTotal/lim*100, 100) : 0;
   document.getElementById('incassoSection').innerHTML = crossHtml + `
-    <div class="row" style="margin-top:16px"><label>Fatturato ${currentYear}</label><span class="val">${fmt(tF)}</span></div>
-    <div class="row"><label>Mancante al limite (${fmt(lim)})</label><span class="val">${fmt(lim-tF)}</span></div>
+    <div class="row" style="margin-top:16px"><label>Fatturato ${currentYear}</label><span class="val">${fmt(tFTotal)}</span></div>
+    <div class="row"><label>Mancante al limite (${fmt(lim)})</label><span class="val">${fmt(lim-tFTotal)}</span></div>
     <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--green),${pct>90?'var(--red)':'var(--blue)'})"></div>
     <div class="progress-text">${pct.toFixed(1)}%</div></div>`;
 }
