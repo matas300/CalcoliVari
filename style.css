@@ -390,11 +390,21 @@ input:focus { outline: none; border-color: var(--accent); }
   gap: 8px; align-items: center; padding: 6px 0;
   border-bottom: 1px solid rgba(255,255,255,.05);
 }
+.budget-row.budget-row-5 {
+  grid-template-columns: 2fr 1fr 0.7fr 36px 36px;
+}
 .budget-row input { width: 100%; }
 .budget-header {
-  display: grid; grid-template-columns: 2fr 1fr 0.7fr 40px;
+  display: grid; grid-template-columns: 2fr 1fr 0.7fr 36px 36px;
   gap: 8px; font-size: .8rem; color: var(--text2); font-weight: 600;
   padding: 6px 0; border-bottom: 2px solid rgba(255,255,255,.1);
+}
+.budget-auto-check {
+  display: flex; align-items: center; justify-content: center;
+}
+.budget-auto-check input[type="checkbox"] {
+  width: 16px; height: 16px; cursor: pointer;
+  accent-color: var(--green);
 }
 .budget-bar-track {
   height: 14px; background: rgba(255,255,255,.06); border-radius: 4px;
@@ -440,4 +450,73 @@ input:focus { outline: none; border-color: var(--accent); }
 .btn-oggi:hover:not(:disabled) { opacity: .8; }
 .pag-warn {
   color: var(--yellow); font-size: .72rem; font-weight: 600; white-space: nowrap;
+}
+
+/* ═══════════════════ Mobile ═══════════════════ */
+@media (max-width: 768px) {
+  header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  header h1 { font-size: 1.1rem; width: 100%; }
+  .header-right { width: 100%; justify-content: space-between; }
+  .profile-badge { font-size: .65rem; padding: 2px 8px; }
+  nav { flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  nav button { padding: 10px 14px; font-size: .78rem; }
+  .container { padding: 12px 8px; }
+  .calc-grid { grid-template-columns: 1fr; gap: 12px; }
+  .calendar-grid { grid-template-columns: 1fr; gap: 10px; }
+  .panel { padding: 14px 12px; border-radius: 10px; }
+
+  /* Tables: horizontal scroll */
+  .fatture-table, .accant-table, .monthly-breakdown {
+    display: block; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    font-size: .78rem;
+  }
+  .fatture-table th, .fatture-table td { padding: 6px 8px; white-space: nowrap; }
+  .accant-table th, .accant-table td { padding: 4px 6px; white-space: nowrap; font-size: .75rem; }
+  .accant-table input[type="number"] { width: 80px; }
+
+  /* Fatture payment cell */
+  .pag-cell { flex-wrap: wrap; gap: 3px; }
+  .pag-mese { width: 56px; font-size: .7rem; }
+  .pag-anno { width: 56px !important; font-size: .7rem; }
+
+  /* Budget & Spese: stack on mobile */
+  .budget-row, .budget-row.budget-row-5, .budget-header {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .budget-row input[type="text"], .budget-header span:first-child {
+    grid-column: 1 / -1;
+  }
+  .spese-row, .spese-header {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+  }
+  .spese-row input[type="text"], .spese-header span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Donut chart */
+  .chart-container { gap: 16px; }
+  .chart-legend-item { font-size: .78rem; gap: 6px; }
+  .chart-legend-val { min-width: 80px; }
+
+  /* Mini bars */
+  .mini-bars { height: 90px; }
+  .mini-bar-label { font-size: .5rem; }
+
+  /* Settings */
+  .settings-group input { width: 100%; }
+  .settings-group select { width: 100%; }
+
+  /* Regime selector */
+  .regime-selector { flex-wrap: wrap; gap: 6px; }
+  .daily-rate-inline { flex-wrap: wrap; }
+
+  /* Status boxes */
+  .status-box { flex-direction: column; text-align: center; padding: 12px; }
+  .status-icon { font-size: 1.5rem; }
+
+  /* Bar chart */
+  .bar-row { font-size: .7rem; }
+  .bar-label { width: 40px; font-size: .65rem; }
 }

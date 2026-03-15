@@ -1,8 +1,5 @@
 // ═══════════════════ Firebase Sync Module ═══════════════════
 
-// ── Firebase Configuration ──
-// Incolla qui la tua configurazione Firebase dal Console:
-// https://console.firebase.google.com → Impostazioni progetto → Web app
 const firebaseConfig = {
   apiKey: "AIzaSyDm2r1CayIMZpbUiaZSCia9peZQQeMGqFA",
   authDomain: "calcoli-piva.firebaseapp.com",
@@ -15,38 +12,37 @@ const firebaseConfig = {
 
 let db = null;
 let firebaseReady = false;
-let syncStatusEl = null;
+let _fs = null; // cached firestore module
+let _syncTimer = null;
+
+// ── Sync Status Indicator ──
+function setSyncStatus(status) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const states = {
+    online:   { color: '#4ecca3', title: 'Sincronizzato', text: 'Sync OK' },
+    syncing:  { color: '#f5a623', title: 'Sincronizzazione...', text: 'Sync...' },
+    error:    { color: '#e94560', title: 'Errore sync', text: 'Errore' },
+    offline:  { color: '#aaa',    title: 'Offline', text: 'Offline' },
+    disabled: { color: '#555',    title: 'Firebase non configurato', text: 'No sync' }
+  };
+  const s = states[status] || states.offline;
+  el.innerHTML = `<span class="sync-dot" style="background:${s.color}"></span><span class="sync-text">${s.text}</span>`;
+  el.title = s.title;
+}
 
 // ── Init ──
 async function initFirebase() {
   try {
-    // Check if config is still placeholder
-    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-      console.warn('Firebase: config non configurata, sync disabilitato');
-      setSyncStatus('disabled');
-      return false;
-    }
-
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
-    const { getFirestore, enableIndexedDbPersistence } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    _fs = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
 
     const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-
-    // Enable offline persistence
-    try {
-      await enableIndexedDbPersistence(db);
-    } catch (err) {
-      if (err.code === 'failed-precondition') {
-        console.warn('Firebase: persistence failed (multiple tabs open)');
-      } else if (err.code === 'unimplemented') {
-        console.warn('Firebase: persistence not supported in this browser');
-      }
-    }
+    db = _fs.getFirestore(app);
 
     firebaseReady = true;
     setSyncStatus('online');
-    console.log('Firebase inizializzato');
+    console.log('Firebase inizializzato con successo');
     return true;
   } catch (err) {
     console.error('Firebase init error:', err);
@@ -55,48 +51,50 @@ async function initFirebase() {
   }
 }
 
-// ── Sync Status Indicator ──
-function setSyncStatus(status) {
-  syncStatusEl = syncStatusEl || document.getElementById('syncStatus');
-  if (!syncStatusEl) return;
-
-  const states = {
-    online:   { color: '#4ecca3', title: 'Sincronizzato', text: 'Sync' },
-    syncing:  { color: '#f5a623', title: 'Sincronizzazione...', text: 'Sync...' },
-    error:    { color: '#e94560', title: 'Errore sync', text: 'Errore' },
-    offline:  { color: '#aaa',    title: 'Offline', text: 'Offline' },
-    disabled: { color: '#555',    title: 'Firebase non configurato', text: 'No sync' }
-  };
-
-  const s = states[status] || states.offline;
-  syncStatusEl.innerHTML = `<span class="sync-dot" style="background:${s.color}"></span><span class="sync-text">${s.text}</span>`;
-  syncStatusEl.title = s.title;
+// Clean data for Firestore: strip undefined values (Firestore rejects them)
+function cleanForFirestore(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-// ── Write to Firestore ──
-async function syncToCloud(profile, year, yearData) {
-  if (!firebaseReady || !db) return;
+// ── Write to Firestore (debounced 800ms) ──
+function syncToCloud(profile, year, yearData) {
+  if (!firebaseReady || !db || !_fs) return;
 
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(async () => {
+    try {
+      setSyncStatus('syncing');
+      const docRef = _fs.doc(db, 'profiles', profile, 'years', String(year));
+      await _fs.setDoc(docRef, cleanForFirestore(yearData));
+      setSyncStatus('online');
+      console.log('Sync OK:', profile, year);
+    } catch (err) {
+      console.error('syncToCloud error:', err);
+      setSyncStatus('error');
+    }
+  }, 800);
+}
+
+// ── Force immediate sync (for login/year change) ──
+async function syncToCloudNow(profile, year, yearData) {
+  if (!firebaseReady || !db || !_fs) return;
   try {
     setSyncStatus('syncing');
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    const docRef = doc(db, 'profiles', profile, 'years', String(year));
-    await setDoc(docRef, yearData);
+    const docRef = _fs.doc(db, 'profiles', profile, 'years', String(year));
+    await _fs.setDoc(docRef, cleanForFirestore(yearData));
     setSyncStatus('online');
   } catch (err) {
-    console.error('syncToCloud error:', err);
+    console.error('syncToCloudNow error:', err);
     setSyncStatus('error');
   }
 }
 
 // ── Read from Firestore ──
 async function syncFromCloud(profile, year) {
-  if (!firebaseReady || !db) return null;
-
+  if (!firebaseReady || !db || !_fs) return null;
   try {
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    const docRef = doc(db, 'profiles', profile, 'years', String(year));
-    const snap = await getDoc(docRef);
+    const docRef = _fs.doc(db, 'profiles', profile, 'years', String(year));
+    const snap = await _fs.getDoc(docRef);
     return snap.exists() ? snap.data() : null;
   } catch (err) {
     console.error('syncFromCloud error:', err);
@@ -106,30 +104,52 @@ async function syncFromCloud(profile, year) {
 
 // ── Sync all years for a profile ──
 async function syncAllFromCloud(profile) {
-  if (!firebaseReady || !db) return;
-
+  if (!firebaseReady || !db || !_fs) return;
   try {
     setSyncStatus('syncing');
-    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    const colRef = collection(db, 'profiles', profile, 'years');
-    const snapshot = await getDocs(colRef);
+    const colRef = _fs.collection(db, 'profiles', profile, 'years');
+    const snapshot = await _fs.getDocs(colRef);
 
+    let count = 0;
     snapshot.forEach(docSnap => {
       const year = docSnap.id;
       const cloudData = docSnap.data();
       const key = 'calcoliPIVA_' + profile + '_' + year;
-      const localRaw = localStorage.getItem(key);
-      const localData = localRaw ? JSON.parse(localRaw) : null;
-
-      // Cloud wins if local doesn't exist; otherwise merge (cloud overwrites)
-      if (!localData || JSON.stringify(cloudData) !== JSON.stringify(localData)) {
-        localStorage.setItem(key, JSON.stringify(cloudData));
-      }
+      localStorage.setItem(key, JSON.stringify(cloudData));
+      count++;
     });
 
     setSyncStatus('online');
+    console.log('Download cloud:', count, 'anni per', profile);
+    return count;
   } catch (err) {
     console.error('syncAllFromCloud error:', err);
+    setSyncStatus('error');
+    return 0;
+  }
+}
+
+// ── Upload all local data for a profile to cloud ──
+async function syncAllToCloud(profile) {
+  if (!firebaseReady || !db || !_fs) return;
+  try {
+    setSyncStatus('syncing');
+    let count = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const prefix = 'calcoliPIVA_' + profile + '_';
+      if (key && key.startsWith(prefix)) {
+        const year = key.substring(prefix.length);
+        const yearData = JSON.parse(localStorage.getItem(key));
+        const docRef = _fs.doc(db, 'profiles', profile, 'years', year);
+        await _fs.setDoc(docRef, cleanForFirestore(yearData));
+        count++;
+      }
+    }
+    setSyncStatus('online');
+    console.log('Upload cloud:', count, 'anni per', profile);
+  } catch (err) {
+    console.error('syncAllToCloud error:', err);
     setSyncStatus('error');
   }
 }

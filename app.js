@@ -27,13 +27,18 @@ async function doLogin() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('profileBadge').textContent = profile;
 
-  // Seed Mattia historical data (once)
+  // Seed historical data (once per profile)
   if (profile === 'Mattia') seedMattiaData();
+  if (profile === 'Peru') seedPeruData();
 
   // Init Firebase and sync
   const fbOk = await initFirebase();
   if (fbOk) {
-    await syncAllFromCloud(profile);
+    const cloudCount = await syncAllFromCloud(profile);
+    // If cloud had no data, upload local seed data
+    if (cloudCount === 0) {
+      await syncAllToCloud(profile);
+    }
   }
 
   loadData();
@@ -52,9 +57,16 @@ function checkSession() {
   if (currentProfile) {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('profileBadge').textContent = currentProfile;
-    // Init Firebase in background for returning sessions
+    // Init Firebase in background, then sync cloud → local → refresh UI
     initFirebase().then(ok => {
-      if (ok) syncAllFromCloud(currentProfile).then(() => { loadData(); recalcAll(); });
+      if (ok) {
+        syncAllFromCloud(currentProfile).then(count => {
+          loadData();
+          recalcAll();
+          // Also push any local-only changes to cloud
+          if (typeof syncAllToCloud === 'function') syncAllToCloud(currentProfile);
+        });
+      }
     });
     return true;
   }
@@ -497,17 +509,35 @@ function renderCalcoloForfettario(h, el) {
   h += row('Netto mensile', fmt(netto / 12), '', 'positive');
   h += `<br><div style="font-size:.82rem;color:var(--text2)">% effettiva: <b style="color:var(--accent)">${fmtPct(perc)}</b> &mdash; Netto/giorno: <b style="color:var(--green)">${fmt(s.dailyRate*(1-perc))}</b></div></div>`;
 
-  h += `<div class="panel"><h3>Andamento Mensile</h3>`;
+  h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Contributi INPS (sul ${s.coefficiente}%)</h3>`;
-  if (useR) h += `<div style="font-size:.82rem;color:var(--yellow);margin-bottom:12px">Riduzione 35% attiva</div>`;
+  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">Contributi INPS (sul ${s.coefficiente}%)</div>`;
+  if (useR) h += `<div style="font-size:.78rem;color:var(--yellow);margin-bottom:6px">Riduzione 35% attiva</div>`;
   h += row('Fissi', fmt(useR ? c.cFR : c.cF));
   h += row('Variabili', fmt(useR ? c.cVR : c.cV));
   h += row('Totale annuo', fmt(contrib), 'highlight');
   h += row('Totale mensile', fmt(contrib / 12));
-  h += `<br><div style="font-size:.8rem;color:var(--text2)">${useR?'Senza':'Con'} riduzione: <b>${fmt(useR?c.cT:c.cTR)}</b>/anno</div></div>`;
+  h += `<div style="font-size:.78rem;color:var(--text2);margin-top:4px">${useR?'Senza':'Con'} riduzione: <b>${fmt(useR?c.cT:c.cTR)}</b>/anno</div>`;
+  h += `</div></div>`;
+
+  // Quick budget summary
+  h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
+  const netM = netto / 12;
+  let totB = 0;
+  for (const b of (data.budget || [])) totB += parseFloat(b.importo) || 0;
+  const rimB = netM - totB;
+  h += row('Netto mensile', fmt(netM));
+  if (data.budget && data.budget.length > 0) {
+    for (const b of data.budget) {
+      const v = parseFloat(b.importo) || 0;
+      if (v > 0) h += row(b.nome || 'Voce', fmt(v));
+    }
+    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
+  } else {
+    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
+  }
+  h += `</div>`;
 
   h += buildMonthlyTable(perc);
 
@@ -549,15 +579,32 @@ function renderCalcoloOrdinario(h, el) {
   h += row('Netto mensile', fmt(c.netto / 12), '', 'positive');
   h += `<br><div style="font-size:.82rem;color:var(--text2)">% effettiva: <b style="color:var(--accent)">${fmtPct(perc)}</b></div></div>`;
 
-  h += `<div class="panel"><h3>Andamento Mensile</h3>`;
+  h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Contributi INPS</h3>`;
+  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">Contributi INPS</div>`;
   h += row('Fissi', fmt(c.cF));
   h += row('Variabili', fmt(c.cV));
   h += row('Totale annuo', fmt(c.cT), 'highlight');
   h += row('Totale mensile', fmt(c.cT / 12));
+  h += `</div></div>`;
+
+  // Quick budget summary
+  h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
+  const netM = c.netto / 12;
+  let totB = 0;
+  for (const b of (data.budget || [])) totB += parseFloat(b.importo) || 0;
+  const rimB = netM - totB;
+  h += row('Netto mensile', fmt(netM));
+  if (data.budget && data.budget.length > 0) {
+    for (const b of data.budget) {
+      const v = parseFloat(b.importo) || 0;
+      if (v > 0) h += row(b.nome || 'Voce', fmt(v));
+    }
+    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
+  } else {
+    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
+  }
   h += `</div>`;
 
   h += buildMonthlyTable(perc);
@@ -904,21 +951,32 @@ function renderBudget() {
   let h = `<div style="margin-bottom:16px;font-size:.88rem;color:var(--text2)">
     Netto mensile stimato: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
 
-  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span></span></div>`;
+  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
+
+  // Calculate auto-fill: items with auto=true and no manual importo get the remaining split equally
+  let totManual = 0, autoCount = 0;
+  for (const b of data.budget) {
+    if (b.auto && !(parseFloat(b.importo) > 0)) autoCount++;
+    else totManual += parseFloat(b.importo) || 0;
+  }
+  const autoAmount = autoCount > 0 && nettoMensile > totManual ? (nettoMensile - totManual) / autoCount : 0;
 
   let totBudget = 0;
   for (let i = 0; i < data.budget.length; i++) {
     const b = data.budget[i];
-    const val = parseFloat(b.importo) || 0;
+    const isAuto = b.auto && !(parseFloat(b.importo) > 0);
+    const val = isAuto ? autoAmount : (parseFloat(b.importo) || 0);
     totBudget += val;
     const pct = nettoMensile > 0 ? (val / nettoMensile * 100) : 0;
-    h += `<div class="budget-row">
+    h += `<div class="budget-row budget-row-5">
       <input type="text" value="${b.nome||''}" placeholder="es. Affitto, Cibo..."
         onchange="data.budget[${i}].nome=this.value;saveData();renderBudget()">
-      <input type="number" value="${val||''}" placeholder="0" step="0.01"
+      <input type="number" value="${isAuto?'':val||''}" placeholder="${isAuto?fmt(autoAmount):'0'}" step="0.01"
         onchange="budgetSetImporto(${i},this.value)">
       <input type="number" value="${pct?pct.toFixed(1):''}" placeholder="%" step="0.1" min="0" max="100"
         onchange="budgetSetPercent(${i},this.value)" style="text-align:center">
+      <label class="budget-auto-check"><input type="checkbox" ${b.auto?'checked':''}
+        onchange="data.budget[${i}].auto=this.checked;if(this.checked)data.budget[${i}].importo=0;saveData();renderBudget()"></label>
       <button class="btn-del" onclick="data.budget.splice(${i},1);saveData();renderBudget()">&times;</button>
     </div>`;
   }
@@ -1127,6 +1185,119 @@ function seedMattiaData() {
   localStorage.setItem('calcoliPIVA_Mattia_2026', JSON.stringify(data2026));
 
   console.log('Dati storici Mattia caricati (2024-2026)');
+}
+
+function seedPeruData() {
+  if (localStorage.getItem('calcoliPIVA_Peru_2025')) return;
+
+  // Helper: mark all weekdays in a date range as 'F' (not working P.IVA)
+  function markFerie(year, startM, startD, endM, endD) {
+    const cal = {};
+    const d = new Date(year, startM - 1, startD);
+    const end = new Date(year, endM - 1, endD);
+    while (d <= end) {
+      const dow = d.getDay();
+      const m = d.getMonth() + 1, day = d.getDate();
+      if (dow !== 0 && dow !== 6 && !isHoliday(year, m, day)) {
+        cal[m + '-' + day] = 'F';
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return cal;
+  }
+
+  // ── 2024: Peru started P.IVA Oct 21, regime ordinario ──
+  const cal2024 = markFerie(2024, 1, 1, 10, 20); // Jan 1 - Oct 20: not working
+  cal2024['12-24'] = 'F';
+  cal2024['12-27'] = 'F';
+  cal2024['12-31'] = 'F';
+
+  const data2024 = {
+    settings: {
+      dailyRate: 400, coefficiente: 67, impostaSostitutiva: 15,
+      contribFissi: 4515.43, minimaleInps: 18415, aliqContributi: 24.8,
+      riduzione35: 0, limiteForfettario: 85000, regime: 'ordinario'
+    },
+    fatture: {
+      10: { importo: 3341.38, pagMese: null, pagAnno: null },
+      11: { importo: 7953.04, pagMese: null, pagAnno: null },
+      12: { importo: 2400, pagMese: null, pagAnno: null }
+    },
+    calendar: cal2024,
+    accantonamento: {},
+    budget: [],
+    spese: [
+      { titolo: 'Secretlab', costo: 1210.57, deducibilita: 1, anni: 1 },
+      { titolo: 'ChatGPT', costo: 18.44, deducibilita: 1, anni: 1 },
+      { titolo: 'ChatGPT', costo: 18.44, deducibilita: 1, anni: 1 },
+      { titolo: 'Fiscozen 1', costo: 1082.54, deducibilita: 1, anni: 1 },
+      { titolo: 'Fiscozen 2', costo: 116.46, deducibilita: 1, anni: 1 },
+      { titolo: 'Fiscozen 3', costo: 40, deducibilita: 1, anni: 1 },
+      { titolo: 'Fiscozen 4', costo: 15, deducibilita: 1, anni: 1 },
+      { titolo: 'Fiscozen 5', costo: 200, deducibilita: 1, anni: 1 },
+      { titolo: 'Corso', costo: 120.49, deducibilita: 1, anni: 1 },
+      { titolo: 'Scarlet 2i2', costo: 149.80, deducibilita: 1, anni: 1 },
+      { titolo: 'Cuffie 1', costo: 102.57, deducibilita: 1, anni: 1 },
+      { titolo: 'Cuffie 2', costo: 102.57, deducibilita: 1, anni: 1 },
+      { titolo: 'TP Link', costo: 245.89, deducibilita: 1, anni: 1 },
+      { titolo: 'Cavo DP-TypeC', costo: 13.76, deducibilita: 1, anni: 1 },
+      { titolo: 'Cavi', costo: 7.37, deducibilita: 1, anni: 1 },
+      { titolo: 'Telefono aziendale', costo: 130.94, deducibilita: 1, anni: 1 },
+      { titolo: 'Tasse universitarie', costo: 4000, deducibilita: 1, anni: 1 }
+    ]
+  };
+
+  // ── 2025: forfettario, dailyRate=150 ──
+  const data2025 = {
+    settings: {
+      dailyRate: 150, coefficiente: 67, impostaSostitutiva: 15,
+      contribFissi: 4515.43, minimaleInps: 18415, aliqContributi: 24.8,
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+    },
+    fatture: {
+      1:  { importo: 3000, pagMese: null, pagAnno: null },
+      2:  { importo: 4127, pagMese: null, pagAnno: null },
+      3:  { importo: 3150, pagMese: null, pagAnno: null },
+      4:  { importo: 3150, pagMese: null, pagAnno: null },
+      5:  { importo: 3150, pagMese: null, pagAnno: null },
+      6:  { importo: 3000, pagMese: null, pagAnno: null },
+      12: { importo: 2550, pagMese: null, pagAnno: null }
+    },
+    calendar: {
+      '1-2': 'F',
+      '6-24': 'M',
+      '8-11': 'F', '8-12': 'F', '8-13': 'F', '8-14': 'F',
+      '9-8': 'FS',
+      '9-9': 'F', '9-10': 'F', '9-11': 'F', '9-12': 'F',
+      '12-22': 'F', '12-23': 'F', '12-24': 'F',
+      '12-29': 'F', '12-30': 'F', '12-31': 'F'
+    },
+    accantonamento: {},
+    budget: [],
+    spese: []
+  };
+
+  // ── 2026: forfettario, dailyRate=175 ──
+  const data2026 = {
+    settings: {
+      dailyRate: 175, coefficiente: 67, impostaSostitutiva: 15,
+      contribFissi: 4515.43, minimaleInps: 18415, aliqContributi: 24.8,
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+    },
+    fatture: {
+      1: { importo: 3150, pagMese: null, pagAnno: null }
+    },
+    calendar: {},
+    accantonamento: {},
+    budget: [],
+    spese: []
+  };
+
+  localStorage.setItem('calcoliPIVA_Peru_2024', JSON.stringify(data2024));
+  localStorage.setItem('calcoliPIVA_Peru_2025', JSON.stringify(data2025));
+  localStorage.setItem('calcoliPIVA_Peru_2026', JSON.stringify(data2026));
+
+  console.log('Dati storici Peru caricati (2024-2026)');
 }
 
 // ═══════════════════ Init ═══════════════════
