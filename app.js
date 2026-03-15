@@ -716,51 +716,86 @@ function getEffectiveTaxRateForYear(year) {
 }
 
 // ═══════════════════ Render: Accantonamento ═══════════════════
+// Collect all fatture paid in the current year (only real invoices, no estimates)
+function getFattureForAccantonamento() {
+  const items = [];
+  const perc = getEffectiveTaxRate();
+
+  // 1. Fatture emesse quest'anno e pagate quest'anno (o senza data pagamento = assunto quest'anno)
+  for (let m = 1; m <= 12; m++) {
+    for (const f of getFatture(m)) {
+      if (f.importo <= 0) continue;
+      if (f.pagAnno && f.pagAnno !== currentYear) continue; // deferred to another year
+      items.push({
+        label: MONTHS[m-1] + (f.desc ? ' - ' + f.desc : ''),
+        mese: m, anno: currentYear, importo: f.importo, rate: perc,
+        key: 'cur_' + m + '_' + items.length // unique key for accantonamento input
+      });
+    }
+  }
+
+  // 2. Fatture dall'anno precedente pagate quest'anno (cross-year)
+  const crossYear = getCrossYearInvoices();
+  for (const inv of crossYear) {
+    items.push({
+      label: MONTHS[inv.mese-1] + ' ' + inv.anno + (inv.desc ? ' - ' + inv.desc : ''),
+      mese: inv.mese, anno: inv.anno, importo: inv.importo, rate: perc,
+      isCrossYear: true,
+      key: 'cross_' + inv.anno + '_' + inv.mese + '_' + items.length
+    });
+  }
+
+  return items;
+}
+
 function renderAccantonamento() {
   const el = document.getElementById('accantonamentoGrid');
   const perc = getEffectiveTaxRate();
+  const fatture = getFattureForAccantonamento();
   let h = '';
 
   h += `<div class="panel" style="grid-column:1/-1"><h3>Tasse Accantonate vs Dovute</h3>`;
   h += `<div style="font-size:.82rem;color:var(--text2);margin-bottom:12px">
-    % effettiva: <b style="color:var(--accent)">${fmtPct(perc)}</b> &mdash;
-    Per ogni euro incassato, accantona <b style="color:var(--yellow)">${fmtPct(perc)}</b></div>`;
+    Basato solo su fatture reali pagate nel ${currentYear}. % effettiva: <b style="color:var(--accent)">${fmtPct(perc)}</b></div>`;
+
+  if (fatture.length === 0) {
+    h += `<div style="font-size:.88rem;color:var(--text2);padding:20px;text-align:center">Nessuna fattura pagata nel ${currentYear}.</div>`;
+    h += `</div>`;
+    el.innerHTML = h;
+    return;
+  }
 
   h += `<table class="accant-table"><thead><tr>
-    <th>Mese</th><th>Lordo</th><th>Da accant.</th><th>Accantonato</th>
+    <th>Fattura</th><th>Lordo</th><th>Aliq.</th><th>Da accant.</th><th>Accantonato</th>
     <th>Delta</th><th>Dovuto cum.</th><th>Accant. cum.</th><th>Delta cum.</th>
   </tr></thead><tbody>`;
 
-  let cD = 0, cM = 0; const md = [];
-  for (let m = 1; m <= 12; m++) {
-    const lordo = getMonthEuro(m), dovuto = lordo * perc;
-    const messo = parseFloat(data.accantonamento[m]) || 0;
+  let cD = 0, cM = 0;
+  const md = [];
+  for (const f of fatture) {
+    const dovuto = f.importo * f.rate;
+    const accKey = f.key;
+    const messo = parseFloat(data.accantonamento[accKey]) || 0;
     cD += dovuto; cM += messo;
     const dm = messo - dovuto, dc = cM - cD;
-    md.push({ m, dovuto, messo, dm, cD, cM, dc });
-    h += `<tr><td>${MONTHS[m-1]}</td><td>${fmt(lordo)}</td>
+    md.push({ label: f.label, mese: f.mese, dovuto, messo, dm, cD, cM, dc, importo: f.importo, isCrossYear: f.isCrossYear });
+
+    const bgStyle = f.isCrossYear ? ' style="background:rgba(245,166,35,.06)"' : '';
+    h += `<tr${bgStyle}>
+      <td style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? ' <span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
+      <td>${fmt(f.importo)}</td>
+      <td style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
       <td style="color:var(--yellow)">${fmt(dovuto)}</td>
       <td><input type="number" value="${messo||''}" placeholder="0" step="0.01"
-        onchange="data.accantonamento[${m}]=parseFloat(this.value)||0;saveData();recalcAll()"></td>
+        onchange="data.accantonamento['${accKey}']=parseFloat(this.value)||0;saveData();recalcAll()"></td>
       <td class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
       <td style="color:var(--yellow)">${fmt(cD)}</td><td>${fmt(cM)}</td>
       <td class="${dc>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${(dc>=0?'+':'')+fmt(dc)}</td></tr>`;
   }
 
-  // Cross-year invoices row
-  const crossYear = getCrossYearInvoices();
-  if (crossYear.length > 0) {
-    const crossTot = crossYear.reduce((s, i) => s + i.importo, 0);
-    const crossDovuto = crossTot * perc;
-    cD += crossDovuto;
-    h += `<tr style="background:rgba(245,166,35,.06)"><td style="font-size:.8rem">Fatture ${currentYear-1}</td><td>${fmt(crossTot)}</td>
-      <td style="color:var(--yellow)">${fmt(crossDovuto)}</td><td></td><td></td>
-      <td style="color:var(--yellow)">${fmt(cD)}</td><td>${fmt(cM)}</td>
-      <td class="${(cM-cD)>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${((cM-cD)>=0?'+':'')+fmt(cM-cD)}</td></tr>`;
-  }
-
+  const totLordo = fatture.reduce((s, f) => s + f.importo, 0);
   const fd = cM - cD;
-  h += `</tbody><tfoot><tr><td>Totale</td><td>${fmt(getTotalAnnuo())}</td>
+  h += `</tbody><tfoot><tr><td style="text-align:left">Totale</td><td>${fmt(totLordo)}</td><td></td>
     <td style="color:var(--yellow)">${fmt(cD)}</td><td>${fmt(cM)}</td>
     <td class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
     <td></td><td></td><td></td></tr></tfoot></table>`;
@@ -778,52 +813,62 @@ function renderAccantonamento() {
   }
   h += `</div>`;
 
-  // Bar chart
-  h += `<div class="panel" style="grid-column:1/-1"><h3>Confronto Mensile</h3>`;
-  const mx = Math.max(...md.map(d => Math.max(d.dovuto, d.messo)), 1);
-  h += '<div class="bar-chart">';
-  for (const d of md) {
-    const wD = (d.dovuto/mx*100).toFixed(1), wM = (d.messo/mx*100).toFixed(1);
-    h += `<div class="bar-row"><div class="bar-label">${MONTHS_SHORT[d.m-1]}</div>
-      <div class="bar-track"><div class="bar-fill-dovuto" style="width:${wD}%"></div>
-      <div class="bar-fill-messo ${d.messo>=d.dovuto?'over':'under'}" style="width:${wM}%"></div></div>
-      <div style="width:80px;font-size:.75rem;color:${d.dm>=0?'var(--green)':'var(--red)'};text-align:right">
-        ${d.messo>0||d.dovuto>0?(d.dm>=0?'+':'')+fmt(d.dm):''}</div></div>`;
+  // Bar chart - only fatture with data
+  const mdWithData = md.filter(d => d.dovuto > 0 || d.messo > 0);
+  if (mdWithData.length > 0) {
+    h += `<div class="panel" style="grid-column:1/-1"><h3>Confronto per Fattura</h3>`;
+    const mx = Math.max(...mdWithData.map(d => Math.max(d.dovuto, d.messo)), 1);
+    h += '<div class="bar-chart">';
+    for (const d of mdWithData) {
+      const wD = (d.dovuto/mx*100).toFixed(1), wM = (d.messo/mx*100).toFixed(1);
+      const shortLabel = MONTHS_SHORT[d.mese-1] + (d.isCrossYear ? '*' : '');
+      h += `<div class="bar-row"><div class="bar-label">${shortLabel}</div>
+        <div class="bar-track"><div class="bar-fill-dovuto" style="width:${wD}%"></div>
+        <div class="bar-fill-messo ${d.messo>=d.dovuto?'over':'under'}" style="width:${wM}%"></div></div>
+        <div style="width:80px;font-size:.75rem;color:${d.dm>=0?'var(--green)':'var(--red)'};text-align:right">
+          ${d.messo>0||d.dovuto>0?(d.dm>=0?'+':'')+fmt(d.dm):''}</div></div>`;
+    }
+    h += `<div style="display:flex;gap:16px;margin-top:10px;font-size:.75rem;color:var(--text2)">
+      <span><span style="display:inline-block;width:12px;height:12px;background:rgba(233,69,96,.4);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:var(--green);border-radius:2px;vertical-align:middle;margin-right:4px"></span>OK</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:var(--yellow);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Sotto</span>
+    </div></div></div>`;
   }
-  h += `<div style="display:flex;gap:16px;margin-top:10px;font-size:.75rem;color:var(--text2)">
-    <span><span style="display:inline-block;width:12px;height:12px;background:rgba(233,69,96,.4);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:var(--green);border-radius:2px;vertical-align:middle;margin-right:4px"></span>OK</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:var(--yellow);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Sotto</span>
-  </div></div></div>`;
 
-  // Cumulative
-  h += `<div class="panel" style="grid-column:1/-1"><h3>Andamento Cumulato</h3>`;
-  const mxC = Math.max(cD, cM, 1);
-  const W = 700, H = 200, pL = 10, pR = 10, pT = 10, pB = 30, pW = W-pL-pR, pH = H-pT-pB;
-  let dP = '', mP = '';
-  for (let i = 0; i < md.length; i++) {
-    const x = pL + (i/11)*pW;
-    dP += (i?'L':'M')+x.toFixed(1)+','+(pT+(1-md[i].cD/mxC)*pH).toFixed(1);
-    mP += (i?'L':'M')+x.toFixed(1)+','+(pT+(1-md[i].cM/mxC)*pH).toFixed(1);
+  // Cumulative chart
+  if (md.length > 1) {
+    h += `<div class="panel" style="grid-column:1/-1"><h3>Andamento Cumulato</h3>`;
+    const mxC = Math.max(cD, cM, 1);
+    const W = 700, H = 200, pL = 10, pR = 10, pT = 10, pB = 30, pW = W-pL-pR, pH = H-pT-pB;
+    let dP = '', mP = '';
+    const n = md.length;
+    for (let i = 0; i < n; i++) {
+      const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
+      dP += (i?'L':'M')+x.toFixed(1)+','+(pT+(1-md[i].cD/mxC)*pH).toFixed(1);
+      mP += (i?'L':'M')+x.toFixed(1)+','+(pT+(1-md[i].cM/mxC)*pH).toFixed(1);
+    }
+    h += `<svg width="100%" viewBox="0 0 ${W} ${H}" style="max-width:${W}px">`;
+    for (let i = 0; i <= 4; i++) {
+      const y = pT+(i/4)*pH;
+      h += `<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="rgba(255,255,255,.08)"/>`;
+      h += `<text x="${W-pR+4}" y="${y+4}" fill="#666" font-size="8">${((mxC*(1-i/4))/1000).toFixed(0)}k</text>`;
+    }
+    for (let i = 0; i < n; i++) {
+      const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
+      h += `<text x="${x}" y="${H-8}" fill="#666" font-size="8" text-anchor="middle">${MONTHS_SHORT[md[i].mese-1]}${md[i].isCrossYear?'*':''}</text>`;
+    }
+    h += `<path d="${dP}" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    h += `<path d="${mP}" fill="none" stroke="#4ecca3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    for (let i = 0; i < n; i++) {
+      const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
+      h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="#e94560"/>`;
+      if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="#4ecca3"/>`;
+    }
+    h += `</svg><div style="display:flex;gap:16px;margin-top:8px;font-size:.75rem;color:var(--text2)">
+      <span><span style="display:inline-block;width:16px;height:3px;background:#e94560;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
+      <span><span style="display:inline-block;width:16px;height:3px;background:#4ecca3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
+    </div></div>`;
   }
-  h += `<svg width="100%" viewBox="0 0 ${W} ${H}" style="max-width:${W}px">`;
-  for (let i = 0; i <= 4; i++) {
-    const y = pT+(i/4)*pH;
-    h += `<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="rgba(255,255,255,.08)"/>`;
-    h += `<text x="${W-pR+4}" y="${y+4}" fill="#666" font-size="8">${((mxC*(1-i/4))/1000).toFixed(0)}k</text>`;
-  }
-  for (let i = 0; i < 12; i++) h += `<text x="${pL+(i/11)*pW}" y="${H-8}" fill="#666" font-size="9" text-anchor="middle">${MONTHS_SHORT[i]}</text>`;
-  h += `<path d="${dP}" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-  h += `<path d="${mP}" fill="none" stroke="#4ecca3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-  for (let i = 0; i < md.length; i++) {
-    const x = pL+(i/11)*pW;
-    h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="#e94560"/>`;
-    if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="#4ecca3"/>`;
-  }
-  h += `</svg><div style="display:flex;gap:16px;margin-top:8px;font-size:.75rem;color:var(--text2)">
-    <span><span style="display:inline-block;width:16px;height:3px;background:#e94560;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
-    <span><span style="display:inline-block;width:16px;height:3px;background:#4ecca3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
-  </div></div>`;
 
   // Deferred invoices: show accantonamento with target year's tax rate
   const deferredFatture = [];
@@ -835,9 +880,9 @@ function renderAccantonamento() {
     }
   }
   if (deferredFatture.length > 0) {
-    h += `<div class="panel" style="grid-column:1/-1"><h3>Accantonamento Fatture Differite</h3>`;
+    h += `<div class="panel" style="grid-column:1/-1"><h3>Fatture Differite (tassate in altro anno)</h3>`;
     h += `<div style="font-size:.82rem;color:var(--text2);margin-bottom:12px">
-      Fatture emesse nel ${currentYear} ma incassate in anni futuri. L'aliquota usata e quella stimata dell'anno di incasso.</div>`;
+      Fatture emesse nel ${currentYear} ma incassate in anni futuri. L'aliquota e quella stimata dell'anno di incasso.</div>`;
     h += `<table class="accant-table"><thead><tr>
       <th style="text-align:left">Fattura</th><th>Importo</th><th>Anno incasso</th><th>Aliquota stimata</th><th>Da accantonare</th>
     </tr></thead><tbody>`;
