@@ -114,6 +114,10 @@
         <label>Limite fatturato forfettario (EUR)</label>
         <input type="number" id="settLimite" value="85000" onchange="saveSetting('limiteForfettario', this.value); recalcAll()">
       </div>
+      <div class="settings-group">
+        <label>Giorni medi per incasso fattura</label>
+        <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="saveSetting('giorniIncasso', this.value); recalcAll()">
+      </div>
       <div class="settings-group" style="margin-top:30px">
         <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
         <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--accent2);margin-left:8px">Importa dati</button>

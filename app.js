@@ -110,6 +110,7 @@ function loadData() {
   if (!data.spese) data.spese = [];
   if (data.settings.dailyRate === undefined) data.settings.dailyRate = 315;
   if (data.settings.regime === undefined) data.settings.regime = 'forfettario';
+  if (data.settings.giorniIncasso === undefined) data.settings.giorniIncasso = 30;
   migrateFatture();
   applySettings();
 }
@@ -140,7 +141,8 @@ function getDefaultSettings() {
   return {
     dailyRate: 315, coefficiente: 67, impostaSostitutiva: 15,
     contribFissi: 4515.43, minimaleInps: 18415, aliqContributi: 24.8,
-    riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+    riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+    giorniIncasso: 30
   };
 }
 
@@ -150,7 +152,7 @@ function applySettings() {
     settDailyRate: 'dailyRate', settCoeff: 'coefficiente',
     settImposta: 'impostaSostitutiva', settContribFissi: 'contribFissi',
     settMinimale: 'minimaleInps', settAliqContr: 'aliqContributi',
-    settLimite: 'limiteForfettario'
+    settLimite: 'limiteForfettario', settGiorniIncasso: 'giorniIncasso'
   };
   for (const [id, key] of Object.entries(fields)) {
     const el = document.getElementById(id);
@@ -310,14 +312,28 @@ function getMonthStimato(month) {
   return s.worked * S().dailyRate + s.M * S().dailyRate / 2;
 }
 
+// Check if an estimated invoice for a given month would be paid within the year
+// based on giorniIncasso setting (days from end of month to payment)
+function isEstimatePayableInYear(month) {
+  const giorni = S().giorniIncasso || 30;
+  // Assume invoice is issued at end of the month, paid giorniIncasso days later
+  const lastDay = new Date(currentYear, month, 0); // last day of the month
+  const payDate = new Date(lastDay);
+  payDate.setDate(payDate.getDate() + giorni);
+  return payDate.getFullYear() <= currentYear;
+}
+
 // Get the effective amount for a month considering payment year
 // Sums only fatture paid in current year (or no payment date set)
 // Excludes fatture deferred to another year
+// For estimates (no fattura): excludes if giorniIncasso pushes payment to next year
 function getMonthEuro(month) {
   const fatture = getFatture(month);
   const hasFatture = fatture.some(f => f.importo > 0);
 
   if (!hasFatture) {
+    // No fattura: use calendar estimate, but only if it would be paid this year
+    if (!isEstimatePayableInYear(month)) return 0;
     const s = getMonthStats(month);
     return s.worked * S().dailyRate + s.M * S().dailyRate / 2;
   }
@@ -660,7 +676,9 @@ function buildMonthlyTable(perc) {
     const tax = inc * perc, net = inc - tax;
     tI += inc; tN += net; tT += tax;
     let src = ff ? '<span style="color:var(--green);font-size:.75rem">Fattura</span>' : '<span style="color:var(--text2);font-size:.75rem">Stimato</span>';
-    if (ff && nDiff > 0) {
+    if (!ff && !isEstimatePayableInYear(m)) {
+      src = `<span style="color:var(--text2);font-size:.7rem">Oltre ${S().giorniIncasso}gg</span>`;
+    } else if (ff && nDiff > 0) {
       if (nDiff === nFatt) {
         src = `<span style="color:var(--yellow);font-size:.7rem">Fatt. differite</span>`;
       } else {
@@ -962,6 +980,8 @@ function renderCalendar() {
     if (ff) {
       const color = nDiff === nFattAtt ? 'var(--yellow)' : 'var(--green)';
       fattTag = ` <span style="font-size:.65rem;color:${color}">(${nFattAtt > 1 ? nFattAtt + ' fatt.' : 'fatt.'}${nDiff > 0 ? ' ' + nDiff + ' diff.' : ''})</span>`;
+    } else if (!isEstimatePayableInYear(m)) {
+      fattTag = ` <span style="font-size:.6rem;color:var(--text2)">(oltre ${S().giorniIncasso}gg)</span>`;
     }
     h += `<div class="month-card"><div class="month-header">${MONTHS[m-1]}
       <span class="month-total">${fmt(euro)}${fattTag}</span></div>`;
@@ -1017,7 +1037,7 @@ function renderFatture() {
             ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
           </select>
           <input type="number" class="pag-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-            onchange="setPagAnno(${m},0,this.value)" style="width:60px" ${f.importo<=0?'disabled':''}>
+            onchange="setPagAnno(${m},0,this.value)" style="width:74px" ${f.importo<=0?'disabled':''}>
           <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
           ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
         </div></td>
@@ -1043,7 +1063,7 @@ function renderFatture() {
               ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
             </select>
             <input type="number" class="pag-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-              onchange="setPagAnno(${m},${fi},this.value)" style="width:60px" ${f.importo<=0?'disabled':''}>
+              onchange="setPagAnno(${m},${fi},this.value)" style="width:74px" ${f.importo<=0?'disabled':''}>
             <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
             ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
           </div></td>

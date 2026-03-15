@@ -507,7 +507,7 @@ input:focus { outline: none; border-color: var(--accent); }
   /* Fatture payment cell */
   .pag-cell { flex-wrap: wrap; gap: 3px; }
   .pag-mese { width: 56px; font-size: .7rem; }
-  .pag-anno { width: 56px !important; font-size: .7rem; }
+  .pag-anno { width: 64px !important; font-size: .7rem; }
 
   /* Budget & Spese: stack on mobile */
   .budget-row, .budget-row.budget-row-5, .budget-header {
