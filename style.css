@@ -451,6 +451,27 @@ input:focus { outline: none; border-color: var(--accent); }
 .pag-warn {
   color: var(--yellow); font-size: .72rem; font-weight: 600; white-space: nowrap;
 }
+.btn-add-fatt, .btn-del-fatt {
+  border: none; border-radius: 50%; cursor: pointer;
+  width: 24px; height: 24px; font-size: .85rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: opacity .2s;
+}
+.btn-add-fatt {
+  background: var(--green); color: #000;
+}
+.btn-del-fatt {
+  background: var(--red); color: #fff;
+}
+.btn-add-fatt:hover, .btn-del-fatt:hover { opacity: .7; }
+.fatt-subrow td { border-top: none !important; padding-top: 2px !important; }
+.fatt-subrow td:first-child { border-bottom: none !important; }
+.fatt-total-row td {
+  border-top: 1px dashed rgba(255,255,255,.1) !important;
+  border-bottom: 2px solid rgba(255,255,255,.08) !important;
+  padding: 4px 12px !important;
+}
+.fatt-actions { display: flex; gap: 4px; align-items: center; }
 
 /* ═══════════════════ Mobile ═══════════════════ */
 @media (max-width: 768px) {

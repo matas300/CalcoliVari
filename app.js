@@ -118,11 +118,14 @@ function migrateFatture() {
   for (const m of Object.keys(data.fatture)) {
     const v = data.fatture[m];
     if (typeof v === 'number') {
-      data.fatture[m] = { importo: v, pagMese: null, pagAnno: null };
-    } else if (v && typeof v === 'object') {
+      data.fatture[m] = [{ importo: v, pagMese: null, pagAnno: null, desc: '' }];
+    } else if (v && typeof v === 'object' && !Array.isArray(v)) {
       if (v.pagMese === undefined) v.pagMese = null;
       if (v.pagAnno === undefined) v.pagAnno = null;
+      if (v.desc === undefined) v.desc = '';
+      data.fatture[m] = [v];
     }
+    // Already array: leave as-is
   }
 }
 
@@ -226,33 +229,58 @@ function setActivity(month, day, val) {
 function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
 
 // ═══════════════════ Fatture helpers ═══════════════════
+function getFatture(month) {
+  const arr = data.fatture[month];
+  if (!arr || !Array.isArray(arr) || arr.length === 0) return [];
+  return arr.map(f => ({
+    importo: parseFloat(f.importo) || 0,
+    pagMese: f.pagMese || null,
+    pagAnno: f.pagAnno || null,
+    desc: f.desc || ''
+  }));
+}
+
 function getFattura(month) {
-  const f = data.fatture[month];
-  if (!f) return { importo: 0, pagMese: null, pagAnno: null };
-  if (typeof f === 'number') return { importo: f, pagMese: null, pagAnno: null };
-  return { importo: parseFloat(f.importo) || 0, pagMese: f.pagMese, pagAnno: f.pagAnno };
+  const arr = getFatture(month);
+  if (arr.length === 0) return { importo: 0, pagMese: null, pagAnno: null };
+  const total = arr.reduce((s, f) => s + f.importo, 0);
+  if (arr.length === 1) return { importo: total, pagMese: arr[0].pagMese, pagAnno: arr[0].pagAnno };
+  return { importo: total, pagMese: null, pagAnno: null };
 }
 
-function setFatturaImporto(month, val) {
-  if (!data.fatture[month]) data.fatture[month] = { importo: 0, pagMese: null, pagAnno: null };
-  data.fatture[month].importo = parseFloat(val) || 0;
+function setFatturaImporto(month, idx, val) {
+  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+  if (!data.fatture[month][idx]) return;
+  data.fatture[month][idx].importo = parseFloat(val) || 0;
   saveData();
 }
 
-function setFatturaPagamento(month, pagMese, pagAnno) {
-  if (!data.fatture[month]) data.fatture[month] = { importo: 0, pagMese: null, pagAnno: null };
-  data.fatture[month].pagMese = pagMese;
-  data.fatture[month].pagAnno = pagAnno;
+function setFatturaDesc(month, idx, val) {
+  if (!data.fatture[month] || !data.fatture[month][idx]) return;
+  data.fatture[month][idx].desc = val;
   saveData();
 }
 
-function getFatturaPaymentYear(issueYear, month) {
-  const yearData = issueYear === currentYear ? data : loadYearData(issueYear);
-  if (!yearData || !yearData.fatture || !yearData.fatture[month]) return issueYear;
-  const f = yearData.fatture[month];
-  if (typeof f === 'number') return issueYear;
-  if (f.pagAnno) return f.pagAnno;
-  return issueYear;
+function setFatturaPagamento(month, idx, pagMese, pagAnno) {
+  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+  if (!data.fatture[month][idx]) return;
+  data.fatture[month][idx].pagMese = pagMese;
+  data.fatture[month][idx].pagAnno = pagAnno;
+  saveData();
+}
+
+function addFattura(month) {
+  if (!data.fatture[month]) data.fatture[month] = [];
+  data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
+  saveData();
+  recalcAll();
+}
+
+function removeFattura(month, idx) {
+  if (!data.fatture[month] || data.fatture[month].length <= 1) return;
+  data.fatture[month].splice(idx, 1);
+  saveData();
+  recalcAll();
 }
 
 // ═══════════════════ Stats ═══════════════════
@@ -268,13 +296,14 @@ function getMonthStats(month) {
 }
 
 function getMonthEuroRaw(month) {
-  const f = getFattura(month);
-  if (f.importo > 0) return f.importo;
+  const fatture = getFatture(month);
+  const totalFatt = fatture.reduce((s, f) => s + f.importo, 0);
+  if (totalFatt > 0) return totalFatt;
   const s = getMonthStats(month);
   return s.worked * S().dailyRate + s.M * S().dailyRate / 2;
 }
 
-function isMonthFromFattura(month) { return getFattura(month).importo > 0; }
+function isMonthFromFattura(month) { return getFatture(month).some(f => f.importo > 0); }
 
 function getMonthStimato(month) {
   const s = getMonthStats(month);
@@ -282,22 +311,23 @@ function getMonthStimato(month) {
 }
 
 // Get the effective amount for a month considering payment year
-// For the current year's tax calculation, we need:
-// 1. Invoices issued this year AND paid this year (or no payment date set)
-// 2. Invoices issued previous year but paid this year
-// 3. EXCLUDE invoices issued this year but paid next year
+// Sums only fatture paid in current year (or no payment date set)
+// Excludes fatture deferred to another year
 function getMonthEuro(month) {
-  const raw = getMonthEuroRaw(month);
-  const f = getFattura(month);
+  const fatture = getFatture(month);
+  const hasFatture = fatture.some(f => f.importo > 0);
 
-  // If it's from a fattura with a payment year different from current, exclude it
-  if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
-    // This invoice is taxed in another year, use stimato for calendar view
-    // but for tax purposes this month contributes 0 from this fattura
-    return 0;
+  if (!hasFatture) {
+    const s = getMonthStats(month);
+    return s.worked * S().dailyRate + s.M * S().dailyRate / 2;
   }
 
-  return raw;
+  let total = 0;
+  for (const f of fatture) {
+    if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) continue;
+    total += f.importo;
+  }
+  return total;
 }
 
 // Get invoices from the previous year that are paid in the current year
@@ -308,11 +338,15 @@ function getCrossYearInvoices() {
 
   const results = [];
   for (let m = 1; m <= 12; m++) {
-    let f = prevData.fatture[m];
-    if (!f) continue;
-    if (typeof f === 'number') continue; // old format, no payment date, assume same year
-    if (f.pagAnno === currentYear && (parseFloat(f.importo) || 0) > 0) {
-      results.push({ mese: m, anno: prevYear, importo: parseFloat(f.importo), pagMese: f.pagMese });
+    let raw = prevData.fatture[m];
+    if (!raw) continue;
+    const arr = Array.isArray(raw) ? raw : (typeof raw === 'number' ? [{ importo: raw }] : [raw]);
+    for (const f of arr) {
+      if (typeof f === 'number') continue;
+      const importo = parseFloat(f.importo) || 0;
+      if (importo > 0 && f.pagAnno === currentYear) {
+        results.push({ mese: m, anno: prevYear, importo, pagMese: f.pagMese, desc: f.desc || '' });
+      }
     }
   }
   return results;
@@ -618,13 +652,20 @@ function buildMonthlyTable(perc) {
   let tI = 0, tN = 0, tT = 0;
   for (let m = 1; m <= 12; m++) {
     const inc = getMonthEuro(m), ff = isMonthFromFattura(m);
-    const f = getFattura(m);
+    const fatture = getFatture(m);
+    const nFatt = fatture.filter(f => f.importo > 0).length;
+    const nDiff = fatture.filter(f => f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear).length;
     const tax = inc * perc, net = inc - tax;
     tI += inc; tN += net; tT += tax;
     let src = ff ? '<span style="color:var(--green);font-size:.75rem">Fattura</span>' : '<span style="color:var(--text2);font-size:.75rem">Stimato</span>';
-    // Show if invoice is deferred to another year
-    if (ff && f.pagAnno && f.pagAnno !== currentYear) {
-      src = `<span style="color:var(--yellow);font-size:.7rem">Fatt. &rarr; ${f.pagAnno}</span>`;
+    if (ff && nDiff > 0) {
+      if (nDiff === nFatt) {
+        src = `<span style="color:var(--yellow);font-size:.7rem">Fatt. differite</span>`;
+      } else {
+        src = `<span style="color:var(--green);font-size:.7rem">${nFatt} fatt. (${nDiff} diff.)</span>`;
+      }
+    } else if (ff && nFatt > 1) {
+      src = `<span style="color:var(--green);font-size:.75rem">${nFatt} fatture</span>`;
     }
     h += `<tr><td>${MONTHS[m-1]}</td><td>${fmt(inc)}</td><td style="text-align:center">${src}</td><td style="color:var(--green)">${fmt(net)}</td><td style="color:var(--red)">${fmt(tax)}</td></tr>`;
   }
@@ -634,11 +675,42 @@ function buildMonthlyTable(perc) {
     const tax = inv.importo * perc, net = inv.importo - tax;
     tI += inv.importo; tN += net; tT += tax;
     h += `<tr style="background:rgba(245,166,35,.06)"><td>${MONTHS[inv.mese-1]} ${inv.anno}</td><td>${fmt(inv.importo)}</td>
-      <td style="text-align:center"><span style="color:var(--yellow);font-size:.7rem">Da ${inv.anno}</span></td>
+      <td style="text-align:center"><span style="color:var(--yellow);font-size:.7rem">Da ${inv.anno}${inv.desc?' ('+inv.desc+')':''}</span></td>
       <td style="color:var(--green)">${fmt(net)}</td><td style="color:var(--red)">${fmt(tax)}</td></tr>`;
   }
   h += `</tbody><tfoot><tr><td>Totale</td><td>${fmt(tI)}</td><td></td><td style="color:var(--green)">${fmt(tN)}</td><td style="color:var(--red)">${fmt(tT)}</td></tr></tfoot></table></div>`;
   return h;
+}
+
+// ═══════════════════ Tax rate for arbitrary year ═══════════════════
+function getEffectiveTaxRateForYear(year) {
+  if (year === currentYear) return getEffectiveTaxRate();
+  const yd = loadYearData(year);
+  if (!yd || !yd.settings) return getEffectiveTaxRate();
+  const s = yd.settings;
+  if (s.regime === 'ordinario') return getEffectiveTaxRate(); // fallback
+
+  // Calculate forfettario rate using that year's settings and data
+  const fatture = yd.fatture || {};
+  let total = 0;
+  for (const m of Object.keys(fatture)) {
+    const arr = Array.isArray(fatture[m]) ? fatture[m] : [fatture[m]];
+    for (const f of arr) {
+      const imp = parseFloat(typeof f === 'number' ? f : (f.importo || 0)) || 0;
+      if (imp > 0 && (!f.pagAnno || f.pagAnno == year)) total += imp;
+    }
+  }
+  if (total <= 0) return getEffectiveTaxRate(); // no data, fallback
+
+  const coeff = (s.coefficiente || 67) / 100;
+  const imp = (s.impostaSostitutiva || 15) / 100;
+  const tasse = total * coeff * imp;
+  const cF = s.contribFissi || 4515.43;
+  const bV = total * coeff - (s.minimaleInps || 18415);
+  const cV = bV > 0 ? bV * ((s.aliqContributi || 24.8) / 100) : 0;
+  const rid = s.riduzione35 == 1 ? 0.65 : 1;
+  const cT = (cF + cV) * rid;
+  return (tasse + cT) / total;
 }
 
 // ═══════════════════ Render: Accantonamento ═══════════════════
@@ -751,6 +823,37 @@ function renderAccantonamento() {
     <span><span style="display:inline-block;width:16px;height:3px;background:#4ecca3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
   </div></div>`;
 
+  // Deferred invoices: show accantonamento with target year's tax rate
+  const deferredFatture = [];
+  for (let m = 1; m <= 12; m++) {
+    for (const f of getFatture(m)) {
+      if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
+        deferredFatture.push({ mese: m, importo: f.importo, pagAnno: f.pagAnno, desc: f.desc });
+      }
+    }
+  }
+  if (deferredFatture.length > 0) {
+    h += `<div class="panel" style="grid-column:1/-1"><h3>Accantonamento Fatture Differite</h3>`;
+    h += `<div style="font-size:.82rem;color:var(--text2);margin-bottom:12px">
+      Fatture emesse nel ${currentYear} ma incassate in anni futuri. L'aliquota usata e quella stimata dell'anno di incasso.</div>`;
+    h += `<table class="accant-table"><thead><tr>
+      <th style="text-align:left">Fattura</th><th>Importo</th><th>Anno incasso</th><th>Aliquota stimata</th><th>Da accantonare</th>
+    </tr></thead><tbody>`;
+    let totDef = 0;
+    for (const d of deferredFatture) {
+      const rate = getEffectiveTaxRateForYear(d.pagAnno);
+      const accant = d.importo * rate;
+      totDef += accant;
+      h += `<tr><td style="text-align:left">${MONTHS[d.mese-1]}${d.desc ? ' - ' + d.desc : ''}</td>
+        <td>${fmt(d.importo)}</td>
+        <td>${d.pagAnno}</td>
+        <td style="color:var(--accent)">${fmtPct(rate)}</td>
+        <td style="color:var(--yellow);font-weight:600">${fmt(accant)}</td></tr>`;
+    }
+    h += `</tbody><tfoot><tr><td style="text-align:left">Totale</td><td></td><td></td><td></td>
+      <td style="color:var(--yellow);font-weight:600">${fmt(totDef)}</td></tr></tfoot></table></div>`;
+  }
+
   el.innerHTML = h;
 }
 
@@ -804,11 +907,17 @@ function renderCalendar() {
   for (let m = 1; m <= 12; m++) {
     const dim = daysInMonth(currentYear, m), stats = getMonthStats(m);
     const euro = getMonthEuroRaw(m), ff = isMonthFromFattura(m);
-    const f = getFattura(m);
+    const fattureM = getFatture(m);
     const offset = (new Date(currentYear, m-1, 1).getDay() + 6) % 7;
-    let deferred = ff && f.pagAnno && f.pagAnno !== currentYear;
+    const nFattAtt = fattureM.filter(f => f.importo > 0).length;
+    const nDiff = fattureM.filter(f => f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear).length;
+    let fattTag = '';
+    if (ff) {
+      const color = nDiff === nFattAtt ? 'var(--yellow)' : 'var(--green)';
+      fattTag = ` <span style="font-size:.65rem;color:${color}">(${nFattAtt > 1 ? nFattAtt + ' fatt.' : 'fatt.'}${nDiff > 0 ? ' ' + nDiff + ' diff.' : ''})</span>`;
+    }
     h += `<div class="month-card"><div class="month-header">${MONTHS[m-1]}
-      <span class="month-total">${fmt(euro)}${ff?' <span style="font-size:.65rem;color:'+(deferred?'var(--yellow)':'var(--green)')+'">(fatt.'+(deferred?' &rarr;'+f.pagAnno:'')+')</span>':''}</span></div>`;
+      <span class="month-total">${fmt(euro)}${fattTag}</span></div>`;
     h += `<div class="cal-weekdays">${['L','M','M','G','V','S','D'].map(w=>`<span>${w}</span>`).join('')}</div>`;
     h += `<div class="cal-days">`;
     for (let i = 0; i < offset; i++) h += `<div class="cal-day empty"></div>`;
@@ -834,39 +943,75 @@ function renderCalendar() {
 // ═══════════════════ Render: Fatture ═══════════════════
 function renderFatture() {
   const table = document.getElementById('fattureTable');
-  let h = `<thead><tr><th>Mese</th><th>Importo Fattura</th><th>Stimato</th><th>Incassato</th><th>Tassato nel</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th>Mese</th><th>Importo</th><th>Desc</th><th>Stimato</th><th>Tassato nel</th><th></th></tr></thead><tbody>`;
   let tF = 0, tS = 0;
+
   for (let m = 1; m <= 12; m++) {
     const stim = getMonthStimato(m);
-    const f = getFattura(m);
-    const fatt = f.importo;
-    const used = fatt > 0 ? fatt : stim;
-    tF += fatt; tS += stim;
-    const hasPag = f.pagMese && f.pagAnno;
-    const pagLabel = hasPag ? `${MONTHS_SHORT[f.pagMese-1]} ${f.pagAnno}` : '';
-    const taxYear = hasPag ? f.pagAnno : currentYear;
-    const isDifferentYear = hasPag && f.pagAnno !== currentYear;
+    const fatture = getFatture(m);
+    const nFatt = fatture.length;
+    const totalFatt = fatture.reduce((s, f) => s + f.importo, 0);
+    tF += totalFatt; tS += stim;
 
-    h += `<tr><td>${MONTHS[m-1]}</td>
-      <td><input type="number" value="${fatt||''}" placeholder="—"
-        onchange="setFatturaImporto(${m},this.value);recalcAll()" style="width:130px"></td>
-      <td style="color:var(--text2)">${fmt(stim)}</td>
-      <td style="color:${fatt>0?'var(--green)':'var(--text2)'}">${fmt(used)}
-        <span style="font-size:.7rem">${fatt>0?' (fattura)':' (stimato)'}</span></td>
-      <td>
-        <div class="pag-cell">
-          <select class="pag-mese" onchange="setPagMese(${m},this.value)" ${fatt<=0?'disabled':''}>
+    if (nFatt <= 1) {
+      const f = fatture[0] || { importo: 0, pagMese: null, pagAnno: null, desc: '' };
+      const hasPag = f.pagMese && f.pagAnno;
+      const isDiffYear = hasPag && f.pagAnno !== currentYear;
+
+      h += `<tr><td>${MONTHS[m-1]}</td>
+        <td><input type="number" value="${f.importo||''}" placeholder="—"
+          onchange="setFatturaImporto(${m},0,this.value);recalcAll()" style="width:110px"></td>
+        <td><input type="text" value="${f.desc||''}" placeholder="—"
+          onchange="setFatturaDesc(${m},0,this.value)" style="width:90px;text-align:left;font-size:.78rem"></td>
+        <td style="color:var(--text2)">${fmt(stim)}</td>
+        <td><div class="pag-cell">
+          <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
             <option value="">Mese...</option>
             ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
           </select>
           <input type="number" class="pag-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-            onchange="setPagAnno(${m},this.value)" style="width:68px" ${fatt<=0?'disabled':''}>
-          <button class="btn-oggi" onclick="setPagOggi(${m})" title="Imposta data odierna" ${fatt<=0?'disabled':''}>Oggi</button>
-          ${isDifferentYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
-        </div>
-      </td></tr>`;
+            onchange="setPagAnno(${m},0,this.value)" style="width:60px" ${f.importo<=0?'disabled':''}>
+          <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
+          ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
+        </div></td>
+        <td><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura">+</button></td></tr>`;
+    } else {
+      for (let fi = 0; fi < nFatt; fi++) {
+        const f = fatture[fi];
+        const hasPag = f.pagMese && f.pagAnno;
+        const isDiffYear = hasPag && f.pagAnno !== currentYear;
+        const isFirst = fi === 0;
+        const isLast = fi === nFatt - 1;
+
+        h += `<tr class="${!isFirst?'fatt-subrow':''}">
+          <td>${isFirst ? MONTHS[m-1] : ''}</td>
+          <td><input type="number" value="${f.importo||''}" placeholder="—"
+            onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" style="width:110px"></td>
+          <td><input type="text" value="${f.desc||''}" placeholder="—"
+            onchange="setFatturaDesc(${m},${fi},this.value)" style="width:90px;text-align:left;font-size:.78rem"></td>
+          <td style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
+          <td><div class="pag-cell">
+            <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
+              <option value="">Mese...</option>
+              ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
+            </select>
+            <input type="number" class="pag-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
+              onchange="setPagAnno(${m},${fi},this.value)" style="width:60px" ${f.importo<=0?'disabled':''}>
+            <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
+            ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
+          </div></td>
+          <td class="fatt-actions">
+            ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi">+</button>` : ''}
+            <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi">&times;</button>
+          </td></tr>`;
+      }
+      h += `<tr class="fatt-total-row"><td></td>
+        <td colspan="2" style="font-weight:600;font-size:.78rem;color:var(--accent)">Totale mese: ${fmt(totalFatt)}</td>
+        <td></td><td></td><td></td></tr>`;
+    }
   }
-  h += `</tbody><tfoot><tr><td>Totale</td><td>${fmt(tF)}</td><td>${fmt(tS)}</td><td>${fmt(getTotalAnnuo())}</td><td></td></tr></tfoot>`;
+
+  h += `</tbody><tfoot><tr><td>Totale</td><td colspan="2">${fmt(tF)}</td><td>${fmt(tS)}</td><td></td><td></td></tr></tfoot>`;
   table.innerHTML = h;
 
   // Cross-year invoices info
@@ -878,16 +1023,17 @@ function renderFatture() {
       <div class="status-icon" style="font-size:1.2rem">&#8592;</div>
       <div class="status-text">
         <h4 style="color:var(--yellow);font-size:.88rem">Fatture ${currentYear-1} incassate nel ${currentYear}</h4>
-        <p>${crossYear.map(i => `${MONTHS[i.mese-1]} ${i.anno}: ${fmt(i.importo)}`).join(' &bull; ')}
+        <p>${crossYear.map(i => `${MONTHS[i.mese-1]} ${i.anno}: ${fmt(i.importo)}${i.desc?' ('+i.desc+')':''}`).join(' &bull; ')}
         &mdash; Totale: <b>${fmt(crossTot)}</b></p></div></div>`;
   }
 
-  // Deferred invoices info (this year's invoices paid next year)
+  // Deferred invoices info
   const deferred = [];
   for (let m = 1; m <= 12; m++) {
-    const f = getFattura(m);
-    if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
-      deferred.push({ mese: m, importo: f.importo, pagAnno: f.pagAnno });
+    for (const f of getFatture(m)) {
+      if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
+        deferred.push({ mese: m, importo: f.importo, pagAnno: f.pagAnno, desc: f.desc });
+      }
     }
   }
   if (deferred.length > 0) {
@@ -896,7 +1042,7 @@ function renderFatture() {
       <div class="status-icon" style="font-size:1.2rem">&#8594;</div>
       <div class="status-text">
         <h4 style="color:var(--yellow);font-size:.88rem">Fatture ${currentYear} tassate in altro anno</h4>
-        <p>${deferred.map(i => `${MONTHS[i.mese-1]}: ${fmt(i.importo)} &rarr; ${i.pagAnno}`).join(' &bull; ')}
+        <p>${deferred.map(i => `${MONTHS[i.mese-1]}${i.desc?' ('+i.desc+')':''}: ${fmt(i.importo)} &rarr; ${i.pagAnno}`).join(' &bull; ')}
         &mdash; Totale: <b>${fmt(defTot)}</b></p></div></div>`;
   }
 
@@ -908,24 +1054,26 @@ function renderFatture() {
     <div class="progress-text">${pct.toFixed(1)}%</div></div>`;
 }
 
-function setPagMese(month, val) {
-  const f = getFattura(month);
+function setPagMese(month, idx, val) {
+  const fatture = getFatture(month);
+  const f = fatture[idx] || { pagMese: null, pagAnno: null };
   const m = parseInt(val) || null;
   const a = f.pagAnno || currentYear;
-  setFatturaPagamento(month, m, m ? a : null);
+  setFatturaPagamento(month, idx, m, m ? a : null);
   recalcAll();
 }
 
-function setPagAnno(month, val) {
-  const f = getFattura(month);
+function setPagAnno(month, idx, val) {
+  const fatture = getFatture(month);
+  const f = fatture[idx] || { pagMese: null, pagAnno: null };
   const a = parseInt(val) || null;
-  setFatturaPagamento(month, f.pagMese || new Date().getMonth() + 1, a);
+  setFatturaPagamento(month, idx, f.pagMese || new Date().getMonth() + 1, a);
   recalcAll();
 }
 
-function setPagOggi(month) {
+function setPagOggi(month, idx) {
   const today = new Date();
-  setFatturaPagamento(month, today.getMonth() + 1, today.getFullYear());
+  setFatturaPagamento(month, idx, today.getMonth() + 1, today.getFullYear());
   recalcAll();
 }
 
