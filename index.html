@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calcoli P.IVA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loginScreen" class="login-overlay">
+  <div class="login-box">
+    <h2>Calcoli P.IVA</h2>
+    <p>Inserisci la password per accedere</p>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Entra</button>
+    <div id="loginError" class="login-error"></div>
+  </div>
+</div>
+
+<header>
+  <h1>Calcoli P.IVA <span id="profileBadge" class="profile-badge"></span></h1>
+  <div class="header-right">
+    <div id="syncStatus" class="sync-indicator"></div>
+    <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
+    <div class="year-selector">
+    <button onclick="changeYear(-1)">&lt;</button>
+    <span id="yearDisplay">2026</span>
+    <button onclick="changeYear(1)">&gt;</button>
+    </div>
+  </div>
+</header>
+
+<nav id="nav">
+  <button class="active" data-tab="calcolo">Regime Forfettario</button>
+  <button data-tab="accantonamento">Tasse Accantonate</button>
+  <button data-tab="calendar">Calendario</button>
+  <button data-tab="fatture">Fatture</button>
+  <button data-tab="budget">Budget</button>
+  <button data-tab="spese" style="display:none">Spese</button>
+  <button data-tab="settings">Impostazioni</button>
+</nav>
+
+<div class="container">
+  <div id="tab-calcolo" class="tab-content active">
+    <div class="calc-grid" id="calcoloGrid"></div>
+  </div>
+
+  <div id="tab-accantonamento" class="tab-content">
+    <div class="calc-grid" id="accantonamentoGrid"></div>
+  </div>
+
+  <div id="tab-calendar" class="tab-content">
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </div>
+
+  <div id="tab-fatture" class="tab-content">
+    <div class="panel" style="max-width:900px">
+      <h3>Fatture</h3>
+      <table class="fatture-table" id="fattureTable"></table>
+      <div class="incasso-section" id="incassoSection"></div>
+    </div>
+  </div>
+
+  <div id="tab-budget" class="tab-content">
+    <div class="panel" style="max-width:700px">
+      <h3>Budget Mensile</h3>
+      <div id="budgetContent"></div>
+    </div>
+  </div>
+
+  <div id="tab-spese" class="tab-content">
+    <div class="panel" style="max-width:900px">
+      <h3>Spese Deducibili</h3>
+      <div id="speseContent"></div>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="tab-content">
+    <div class="panel" style="max-width:500px">
+      <h3>Impostazioni</h3>
+      <div class="settings-group">
+        <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
+        <input type="number" id="settDailyRate" value="315" onchange="saveSetting('dailyRate', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Coefficiente redditivita forfettario (%)</label>
+        <input type="number" id="settCoeff" value="67" onchange="saveSetting('coefficiente', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Imposta sostitutiva forfettario (%)</label>
+        <input type="number" id="settImposta" value="15" onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Contributi INPS fissi annui (EUR)</label>
+        <input type="number" id="settContribFissi" value="4515.43" step="0.01" onchange="saveSetting('contribFissi', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Minimale INPS (EUR)</label>
+        <input type="number" id="settMinimale" value="18415" onchange="saveSetting('minimaleInps', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Aliquota contributi variabili (%)</label>
+        <input type="number" id="settAliqContr" value="24.8" step="0.1" onchange="saveSetting('aliqContributi', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Riduzione contributi 35% (nuove attivita)</label>
+        <select id="settRiduzione" onchange="saveSetting('riduzione35', this.value); recalcAll()">
+          <option value="0">No</option>
+          <option value="1">Si</option>
+        </select>
+      </div>
+      <div class="settings-group">
+        <label>Limite fatturato forfettario (EUR)</label>
+        <input type="number" id="settLimite" value="85000" onchange="saveSetting('limiteForfettario', this.value); recalcAll()">
+      </div>
+      <div class="settings-group" style="margin-top:30px">
+        <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
+        <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--accent2);margin-left:8px">Importa dati</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity picker popup -->
+<div id="pickerOverlay" class="picker-overlay" onclick="closePicker()"></div>
+<div id="pickerPopup" class="picker-popup"></div>
+
+<script src="firebase-sync.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
