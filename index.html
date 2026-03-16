@@ -34,6 +34,7 @@
 <nav id="nav">
   <button class="active" data-tab="calcolo">Regime Forfettario</button>
   <button data-tab="accantonamento">Tasse Accantonate</button>
+  <button data-tab="pagamenti">Pagamenti</button>
   <button data-tab="calendar">Calendario</button>
   <button data-tab="fatture">Fatture</button>
   <button data-tab="budget">Budget</button>
@@ -48,6 +49,10 @@
 
   <div id="tab-accantonamento" class="tab-content">
     <div class="calc-grid" id="accantonamentoGrid"></div>
+  </div>
+
+  <div id="tab-pagamenti" class="tab-content">
+    <div class="calc-grid" id="pagamentiGrid"></div>
   </div>
 
   <div id="tab-calendar" class="tab-content">
@@ -81,7 +86,7 @@
       <h3>Impostazioni</h3>
       <div class="settings-group">
         <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
-        <input type="number" id="settDailyRate" value="315" onchange="saveSetting('dailyRate', this.value); recalcAll()">
+        <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
       </div>
       <div class="settings-group">
         <label>Coefficiente redditivita forfettario (%)</label>
@@ -92,16 +97,26 @@
         <input type="number" id="settImposta" value="15" onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Contributi INPS fissi annui (EUR)</label>
+        <label>Contributi INPS fissi annui (EUR, solo Artig./Comm.)</label>
         <input type="number" id="settContribFissi" value="4515.43" step="0.01" onchange="saveSetting('contribFissi', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Minimale INPS (EUR)</label>
+        <label>Minimale INPS (EUR, solo Artig./Comm.)</label>
         <input type="number" id="settMinimale" value="18415" onchange="saveSetting('minimaleInps', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Aliquota contributi variabili (%)</label>
+        <label>Aliquota contributi previdenziali (%)</label>
         <input type="number" id="settAliqContr" value="24.8" step="0.1" onchange="saveSetting('aliqContributi', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Gestione previdenziale</label>
+        <select id="settInpsMode" onchange="saveTextSetting('inpsMode', this.value); recalcAll()">
+          <option value="artigiani_commercianti">Artigiani / Commercianti</option>
+          <option value="gestione_separata">Gestione Separata</option>
+        </select>
+        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
+          Artigiani/Commercianti: contributi fissi + eccedenza sul minimale. Gestione Separata: niente fissi, aliquota su tutto l'imponibile.
+        </div>
       </div>
       <div class="settings-group">
         <label>Riduzione contributi 35% (nuove attivita)</label>
@@ -130,6 +145,8 @@
 <!-- Activity picker popup -->
 <div id="pickerOverlay" class="picker-overlay" onclick="closePicker()"></div>
 <div id="pickerPopup" class="picker-popup"></div>
+<div id="paymentDateOverlay" class="picker-overlay" onclick="closePaymentDatePicker()"></div>
+<div id="paymentDatePopup" class="payment-date-popup"></div>
 
 <script src="firebase-sync.js"></script>
 <script src="app.js"></script>

@@ -87,6 +87,12 @@ const ACTIVITY_INFO = {
   'Donazione': { label: 'Donazione', color: '#533483', dark: false },
 };
 const HOLIDAYS = [[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
+const PAYMENT_TYPES = {
+  tasse:      { label: 'Tasse', color: 'var(--red)' },
+  contributi: { label: 'Contributi', color: 'var(--yellow)' },
+  misto:      { label: 'Misto', color: 'var(--blue)' },
+  altro:      { label: 'Altro', color: 'var(--text2)' }
+};
 
 let currentYear = new Date().getFullYear();
 let data = {};
@@ -94,40 +100,124 @@ let data = {};
 // ═══════════════════ Storage ═══════════════════
 function storageKey(y) { return 'calcoliPIVA_' + currentProfile + '_' + (y || currentYear); }
 
-function loadYearData(y) {
-  const raw = localStorage.getItem(storageKey(y));
-  return raw ? JSON.parse(raw) : null;
+function normalizeInpsMode(mode) {
+  return mode === 'gestione_separata' ? 'gestione_separata' : 'artigiani_commercianti';
 }
 
-function loadData() {
-  const raw = localStorage.getItem(storageKey());
-  data = raw ? JSON.parse(raw) : {};
-  if (!data.settings) data.settings = getDefaultSettings();
-  if (!data.fatture) data.fatture = {};
-  if (!data.calendar) data.calendar = {};
-  if (!data.accantonamento) data.accantonamento = {};
-  if (!data.budget) data.budget = [];
-  if (!data.spese) data.spese = [];
-  if (data.settings.dailyRate === undefined) data.settings.dailyRate = 315;
-  if (data.settings.regime === undefined) data.settings.regime = 'forfettario';
-  if (data.settings.giorniIncasso === undefined) data.settings.giorniIncasso = 30;
-  migrateFatture();
-  applySettings();
+function inferInpsMode(settings) {
+  const s = settings || {};
+  if (s.inpsMode !== undefined) return normalizeInpsMode(s.inpsMode);
+  const contribFissi = parseFloat(s.contribFissi) || 0;
+  const minimale = parseFloat(s.minimaleInps) || 0;
+  return contribFissi <= 0 && minimale <= 0 ? 'gestione_separata' : 'artigiani_commercianti';
 }
 
-function migrateFatture() {
-  for (const m of Object.keys(data.fatture)) {
-    const v = data.fatture[m];
+function getInpsMode(settings) {
+  return inferInpsMode(settings);
+}
+
+function getInpsModeLabel(mode) {
+  return mode === 'gestione_separata' ? 'Gestione Separata' : 'Artigiani/Commercianti';
+}
+
+function getContribLabel(mode) {
+  return mode === 'gestione_separata' ? 'Contributi previdenziali' : 'Contributi INPS';
+}
+
+function getPaymentTypeLabel(type) {
+  return PAYMENT_TYPES[type]?.label || PAYMENT_TYPES.altro.label;
+}
+
+function getIrpefBracketsForYear(year) {
+  const y = parseInt(year, 10) || currentYear;
+  if (y >= 2024) {
+    return [
+      { l: 28000, a: 0.23 },
+      { l: 50000, a: 0.35 },
+      { l: Infinity, a: 0.43 }
+    ];
+  }
+  return [
+    { l: 15000, a: 0.23 },
+    { l: 28000, a: 0.25 },
+    { l: 50000, a: 0.35 },
+    { l: Infinity, a: 0.43 }
+  ];
+}
+
+function getIrpefBracketLabelsForYear(year) {
+  const y = parseInt(year, 10) || currentYear;
+  if (y >= 2024) {
+    return ['0-28.000 (23%)', '28.001-50.000 (35%)', 'Oltre 50.000 (43%)'];
+  }
+  return ['0-15.000 (23%)', '15.001-28.000 (25%)', '28.001-50.000 (35%)', 'Oltre 50.000 (43%)'];
+}
+
+function calcInpsContributions(imponibile, settings) {
+  const s = settings || {};
+  const mode = getInpsMode(s);
+  const base = Math.max(parseFloat(imponibile) || 0, 0);
+  const aliquota = (parseFloat(s.aliqContributi) || 0) / 100;
+
+  if (mode === 'gestione_separata') {
+    const cV = base * aliquota;
+    return { mode, cF: 0, cV, cT: cV, imponibile: base };
+  }
+
+  const cF = Math.max(parseFloat(s.contribFissi) || 0, 0);
+  const minimale = Math.max(parseFloat(s.minimaleInps) || 0, 0);
+  const eccedenza = Math.max(base - minimale, 0);
+  const cV = eccedenza * aliquota;
+  return { mode, cF, cV, cT: cF + cV, imponibile: base, minimale, eccedenza };
+}
+
+function migrateFattureFor(target) {
+  const fatture = target.fatture || {};
+  for (const m of Object.keys(fatture)) {
+    const v = fatture[m];
     if (typeof v === 'number') {
-      data.fatture[m] = [{ importo: v, pagMese: null, pagAnno: null, desc: '' }];
+      fatture[m] = [{ importo: v, pagMese: null, pagAnno: null, desc: '' }];
     } else if (v && typeof v === 'object' && !Array.isArray(v)) {
       if (v.pagMese === undefined) v.pagMese = null;
       if (v.pagAnno === undefined) v.pagAnno = null;
       if (v.desc === undefined) v.desc = '';
-      data.fatture[m] = [v];
+      fatture[m] = [v];
     }
     // Already array: leave as-is
   }
+}
+
+function ensureDataShape(target) {
+  const out = target || {};
+  if (!out.settings) out.settings = getDefaultSettings();
+  if (!out.fatture) out.fatture = {};
+  if (!out.calendar) out.calendar = {};
+  if (!out.accantonamento) out.accantonamento = {};
+  if (!out.pagamenti) out.pagamenti = [];
+  if (!out.budget) out.budget = [];
+  if (!out.spese) out.spese = [];
+  if (out.settings.dailyRate === undefined) out.settings.dailyRate = 0;
+  if (out.settings.regime === undefined) out.settings.regime = 'forfettario';
+  if (out.settings.inpsMode === undefined) out.settings.inpsMode = inferInpsMode(out.settings);
+  if (out.settings.giorniIncasso === undefined) out.settings.giorniIncasso = 30;
+  migrateFattureFor(out);
+  return out;
+}
+
+function loadYearData(y) {
+  if (y === currentYear) return ensureDataShape(data);
+  const raw = localStorage.getItem(storageKey(y));
+  return raw ? ensureDataShape(JSON.parse(raw)) : null;
+}
+
+function loadData() {
+  const raw = localStorage.getItem(storageKey());
+  data = ensureDataShape(raw ? JSON.parse(raw) : {});
+  applySettings();
+}
+
+function migrateFatture() {
+  migrateFattureFor(data);
 }
 
 function saveData() {
@@ -137,11 +227,38 @@ function saveData() {
   }
 }
 
+function saveYearData(year, yearData) {
+  const normalized = ensureDataShape(yearData);
+  if (year === currentYear) {
+    data = normalized;
+    saveData();
+    return;
+  }
+  localStorage.setItem(storageKey(year), JSON.stringify(normalized));
+  if (typeof syncToCloud === 'function' && currentProfile) {
+    syncToCloud(currentProfile, year, normalized);
+  }
+}
+
+function getStoredYears(maxYear = currentYear) {
+  const years = new Set([maxYear]);
+  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i) || '';
+    if (!key.startsWith(prefix)) continue;
+    const year = parseInt(key.slice(prefix.length), 10);
+    if (!Number.isFinite(year) || year > maxYear) continue;
+    years.add(year);
+  }
+  return Array.from(years).sort((a, b) => a - b);
+}
+
 function getDefaultSettings() {
   return {
-    dailyRate: 315, coefficiente: 67, impostaSostitutiva: 15,
+    dailyRate: 0, coefficiente: 67, impostaSostitutiva: 15,
     contribFissi: 4515.43, minimaleInps: 18415, aliqContributi: 24.8,
     riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+    inpsMode: 'artigiani_commercianti',
     giorniIncasso: 30
   };
 }
@@ -158,8 +275,18 @@ function applySettings() {
     const el = document.getElementById(id);
     if (el) el.value = s[key];
   }
+  const isGestioneSeparata = getInpsMode(s) === 'gestione_separata';
   const rid = document.getElementById('settRiduzione');
-  if (rid) rid.value = s.riduzione35;
+  if (rid) {
+    rid.value = s.riduzione35;
+    rid.disabled = isGestioneSeparata;
+  }
+  const inpsMode = document.getElementById('settInpsMode');
+  if (inpsMode) inpsMode.value = getInpsMode(s);
+  const contribFissi = document.getElementById('settContribFissi');
+  if (contribFissi) contribFissi.disabled = isGestioneSeparata;
+  const minimale = document.getElementById('settMinimale');
+  if (minimale) minimale.disabled = isGestioneSeparata;
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
   if (typeof updateNavLabels === 'function') updateNavLabels();
@@ -169,6 +296,13 @@ function saveSetting(key, val) {
   data.settings[key] = parseFloat(val) || 0;
   saveData();
 }
+
+function saveTextSetting(key, val) {
+  data.settings[key] = val;
+  saveData();
+  applySettings();
+}
+
 function S() { return data.settings; }
 
 function setRegime(r) {
@@ -230,8 +364,8 @@ function setActivity(month, day, val) {
 function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
 
 // ═══════════════════ Fatture helpers ═══════════════════
-function getFatture(month) {
-  const arr = data.fatture[month];
+function getFattureFromYearData(yearData, month) {
+  const arr = yearData && yearData.fatture ? yearData.fatture[month] : null;
   if (!arr || !Array.isArray(arr) || arr.length === 0) return [];
   return arr.map(f => ({
     importo: parseFloat(f.importo) || 0,
@@ -239,6 +373,10 @@ function getFatture(month) {
     pagAnno: f.pagAnno || null,
     desc: f.desc || ''
   }));
+}
+
+function getFatture(month) {
+  return getFattureFromYearData(data, month);
 }
 
 function getFattura(month) {
@@ -345,26 +483,27 @@ function getMonthEuro(month) {
   return total;
 }
 
-// Get invoices from the previous year that are paid in the current year
-function getCrossYearInvoices() {
-  const prevYear = currentYear - 1;
-  const prevData = loadYearData(prevYear);
-  if (!prevData || !prevData.fatture) return [];
-
+// Get invoices from previous years that are paid in the target year
+function getCrossYearInvoicesForYear(year) {
   const results = [];
-  for (let m = 1; m <= 12; m++) {
-    let raw = prevData.fatture[m];
-    if (!raw) continue;
-    const arr = Array.isArray(raw) ? raw : (typeof raw === 'number' ? [{ importo: raw }] : [raw]);
-    for (const f of arr) {
-      if (typeof f === 'number') continue;
-      const importo = parseFloat(f.importo) || 0;
-      if (importo > 0 && f.pagAnno === currentYear) {
-        results.push({ mese: m, anno: prevYear, importo, pagMese: f.pagMese, desc: f.desc || '' });
+  for (const sourceYear of getStoredYears(year - 1)) {
+    if (sourceYear >= year) continue;
+    const sourceData = loadYearData(sourceYear);
+    if (!sourceData || !sourceData.fatture) continue;
+    for (let m = 1; m <= 12; m++) {
+      for (const f of getFattureFromYearData(sourceData, m)) {
+        const importo = parseFloat(f.importo) || 0;
+        if (importo > 0 && f.pagAnno === year) {
+          results.push({ mese: m, anno: sourceYear, importo, pagMese: f.pagMese, desc: f.desc || '' });
+        }
       }
     }
   }
   return results;
+}
+
+function getCrossYearInvoices() {
+  return getCrossYearInvoicesForYear(currentYear);
 }
 
 function getTotalAnnuo() {
@@ -383,24 +522,23 @@ function getTotalWorkedDays() {
 function calcForfettario() {
   const tot = getTotalAnnuo(), s = S();
   const coeff = s.coefficiente / 100, imp = s.impostaSostitutiva / 100;
-  const tasse = tot * coeff * imp;
-  const cF = s.contribFissi;
-  const bV = tot * coeff - s.minimaleInps;
-  const cV = bV > 0 ? bV * (s.aliqContributi / 100) : 0;
-  const cT = cF + cV;
-  const rid = s.riduzione35 == 1 ? 0.65 : 1;
+  const imponibile = tot * coeff;
+  const tasse = imponibile * imp;
+  const inps = calcInpsContributions(imponibile, s);
+  const cF = inps.cF, cV = inps.cV, cT = inps.cT;
+  const rid = s.riduzione35 == 1 && inps.mode === 'artigiani_commercianti' ? 0.65 : 1;
   const cFR = cF * rid, cVR = cV * rid, cTR = cFR + cVR;
   const n = tot - cT - tasse, nR = tot - cTR - tasse;
   return {
-    totale: tot, tasse, cF, cV, cT, cFR, cVR, cTR, n, nR,
+    totale: tot, imponibile, tasse, cF, cV, cT, cFR, cVR, cTR, n, nR, inpsMode: inps.mode,
     perc: tot > 0 ? (tot - n) / tot : 0,
     percR: tot > 0 ? (tot - nR) / tot : 0
   };
 }
 
-function calcSpeseTotal() {
+function calcSpeseTotalFor(speseList) {
   let tot = 0;
-  for (const sp of (data.spese || [])) {
+  for (const sp of (speseList || [])) {
     const c = parseFloat(sp.costo) || 0;
     const d = parseFloat(sp.deducibilita) || 0;
     const a = parseInt(sp.anni) || 1;
@@ -409,31 +547,97 @@ function calcSpeseTotal() {
   return tot;
 }
 
-function calcOrdinario() {
-  const tot = getTotalAnnuo(), s = S();
-  const spese = calcSpeseTotal();
-  const base = tot, baseSp = tot - spese;
+function getSpeseAttiveForYear(year) {
+  const items = [];
+  for (const sourceYear of getStoredYears(year)) {
+    const yearData = sourceYear === currentYear ? data : loadYearData(sourceYear);
+    if (!yearData || !Array.isArray(yearData.spese)) continue;
+    for (let idx = 0; idx < yearData.spese.length; idx++) {
+      const sp = yearData.spese[idx] || {};
+      const anni = Math.max(parseInt(sp.anni, 10) || 1, 1);
+      if (year < sourceYear || year > sourceYear + anni - 1) continue;
+      items.push({
+        ...sp,
+        anni,
+        annoOrigine: sourceYear,
+        quotaAnno: year - sourceYear + 1,
+        annua: calcSpeseTotalFor([sp]),
+        _idx: idx
+      });
+    }
+  }
+  return items;
+}
+
+function calcSpeseTotalForYear(year) {
+  let total = 0;
+  for (const sp of getSpeseAttiveForYear(year)) total += sp.annua;
+  return total;
+}
+
+function calcSpeseCarryoverTotalForYear(year) {
+  let total = 0;
+  for (const sp of getSpeseAttiveForYear(year)) {
+    if (sp.annoOrigine !== year) total += sp.annua;
+  }
+  return total;
+}
+
+function calcSpeseTotal() {
+  return calcSpeseTotalForYear(currentYear);
+}
+
+function calcOrdinarioValues(totLordo, spese, settings, year) {
+  const s = settings || {};
+  const baseLordo = Math.max(parseFloat(totLordo) || 0, 0);
+  const speseTot = Math.max(parseFloat(spese) || 0, 0);
+  const baseSp = Math.max(baseLordo - speseTot, 0);
+  const scaglioni = getIrpefBracketsForYear(year);
+
   function irpef(b) {
-    const sc = [{l:15000,a:.23},{l:28000,a:.25},{l:50000,a:.35},{l:Infinity,a:.43}];
     let t = 0, p = 0, det = [];
-    for (const s of sc) {
-      if (b <= p) { det.push({b:0,t:0,a:s.a}); continue; }
-      const im = Math.min(b, s.l) - p;
-      const tx = im * s.a;
-      det.push({b:im,t:tx,a:s.a}); t += tx; p = s.l;
+    for (const sc of scaglioni) {
+      if (b <= p) { det.push({b:0,t:0,a:sc.a}); continue; }
+      const im = Math.min(b, sc.l) - p;
+      const tx = im * sc.a;
+      det.push({b:im,t:tx,a:sc.a}); t += tx; p = sc.l;
     }
     return { tasse: t, netto: b - t, det };
   }
-  const senza = irpef(base), con = irpef(baseSp);
-  const cF = 4427.04;
-  const cV = (base - s.minimaleInps) > 0 ? (base - s.minimaleInps) * 0.24 : 0;
-  const cVS = (baseSp - s.minimaleInps) > 0 ? (baseSp - s.minimaleInps) * 0.24 : 0;
-  const cT = cF + cV, cTS = cF + cVS;
+
+  const senza = irpef(baseLordo), con = irpef(baseSp);
+  const inpsLordo = calcInpsContributions(baseLordo, s);
+  const inps = calcInpsContributions(baseSp, s);
+  const cTLordo = inpsLordo.cT, cT = inps.cT;
+  const dovutoTotaleLordo = senza.tasse + cTLordo;
+  const dovutoTotale = con.tasse + cT;
+  const nettoLordo = baseLordo - cTLordo - senza.tasse;
+  const netto = baseSp - cT - con.tasse;
+
   return {
-    tot: base, totSp: baseSp, spese, senza, con, cF, cV, cVS, cT, cTS,
-    netto: base - cT - senza.tasse, nettoSp: baseSp - cTS - con.tasse,
-    perc: base > 0 ? (cT + senza.tasse) / base : 0
+    tot: baseLordo,
+    totSp: baseSp,
+    spese: speseTot,
+    senza,
+    con,
+    cF: inps.cF,
+    cV: inps.cV,
+    cVLordo: inpsLordo.cV,
+    cT,
+    cTLordo,
+    dovutoTotale,
+    dovutoTotaleLordo,
+    netto,
+    nettoLordo,
+    nettoSp: netto,
+    inpsMode: inps.mode,
+    perc: baseLordo > 0 ? dovutoTotale / baseLordo : 0,
+    percImponibile: baseSp > 0 ? dovutoTotale / baseSp : 0
   };
+}
+
+function calcOrdinario() {
+  return calcOrdinarioValues(getTotalAnnuo(), calcSpeseTotal(), S(), currentYear);
 }
 
 function getEffectiveTaxRate() {
@@ -452,9 +656,16 @@ function getEffectiveNetto() {
 }
 
 // ═══════════════════ Formatting ═══════════════════
+function ceil2(n) {
+  if (n === undefined || n === null || isNaN(n)) return n;
+  const scaled = Math.abs(Number(n)) * 100;
+  const rounded = Math.ceil(scaled - 1e-9) / 100;
+  return Number(n) < 0 ? -rounded : rounded;
+}
+
 function fmt(n) {
   if (n === undefined || n === null || isNaN(n)) return '\u2014';
-  return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
+  return ceil2(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
 }
 function fmtPct(n) { return (n * 100).toFixed(1) + '%'; }
 function row(label, val, cls, valCls) {
@@ -462,7 +673,7 @@ function row(label, val, cls, valCls) {
 }
 
 // ═══════════════════ Donut ═══════════════════
-function drawDonut(netto, tasse, contributi) {
+function drawDonut(netto, tasse, contributi, totalLabel = 'Totale lordo') {
   const total = netto + tasse + contributi;
   if (total <= 0) return '<div style="text-align:center;color:var(--text2);padding:30px">Nessun dato</div>';
   const size = 180, cx = 90, cy = 90, r = 70, sw = 28, C = 2*Math.PI*r;
@@ -474,25 +685,27 @@ function drawDonut(netto, tasse, contributi) {
   svg += `<text x="${cx}" y="${cy-6}" text-anchor="middle" fill="#eee" font-size="14" font-weight="700">${fmtPct(pN)}</text>`;
   svg += `<text x="${cx}" y="${cy+10}" text-anchor="middle" fill="#aaa" font-size="9">netto</text></svg>`;
   const tasseLabel = S().regime === 'ordinario' ? 'IRPEF' : 'Imposta sost.';
+  const contribLabel = getContribLabel(getInpsMode(S()));
   return `<div class="chart-container">${svg}<div class="chart-legend">
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#4ecca3"></div><span>Netto</span><span class="chart-legend-val" style="color:#4ecca3">${fmt(netto)}</span></div>
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#e94560"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:#e94560">${fmt(tasse)}</span></div>
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f5a623"></div><span>Contributi INPS</span><span class="chart-legend-val" style="color:#f5a623">${fmt(contributi)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f5a623"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:#f5a623">${fmt(contributi)}</span></div>
     <div class="chart-legend-item" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
-      <div class="chart-legend-dot" style="background:transparent"></div><span style="font-weight:600">Totale lordo</span><span class="chart-legend-val">${fmt(total)}</span></div>
+      <div class="chart-legend-dot" style="background:transparent"></div><span style="font-weight:600">${totalLabel}</span><span class="chart-legend-val">${fmt(total)}</span></div>
   </div></div>`;
 }
 
 // ═══════════════════ Mini bar chart ═══════════════════
 function drawMiniBars(perc) {
+  const safePerc = Math.max(0, Math.min(perc, 1));
   const vals = [];
   for (let m = 1; m <= 12; m++) vals.push(getMonthEuro(m));
   const mx = Math.max(...vals, 1);
   let h = '<div class="mini-bars">';
   for (let m = 0; m < 12; m++) {
     const hPx = Math.round((vals[m] / mx) * 110);
-    const net = vals[m] * (1 - perc);
-    const tax = vals[m] * perc;
+    const net = vals[m] * (1 - safePerc);
+    const tax = vals[m] * safePerc;
     const hN = Math.round((net / mx) * 110);
     const hT = hPx - hN;
     h += `<div class="mini-bar-col">
@@ -532,11 +745,12 @@ function renderCalcolo() {
 
 function renderCalcoloForfettario(h, el) {
   const c = calcForfettario(), s = S();
-  const useR = s.riduzione35 == 1;
+  const useR = s.riduzione35 == 1 && c.inpsMode === 'artigiani_commercianti';
   const contrib = useR ? c.cTR : c.cT;
   const netto = useR ? c.nR : c.n;
   const perc = useR ? c.percR : c.perc;
   const crossYear = getCrossYearInvoices();
+  const contribLabel = getContribLabel(c.inpsMode);
 
   h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo${useR ? ' (riduzione 35%)' : ''}</h3>`;
   h += drawDonut(netto, c.tasse, contrib);
@@ -545,14 +759,15 @@ function renderCalcoloForfettario(h, el) {
   h += `<div class="panel"><h3>Riepilogo Annuale</h3>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
+  h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
   h += row('Totale annuo lordo', fmt(c.totale), 'highlight');
   if (crossYear.length > 0) {
     const crossTot = crossYear.reduce((s, i) => s + i.importo, 0);
-    h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Include ${fmt(crossTot)} da fatture ${currentYear-1} incassate nel ${currentYear}</div>`;
+    h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Include ${fmt(crossTot)} da fatture di anni precedenti incassate nel ${currentYear}</div>`;
   }
   h += '<br>';
   h += row(`Imposta sostitutiva (${s.impostaSostitutiva}% su ${s.coefficiente}%)`, fmt(c.tasse), '', 'negative');
-  h += row('Contributi INPS', fmt(contrib), '', 'negative');
+  h += row(contribLabel, fmt(contrib), '', 'negative');
   h += '<br>';
   h += row('Netto annuo', fmt(netto), 'highlight', 'positive');
   h += row('Netto mensile', fmt(netto / 12), '', 'positive');
@@ -561,13 +776,19 @@ function renderCalcoloForfettario(h, el) {
   h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
   h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
-  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">Contributi INPS (sul ${s.coefficiente}%)</div>`;
+  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">${contribLabel} (sul ${s.coefficiente}%)</div>`;
   if (useR) h += `<div style="font-size:.78rem;color:var(--yellow);margin-bottom:6px">Riduzione 35% attiva</div>`;
-  h += row('Fissi', fmt(useR ? c.cFR : c.cF));
-  h += row('Variabili', fmt(useR ? c.cVR : c.cV));
+  if (c.inpsMode === 'gestione_separata') {
+    h += row('Su imponibile', fmt(contrib), 'highlight');
+  } else {
+    h += row('Fissi', fmt(useR ? c.cFR : c.cF));
+    h += row('Variabili', fmt(useR ? c.cVR : c.cV));
+  }
   h += row('Totale annuo', fmt(contrib), 'highlight');
   h += row('Totale mensile', fmt(contrib / 12));
-  h += `<div style="font-size:.78rem;color:var(--text2);margin-top:4px">${useR?'Senza':'Con'} riduzione: <b>${fmt(useR?c.cT:c.cTR)}</b>/anno</div>`;
+  if (c.inpsMode === 'artigiani_commercianti') {
+    h += `<div style="font-size:.78rem;color:var(--text2);margin-top:4px">${useR?'Senza':'Con'} riduzione: <b>${fmt(useR?c.cT:c.cTR)}</b>/anno</div>`;
+  }
   h += `</div></div>`;
 
   // Quick budget summary
@@ -583,33 +804,39 @@ function renderCalcoloForfettario(h, el) {
 function renderCalcoloOrdinario(h, el) {
   const c = calcOrdinario(), s = S();
   const perc = c.perc;
-  const labels = ['0-15.000 (23%)','15.001-28.000 (25%)','28.001-50.000 (35%)','Oltre 50.000 (43%)'];
+  const labels = getIrpefBracketLabelsForYear(currentYear);
   const crossYear = getCrossYearInvoices();
+  const contribLabel = getContribLabel(c.inpsMode);
+  const speseStoriche = calcSpeseCarryoverTotalForYear(currentYear);
 
-  h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo (Ordinario)</h3>`;
-  h += drawDonut(c.netto, c.senza.tasse, c.cT);
+  h += `<div class="panel" style="grid-column:1/-1"><h3>${c.spese > 0 ? "Ripartizione dell'Imponibile (Ordinario)" : 'Ripartizione del Lordo (Ordinario)'}</h3>`;
+  h += drawDonut(c.netto, c.con.tasse, c.cT, c.spese > 0 ? 'Imponibile' : 'Totale lordo');
   h += `</div>`;
 
   h += `<div class="panel"><h3>Riepilogo Annuale</h3>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
+  h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
   h += row('Totale annuo lordo', fmt(c.tot), 'highlight');
   if (crossYear.length > 0) {
     const crossTot = crossYear.reduce((s, i) => s + i.importo, 0);
-    h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Include ${fmt(crossTot)} da fatture ${currentYear-1} incassate nel ${currentYear}</div>`;
+    h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Include ${fmt(crossTot)} da fatture di anni precedenti incassate nel ${currentYear}</div>`;
   }
   if (c.spese > 0) {
     h += row('Spese deducibili', fmt(c.spese), '', 'negative');
+    if (speseStoriche > 0) {
+      h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Di cui ${fmt(speseStoriche)} da quote di anni precedenti ancora attive nel ${currentYear}</div>`;
+    }
     h += row('Imponibile', fmt(c.totSp), 'highlight');
   }
   h += '<br><div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">Scaglioni IRPEF:</div>';
-  for (let i = 0; i < 4; i++) {
-    const d = c.senza.det[i];
+  for (let i = 0; i < labels.length; i++) {
+    const d = c.con.det[i];
     if (d.b > 0) h += row(labels[i], `${fmt(d.b)} &rarr; ${fmt(d.t)}`);
   }
   h += '<br>';
-  h += row('IRPEF', fmt(c.senza.tasse), '', 'negative');
-  h += row('Contributi INPS', fmt(c.cT), '', 'negative');
+  h += row('IRPEF', fmt(c.con.tasse), '', 'negative');
+  h += row(contribLabel, fmt(c.cT), '', 'negative');
   h += '<br>';
   h += row('Netto annuo', fmt(c.netto), 'highlight', 'positive');
   h += row('Netto mensile', fmt(c.netto / 12), '', 'positive');
@@ -618,9 +845,13 @@ function renderCalcoloOrdinario(h, el) {
   h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
   h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
-  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">Contributi INPS</div>`;
-  h += row('Fissi', fmt(c.cF));
-  h += row('Variabili', fmt(c.cV));
+  h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">${contribLabel}</div>`;
+  if (c.inpsMode === 'gestione_separata') {
+    h += row('Su imponibile', fmt(c.cT), 'highlight');
+  } else {
+    h += row('Fissi', fmt(c.cF));
+    h += row('Variabili', fmt(c.cV));
+  }
   h += row('Totale annuo', fmt(c.cT), 'highlight');
   h += row('Totale mensile', fmt(c.cT / 12));
   h += `</div></div>`;
@@ -707,7 +938,6 @@ function getEffectiveTaxRateForYear(year) {
   const yd = loadYearData(year);
   if (!yd || !yd.settings) return getEffectiveTaxRate();
   const s = yd.settings;
-  if (s.regime === 'ordinario') return getEffectiveTaxRate(); // fallback
 
   // Calculate forfettario rate using that year's settings and data
   const fatture = yd.fatture || {};
@@ -719,27 +949,31 @@ function getEffectiveTaxRateForYear(year) {
       if (imp > 0 && (!f.pagAnno || f.pagAnno == year)) total += imp;
     }
   }
+  for (const inv of getCrossYearInvoicesForYear(year)) total += inv.importo;
   if (total <= 0) return getEffectiveTaxRate(); // no data, fallback
+  if (s.regime === 'ordinario') {
+    return calcOrdinarioValues(total, calcSpeseTotalForYear(year), s, year).perc;
+  }
 
   const coeff = (s.coefficiente || 67) / 100;
   const imp = (s.impostaSostitutiva || 15) / 100;
-  const tasse = total * coeff * imp;
-  const cF = s.contribFissi || 4515.43;
-  const bV = total * coeff - (s.minimaleInps || 18415);
-  const cV = bV > 0 ? bV * ((s.aliqContributi || 24.8) / 100) : 0;
-  const rid = s.riduzione35 == 1 ? 0.65 : 1;
-  const cT = (cF + cV) * rid;
-  return (tasse + cT) / total;
+  const imponibile = total * coeff;
+  const tasse = imponibile * imp;
+  const inps = calcInpsContributions(imponibile, s);
+  const rid = s.riduzione35 == 1 && inps.mode === 'artigiani_commercianti' ? 0.65 : 1;
+  return (tasse + inps.cT * rid) / total;
 }
 
 // ═══════════════════ Render: Accantonamento ═══════════════════
-// Collect all fatture paid in the current year (only real invoices, no estimates)
-function getFattureForAccantonamento() {
+// Collect all fatture paid in the selected year (only real invoices, no estimates)
+function getFattureForAccantonamentoForYear(year) {
   const items = [];
-  const perc = getEffectiveTaxRate();
+  const perc = getEffectiveTaxRateForYear(year);
+  const yearData = year === currentYear ? data : loadYearData(year);
+  if (!yearData) return items;
 
-  // 1. Fatture dall'anno precedente pagate quest'anno (cross-year) — in testa
-  const crossYear = getCrossYearInvoices();
+  // 1. Fatture di anni precedenti pagate in questo anno (cross-year) — in testa
+  const crossYear = getCrossYearInvoicesForYear(year);
   const crossCounts = {}; // per-month index for stable keys
   for (const inv of crossYear) {
     const idx = crossCounts[inv.mese] = (crossCounts[inv.mese] || 0) + 1;
@@ -751,22 +985,262 @@ function getFattureForAccantonamento() {
     });
   }
 
-  // 2. Fatture emesse quest'anno e pagate quest'anno (o senza data pagamento = assunto quest'anno)
+  // 2. Fatture emesse in questo anno e pagate in questo anno (o senza data pagamento = assunto nello stesso anno)
   for (let m = 1; m <= 12; m++) {
     let idx = 0;
-    for (const f of getFatture(m)) {
+    for (const f of getFattureFromYearData(yearData, m)) {
       idx++;
       if (f.importo <= 0) continue;
-      if (f.pagAnno && f.pagAnno !== currentYear) continue; // deferred to another year
+      if (f.pagAnno && f.pagAnno !== year) continue; // deferred to another year
       items.push({
         label: MONTHS[m-1] + (f.desc ? ' - ' + f.desc : ''),
-        mese: m, anno: currentYear, importo: f.importo, rate: perc,
+        mese: m, anno: year, importo: f.importo, rate: perc,
         key: 'cur_' + m + '_' + idx // stable key: month + index within month
       });
     }
   }
 
   return items;
+}
+
+function getFattureForAccantonamento() {
+  return getFattureForAccantonamentoForYear(currentYear);
+}
+
+function getAllFattureForAccantonamento() {
+  let items = [];
+  for (const year of getStoredYears(currentYear)) {
+    items = items.concat(getFattureForAccantonamentoForYear(year).map(item => ({ ...item, paidYear: year })));
+  }
+  return items;
+}
+
+function getPagamentiForYear(year) {
+  const yearData = year === currentYear ? data : loadYearData(year);
+  return yearData && Array.isArray(yearData.pagamenti) ? yearData.pagamenti : [];
+}
+
+function getPagamenti() {
+  const items = [];
+  for (const year of getStoredYears(currentYear)) {
+    const pagamenti = getPagamentiForYear(year);
+    for (let idx = 0; idx < pagamenti.length; idx++) {
+      const p = pagamenti[idx] || {};
+      items.push({
+        anno: year,
+        _idx: idx,
+        data: p.data || '',
+        tipo: p.tipo || 'tasse',
+        descrizione: p.descrizione || '',
+        importo: ceil2(parseFloat(p.importo) || 0)
+      });
+    }
+  }
+  return items.sort((a, b) => (b.data || '').localeCompare(a.data || '') || b.anno - a.anno || a._idx - b._idx);
+}
+
+function getTotalAccantonato() {
+  let total = 0;
+  for (const year of getStoredYears(currentYear)) {
+    const yearData = year === currentYear ? data : loadYearData(year);
+    for (const raw of Object.values((yearData && yearData.accantonamento) || {})) {
+      total = ceil2(total + ceil2(parseFloat(raw) || 0));
+    }
+  }
+  return total;
+}
+
+function getTotalDovutoAccantonamento() {
+  let total = 0;
+  for (const f of getAllFattureForAccantonamento()) {
+    total = ceil2(total + ceil2(f.importo * f.rate));
+  }
+  return total;
+}
+
+function getTotalPagamenti() {
+  let total = 0;
+  for (const p of getPagamenti()) {
+    total = ceil2(total + ceil2(parseFloat(p.importo) || 0));
+  }
+  return total;
+}
+
+function addPagamento() {
+  if (!Array.isArray(data.pagamenti)) data.pagamenti = [];
+  data.pagamenti.unshift({
+    data: `${currentYear}-01-01`,
+    tipo: 'tasse',
+    descrizione: '',
+    importo: 0
+  });
+  saveData();
+  renderPagamenti();
+}
+
+function setPagamentoField(year, idx, key, val) {
+  const yearData = year === currentYear ? data : loadYearData(year);
+  if (!yearData || !yearData.pagamenti || !yearData.pagamenti[idx]) return;
+  yearData.pagamenti[idx][key] = val;
+  saveYearData(year, yearData);
+  renderPagamenti();
+}
+
+function setPagamentoImporto(year, idx, val) {
+  const yearData = year === currentYear ? data : loadYearData(year);
+  if (!yearData || !yearData.pagamenti || !yearData.pagamenti[idx]) return;
+  yearData.pagamenti[idx].importo = ceil2(parseFloat(val) || 0);
+  saveYearData(year, yearData);
+  renderPagamenti();
+}
+
+function removePagamento(year, idx) {
+  const yearData = year === currentYear ? data : loadYearData(year);
+  if (!yearData || !yearData.pagamenti || !yearData.pagamenti[idx]) return;
+  yearData.pagamenti.splice(idx, 1);
+  saveYearData(year, yearData);
+  renderPagamenti();
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function parseIsoDate(value) {
+  if (!value) return null;
+  const parts = String(value).split('-').map(v => parseInt(v, 10));
+  if (parts.length !== 3 || parts.some(v => !Number.isFinite(v))) return null;
+  const [year, month, day] = parts;
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+  return { year, month, day };
+}
+
+function formatPaymentDateDisplay(value) {
+  const parsed = parseIsoDate(value);
+  if (!parsed) return 'Seleziona data';
+  return `${pad2(parsed.day)} ${MONTHS_SHORT[parsed.month - 1]} ${parsed.year}`;
+}
+
+function formatPaymentDateMeta(rowYear, value) {
+  const parsed = parseIsoDate(value);
+  if (!parsed) return `Anno contabile ${rowYear}`;
+  if (parsed.year !== rowYear) return `Pagato nel ${parsed.year} - contabile ${rowYear}`;
+  return `Anno contabile ${rowYear}`;
+}
+
+let paymentDatePickerState = null;
+
+function positionFloatingPopup(popup, rect, preferredWidth, preferredHeight) {
+  if (window.innerWidth <= 768) {
+    popup.style.left = '50%';
+    popup.style.top = '50%';
+    popup.style.transform = 'translate(-50%, -50%)';
+    return;
+  }
+
+  popup.style.transform = '';
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  if (left + preferredWidth > window.innerWidth - 12) left = window.innerWidth - preferredWidth - 12;
+  if (left < 12) left = 12;
+  if (top + preferredHeight > window.innerHeight - 12) top = Math.max(12, rect.top - preferredHeight - 8);
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+}
+
+function openPaymentDatePicker(year, idx, evt) {
+  if (evt) evt.stopPropagation();
+  const pagamento = getPagamentiForYear(year)[idx];
+  if (!pagamento) return;
+
+  const parsed = parseIsoDate(pagamento.data) || { year, month: 1, day: 1 };
+  paymentDatePickerState = {
+    rowYear: year,
+    idx,
+    selected: pagamento.data || '',
+    viewYear: parsed.year,
+    viewMonth: parsed.month
+  };
+
+  const popup = document.getElementById('paymentDatePopup');
+  const overlay = document.getElementById('paymentDateOverlay');
+  if (!popup || !overlay) return;
+  const rect = evt && evt.currentTarget ? evt.currentTarget.getBoundingClientRect() : { left: 24, top: 24, bottom: 24 };
+  positionFloatingPopup(popup, rect, 300, 360);
+  renderPaymentDatePicker();
+  overlay.style.display = 'block';
+  popup.style.display = 'block';
+}
+
+function closePaymentDatePicker() {
+  const popup = document.getElementById('paymentDatePopup');
+  const overlay = document.getElementById('paymentDateOverlay');
+  if (popup) popup.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
+  paymentDatePickerState = null;
+}
+
+function shiftPaymentDatePicker(deltaMonths) {
+  if (!paymentDatePickerState) return;
+  const base = new Date(paymentDatePickerState.viewYear, paymentDatePickerState.viewMonth - 1 + deltaMonths, 1);
+  paymentDatePickerState.viewYear = base.getFullYear();
+  paymentDatePickerState.viewMonth = base.getMonth() + 1;
+  renderPaymentDatePicker();
+}
+
+function pickPagamentoDate(year, month, day) {
+  if (!paymentDatePickerState) return;
+  const iso = `${year}-${pad2(month)}-${pad2(day)}`;
+  const rowYear = paymentDatePickerState.rowYear;
+  const idx = paymentDatePickerState.idx;
+  closePaymentDatePicker();
+  setPagamentoField(rowYear, idx, 'data', iso);
+}
+
+function setPagamentoDateToday() {
+  const today = new Date();
+  pickPagamentoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+}
+
+function clearPagamentoDate() {
+  if (!paymentDatePickerState) return;
+  const rowYear = paymentDatePickerState.rowYear;
+  const idx = paymentDatePickerState.idx;
+  closePaymentDatePicker();
+  setPagamentoField(rowYear, idx, 'data', '');
+}
+
+function renderPaymentDatePicker() {
+  const popup = document.getElementById('paymentDatePopup');
+  if (!popup || !paymentDatePickerState) return;
+
+  const state = paymentDatePickerState;
+  const selected = parseIsoDate(state.selected);
+  const firstDow = (new Date(state.viewYear, state.viewMonth - 1, 1).getDay() + 6) % 7;
+  const dim = daysInMonth(state.viewYear, state.viewMonth);
+  const today = new Date();
+  let html = `<div class="payment-date-head">
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(-1)">&lsaquo;</button>
+    <div class="payment-date-title">${MONTHS[state.viewMonth - 1]} ${state.viewYear}</div>
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(1)">&rsaquo;</button>
+  </div>`;
+  html += `<div class="payment-date-weekdays">${['L','M','M','G','V','S','D'].map(d => `<span>${d}</span>`).join('')}</div>`;
+  html += `<div class="payment-date-grid">`;
+  for (let i = 0; i < firstDow; i++) html += `<span class="payment-date-empty"></span>`;
+  for (let day = 1; day <= dim; day++) {
+    const isSelected = selected && selected.year === state.viewYear && selected.month === state.viewMonth && selected.day === day;
+    const isToday = today.getFullYear() === state.viewYear && today.getMonth() + 1 === state.viewMonth && today.getDate() === day;
+    html += `<button type="button" class="payment-date-day${isSelected ? ' selected' : ''}${isToday ? ' today' : ''}" onclick="pickPagamentoDate(${state.viewYear}, ${state.viewMonth}, ${day})">${day}</button>`;
+  }
+  const cellsUsed = firstDow + dim;
+  const trailing = (7 - (cellsUsed % 7)) % 7;
+  for (let i = 0; i < trailing; i++) html += `<span class="payment-date-empty"></span>`;
+  html += `</div>`;
+  html += `<div class="payment-date-actions">
+    <button type="button" onclick="setPagamentoDateToday()">Oggi</button>
+    <button type="button" onclick="clearPagamentoDate()">Svuota</button>
+  </div>`;
+  popup.innerHTML = html;
 }
 
 function renderAccantonamento() {
@@ -794,11 +1268,12 @@ function renderAccantonamento() {
   let cD = 0, cM = 0;
   const md = [];
   for (const f of fatture) {
-    const dovuto = f.importo * f.rate;
+    const dovuto = ceil2(f.importo * f.rate);
     const accKey = f.key;
-    const messo = parseFloat(data.accantonamento[accKey]) || 0;
-    cD += dovuto; cM += messo;
-    const dm = messo - dovuto, dc = cM - cD;
+    const messo = ceil2(parseFloat(data.accantonamento[accKey]) || 0);
+    cD = ceil2(cD + dovuto);
+    cM = ceil2(cM + messo);
+    const dm = ceil2(messo - dovuto), dc = ceil2(cM - cD);
     md.push({ label: f.label, mese: f.mese, dovuto, messo, dm, cD, cM, dc, importo: f.importo, isCrossYear: f.isCrossYear });
 
     const bgStyle = f.isCrossYear ? ' style="background:rgba(245,166,35,.06)"' : '';
@@ -808,7 +1283,7 @@ function renderAccantonamento() {
       <td data-label="Aliq." style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
       <td data-label="Da accant." style="color:var(--yellow)">${fmt(dovuto)}</td>
       <td data-label="Accantonato"><input type="number" value="${messo||''}" placeholder="0" step="0.01"
-        onchange="data.accantonamento['${accKey}']=parseFloat(this.value)||0;saveData();recalcAll()"></td>
+        onchange="data.accantonamento['${accKey}']=ceil2(parseFloat(this.value)||0);saveData();recalcAll()"></td>
       <td data-label="Delta" class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
       <td data-label="Dovuto cum." style="color:var(--yellow)">${fmt(cD)}</td>
       <td data-label="Accant. cum.">${fmt(cM)}</td>
@@ -816,7 +1291,7 @@ function renderAccantonamento() {
   }
 
   const totLordo = fatture.reduce((s, f) => s + f.importo, 0);
-  const fd = cM - cD;
+  const fd = ceil2(cM - cD);
   h += `</tbody><tfoot><tr><td data-label="Fattura" style="text-align:left">Totale</td><td data-label="Lordo">${fmt(totLordo)}</td><td data-label="Aliq."></td>
     <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td><td data-label="Accantonato">${fmt(cM)}</td>
     <td data-label="Delta" class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
@@ -911,8 +1386,8 @@ function renderAccantonamento() {
     let totDef = 0;
     for (const d of deferredFatture) {
       const rate = getEffectiveTaxRateForYear(d.pagAnno);
-      const accant = d.importo * rate;
-      totDef += accant;
+      const accant = ceil2(d.importo * rate);
+      totDef = ceil2(totDef + accant);
       h += `<tr><td data-label="Fattura" style="text-align:left">${MONTHS[d.mese-1]}${d.desc ? ' - ' + d.desc : ''}</td>
         <td data-label="Importo">${fmt(d.importo)}</td>
         <td data-label="Anno incasso">${d.pagAnno}</td>
@@ -927,6 +1402,92 @@ function renderAccantonamento() {
 }
 
 // ═══════════════════ Render: Calendar ═══════════════════
+function renderPagamenti() {
+  const el = document.getElementById('pagamentiGrid');
+  if (!el) return;
+
+  const pagamenti = getPagamenti();
+  const totAcc = getTotalAccantonato();
+  const totPag = getTotalPagamenti();
+  const totDov = getTotalDovutoAccantonamento();
+  const fondoResiduo = ceil2(totAcc - totPag);
+  const residuoDaVersare = ceil2(totDov - totPag);
+  const copertura = ceil2(totAcc - totDov);
+
+  const perTipo = {};
+  for (const p of getPagamenti()) {
+    const tipo = PAYMENT_TYPES[p.tipo] ? p.tipo : 'altro';
+    perTipo[tipo] = ceil2((perTipo[tipo] || 0) + ceil2(parseFloat(p.importo) || 0));
+  }
+
+  let h = '';
+  h += `<div class="panel"><h3>Fondo Accantonato</h3>`;
+  h += row('Totale accantonato', fmt(totAcc), 'highlight', 'positive');
+  h += row('Pagamenti registrati', fmt(totPag), '', 'negative');
+  h += row('Fondo residuo', fmt(fondoResiduo), 'highlight', fondoResiduo >= 0 ? 'positive' : 'negative');
+  h += `<div style="font-size:.78rem;color:var(--text2);margin-top:8px">
+    Fondo residuo = totale accantonato meno pagamenti registrati fino al ${currentYear}.</div></div>`;
+
+  h += `<div class="panel"><h3>Stato Versamenti</h3>`;
+  h += row('Dovuto stimato', fmt(totDov), 'highlight');
+  if (residuoDaVersare > 0) {
+    h += row('Ancora da versare', fmt(residuoDaVersare), '', 'negative');
+  } else if (residuoDaVersare < 0) {
+    h += row('Pagato oltre il dovuto stimato', fmt(Math.abs(residuoDaVersare)), '', 'positive');
+  } else {
+    h += row('In pari col dovuto', fmt(0), '', 'positive');
+  }
+  h += row('Copertura accantonamento', fmt(copertura), 'highlight', copertura >= 0 ? 'positive' : 'negative');
+  h += `<div style="font-size:.78rem;color:var(--text2);margin-top:8px">
+    Il dovuto stimato cumula i valori del tab Tasse Accantonate fino al ${currentYear}.</div></div>`;
+
+  h += `<div class="panel"><h3>Riepilogo per Tipo</h3>`;
+  const tipiUsati = Object.keys(PAYMENT_TYPES).filter(k => perTipo[k] > 0);
+  if (tipiUsati.length === 0) {
+    h += `<div style="font-size:.82rem;color:var(--text2)">Nessun pagamento registrato fino al ${currentYear}.</div>`;
+  } else {
+    for (const tipo of tipiUsati) h += row(getPaymentTypeLabel(tipo), fmt(perTipo[tipo]));
+  }
+  h += `</div>`;
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>Pagamenti fino al ${currentYear}</h3>`;
+  h += `<div style="font-size:.82rem;color:var(--text2);margin-bottom:12px">
+    Registra F24, contributi o altri versamenti gia effettuati. Lo storico resta salvato per anno, ma qui viene mostrato in modo cumulato.</div>`;
+  h += `<div class="pagamenti-header"><span>Data</span><span>Tipo</span><span>Descrizione</span><span>Importo</span><span></span></div>`;
+
+  if (pagamenti.length === 0) {
+    h += `<div style="font-size:.88rem;color:var(--text2);padding:18px 0;text-align:center">
+      Nessun pagamento registrato fino al ${currentYear}.</div>`;
+  } else {
+    for (const p of pagamenti) {
+      const idx = p._idx;
+      const anno = p.anno;
+      const storicoLabel = anno !== currentYear ? ` (${anno})` : '';
+      const dateLabel = formatPaymentDateDisplay(p.data);
+      const dateMeta = formatPaymentDateMeta(anno, p.data);
+      h += `<div class="pagamenti-row">
+        <button type="button" class="payment-date-btn" title="Scegli data${storicoLabel}" onclick="openPaymentDatePicker(${anno}, ${idx}, event)">
+          <span class="payment-date-main">${dateLabel}</span>
+          <span class="payment-date-meta">${dateMeta}</span>
+        </button>
+        <select onchange="setPagamentoField(${anno}, ${idx}, 'tipo', this.value)">
+          ${Object.entries(PAYMENT_TYPES).map(([key, info]) => `<option value="${key}" ${p.tipo===key?'selected':''}>${info.label}</option>`).join('')}
+        </select>
+        <input type="text" value="${p.descrizione || ''}" placeholder="es. F24 giugno, saldo INPS..." onchange="setPagamentoField(${anno}, ${idx}, 'descrizione', this.value)">
+        <input type="number" value="${p.importo || ''}" placeholder="0" step="0.01" onchange="setPagamentoImporto(${anno}, ${idx}, this.value)">
+        <button class="btn-del" title="Elimina pagamento${storicoLabel}" onclick="removePagamento(${anno}, ${idx})">&times;</button>
+      </div>`;
+    }
+  }
+
+  h += `<button class="btn-add" onclick="addPagamento()">+ Aggiungi pagamento</button>`;
+  h += `<div style="font-size:.78rem;color:var(--text2);margin-top:8px">I nuovi pagamenti vengono aggiunti all'anno ${currentYear}.</div>`;
+  h += `<div style="margin-top:16px">${row('Totale pagamenti registrati', fmt(totPag), 'highlight', 'negative')}</div>`;
+  h += `</div>`;
+
+  el.innerHTML = h;
+}
+
 let pickerMonth = 0, pickerDay = 0;
 
 function openPicker(m, d, evt) {
@@ -1099,7 +1660,7 @@ function renderFatture() {
     crossHtml += `<div class="status-box ok" style="margin-bottom:16px">
       <div class="status-icon" style="font-size:1.2rem">&#8592;</div>
       <div class="status-text">
-        <h4 style="color:var(--yellow);font-size:.88rem">Fatture ${currentYear-1} incassate nel ${currentYear}</h4>
+        <h4 style="color:var(--yellow);font-size:.88rem">Fatture di anni precedenti incassate nel ${currentYear}</h4>
         <p>${crossYear.map(i => `${MONTHS[i.mese-1]} ${i.anno}: ${fmt(i.importo)}${i.desc?' ('+i.desc+')':''}`).join(' &bull; ')}
         &mdash; Totale: <b>${fmt(crossTot)}</b></p></div></div>`;
   }
@@ -1231,7 +1792,7 @@ function budgetSetImporto(idx, val) {
 function budgetSetPercent(idx, val) {
   const { netto: nettoMensile } = getBudgetNettoMensile();
   const pct = parseFloat(val) || 0;
-  data.budget[idx].importo = Math.round(nettoMensile * pct / 100 * 100) / 100;
+  data.budget[idx].importo = ceil2(nettoMensile * pct / 100);
   saveData(); renderBudget();
 }
 
@@ -1371,6 +1932,10 @@ function renderBudget() {
 // ═══════════════════ Render: Spese ═══════════════════
 function renderSpese() {
   const el = document.getElementById('speseContent');
+  const speseAttive = getSpeseAttiveForYear(currentYear);
+  const speseStoriche = speseAttive.filter(sp => sp.annoOrigine !== currentYear);
+  const totaleCorrente = calcSpeseTotalFor(data.spese);
+  const totaleStorico = calcSpeseCarryoverTotalForYear(currentYear);
   let h = '';
   h += `<div class="spese-header"><span>Titolo</span><span>Costo</span><span>Deducib.</span><span>Anni</span><span>Annua</span><span></span></div>`;
 
@@ -1387,7 +1952,20 @@ function renderSpese() {
     </div>`;
   }
   h += `<button class="btn-add" onclick="data.spese.push({titolo:'',costo:0,deducibilita:1,anni:1});saveData();renderSpese()">+ Aggiungi spesa</button>`;
-  h += `<div style="margin-top:16px">${row('Totale deducibilita annua', fmt(calcSpeseTotal()), 'highlight', 'positive')}</div>`;
+  if (speseStoriche.length > 0) {
+    h += `<div style="margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+    h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">Quote attive da anni precedenti</div>`;
+    for (const sp of speseStoriche) {
+      const quota = `${sp.quotaAnno}/${sp.anni}`;
+      h += row(`${sp.titolo || 'Spesa'} (${sp.annoOrigine}, quota ${quota})`, fmt(sp.annua));
+    }
+    h += `</div>`;
+  }
+  h += `<div style="margin-top:16px">`;
+  h += row('Quote anno corrente', fmt(totaleCorrente));
+  if (totaleStorico > 0) h += row('Quote anni precedenti', fmt(totaleStorico));
+  h += row('Totale deducibilita annua', fmt(calcSpeseTotal()), 'highlight', 'positive');
+  h += `</div>`;
   el.innerHTML = h;
 }
 
@@ -1397,6 +1975,7 @@ function recalcAll() {
   renderCalendar();
   renderFatture();
   renderAccantonamento();
+  renderPagamenti();
   renderBudget();
   if (S().regime === 'ordinario') renderSpese();
 }
@@ -1415,6 +1994,7 @@ document.getElementById('nav').addEventListener('click', e => {
 const NAV_LABELS = {
   calcolo:        { full: null, short: 'Regime' }, // full set by applySettings
   accantonamento: { full: 'Tasse Accantonate', short: 'Tasse' },
+  pagamenti:      { full: 'Pagamenti', short: 'Pagam.' },
   calendar:       { full: 'Calendario', short: 'Calend.' },
   fatture:        { full: 'Fatture', short: 'Fatture' },
   budget:         { full: 'Budget', short: 'Budget' },
