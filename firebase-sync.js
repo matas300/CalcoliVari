@@ -116,7 +116,7 @@ function mergeYearData(local, cloud) {
       merged[key] = { ...cv, ...lv };
       // For nested objects like calendar/fatture, also merge at second level
       for (const subKey of Object.keys(cv)) {
-        if (lv[subKey] === undefined || lv[subKey] === null || lv[subKey] === '' || lv[subKey] === 0) {
+        if (lv[subKey] === undefined || lv[subKey] === null || lv[subKey] === '') {
           merged[key][subKey] = cv[subKey];
         }
       }
@@ -164,17 +164,20 @@ async function syncAllToCloud(profile) {
   if (!firebaseReady || !db || !_fs) return;
   try {
     setSyncStatus('syncing');
-    let count = 0;
+    const prefix = 'calcoliPIVA_' + profile + '_';
+    const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      const prefix = 'calcoliPIVA_' + profile + '_';
-      if (key && key.startsWith(prefix)) {
-        const year = key.substring(prefix.length);
-        const yearData = JSON.parse(localStorage.getItem(key));
-        const docRef = _fs.doc(db, 'profiles', profile, 'years', year);
-        await _fs.setDoc(docRef, cleanForFirestore(yearData));
-        count++;
-      }
+      if (key && key.startsWith(prefix)) keys.push(key);
+    }
+    let count = 0;
+    for (const key of keys) {
+      const year = key.substring(prefix.length);
+      const yearData = JSON.parse(localStorage.getItem(key));
+      if (!yearData) continue;
+      const docRef = _fs.doc(db, 'profiles', profile, 'years', year);
+      await _fs.setDoc(docRef, cleanForFirestore(yearData));
+      count++;
     }
     setSyncStatus('online');
     console.log('Upload cloud:', count, 'anni per', profile);

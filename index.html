@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Calcoli P.IVA</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -23,6 +23,7 @@
   <div class="header-right">
     <div id="syncStatus" class="sync-indicator"></div>
     <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
+    <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni">&#9881;</button>
     <div class="year-selector">
     <button onclick="changeYear(-1)">&lt;</button>
     <span id="yearDisplay">2026</span>
@@ -34,7 +35,7 @@
 <nav id="nav">
   <button class="active" data-tab="calcolo">Regime Forfettario</button>
   <button data-tab="accantonamento">Tasse Accantonate</button>
-  <button data-tab="pagamenti">Pagamenti</button>
+  <button data-tab="scadenziario">Scadenziario</button>
   <button data-tab="calendar">Calendario</button>
   <button data-tab="fatture">Fatture</button>
   <button data-tab="budget">Budget</button>
@@ -51,8 +52,8 @@
     <div class="calc-grid" id="accantonamentoGrid"></div>
   </div>
 
-  <div id="tab-pagamenti" class="tab-content">
-    <div class="calc-grid" id="pagamentiGrid"></div>
+  <div id="tab-scadenziario" class="tab-content">
+    <div class="calc-grid" id="scadenziarioGrid"></div>
   </div>
 
   <div id="tab-calendar" class="tab-content">
@@ -98,7 +99,7 @@
       </div>
       <div class="settings-group">
         <label>Contributi INPS fissi annui (EUR, solo Artig./Comm.)</label>
-        <input type="number" id="settContribFissi" value="4515.43" step="0.01" onchange="saveSetting('contribFissi', this.value); recalcAll()">
+        <input type="number" id="settContribFissi" value="4427.04" step="0.01" onchange="saveSetting('contribFissi', this.value); recalcAll()">
       </div>
       <div class="settings-group">
         <label>Minimale INPS (EUR, solo Artig./Comm.)</label>
@@ -106,7 +107,7 @@
       </div>
       <div class="settings-group">
         <label>Aliquota contributi previdenziali (%)</label>
-        <input type="number" id="settAliqContr" value="24.8" step="0.1" onchange="saveSetting('aliqContributi', this.value); recalcAll()">
+        <input type="number" id="settAliqContr" value="24.0" step="0.1" onchange="saveSetting('aliqContributi', this.value); recalcAll()">
       </div>
       <div class="settings-group">
         <label>Gestione previdenziale</label>
@@ -117,6 +118,31 @@
         <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
           Artigiani/Commercianti: contributi fissi + eccedenza sul minimale. Gestione Separata: niente fissi, aliquota su tutto l'imponibile.
         </div>
+      </div>
+      <div class="settings-group">
+        <label>Anno con reddito da lavoro dipendente</label>
+        <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
+          <option value="0">No</option>
+          <option value="1">Si</option>
+        </select>
+        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
+          Serve per segnalare correttamente gli anni misti e avvisare quando il metodo storico puo essere conservativo.
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>Categoria artigiani/commercianti</label>
+        <select id="settInpsCategory" onchange="saveTextSetting('inpsCategoria', this.value); recalcAll()">
+          <option value="artigiano">Artigiano</option>
+          <option value="commerciante">Commerciante</option>
+        </select>
+      </div>
+      <div class="settings-group">
+        <label>Parametri INPS per l'anno selezionato</label>
+        <select id="settInpsOfficial" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
+          <option value="1">Usa parametri ufficiali</option>
+          <option value="0">Inserimento manuale</option>
+        </select>
+        <div id="settInpsOfficialHint" style="margin-top:6px;color:var(--text2);font-size:.75rem"></div>
       </div>
       <div class="settings-group">
         <label>Riduzione contributi 35% (nuove attivita)</label>
@@ -149,6 +175,7 @@
 <div id="paymentDatePopup" class="payment-date-popup"></div>
 
 <script src="firebase-sync.js"></script>
+<script src="tax-engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
