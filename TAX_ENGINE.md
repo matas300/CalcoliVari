@@ -67,6 +67,9 @@ Key rule:
 - Show installment status: stimato, da confermare, pagato, sovrastimato, sottostimato
 - Keep storico and previsionale visible in parallel with warnings
 - Highlight transition-year uncertainty
+- In `Scadenziario`, keep competence as the default lens and cash as a secondary lens
+- Show only fiscally relevant years by default, plus the single trailing settlement year after the last year with real revenues
+- Keep `ordinario` / `misto` hidden behind toggle and never use them as automatic forfettario history without an explicit warning
 
 ## Planned data shape extension
 
@@ -101,6 +104,7 @@ This is not fully persisted yet in UI flows, but the engine/module is designed f
 ## Next implementation steps
 1. Persist normalized imports in yearly state
 2. Make scadenziario row explanations fully engine-driven
-3. Add declaration/history UI
-4. Add simulator: "se fatturo X entro dicembre", "storico vs previsionale delta"
-5. Extend to gestione separata / casse professionali
+3. Finish migrating scadenziario to a full payment-event model for native partial payments
+4. Add declaration/history UI
+5. Add simulator: "se fatturo X entro dicembre", "storico vs previsionale delta"
+6. Extend to gestione separata / casse professionali

@@ -4103,18 +4103,15 @@ function getScadenziarioYearTypeFromSettings(settings) {
 
 function getKnownExternalFiscalYears() {
   const years = new Set();
-  const external = getExternalFiscalData();
   const pushYear = (value) => {
     const year = parseInt(value, 10);
     if (Number.isFinite(year)) years.add(year);
   };
-  const flatEntries = []
-    .concat(external && Array.isArray(external.paidFlatEntries) ? external.paidFlatEntries : [])
-    .concat(external && Array.isArray(external.futureFlatEntries) ? external.futureFlatEntries : []);
+  const flatEntries = getExternalFiscalFlatEntries();
   for (const entry of flatEntries) {
     pushYear(entry && (entry.referenceYear || entry.competenceYear));
-    pushYear(entry && entry.dueYear);
   }
+  const external = getExternalFiscalData();
   const summaries = external && external.summaries ? external.summaries : {};
   for (const key of Object.keys(summaries)) {
     const match = key.match(/(20\d{2})/);
@@ -4142,12 +4139,23 @@ function getYearInvoiceCount(yearData) {
   return count;
 }
 
-function getImportedFiscalEntriesForYear(year) {
+function getExternalFiscalFlatEntries() {
   const external = getExternalFiscalData();
-  const flatEntries = []
+  return []
     .concat(external && Array.isArray(external.paidFlatEntries) ? external.paidFlatEntries : [])
     .concat(external && Array.isArray(external.futureFlatEntries) ? external.futureFlatEntries : []);
-  return flatEntries.filter(entry => {
+}
+
+function getImportedCompetenceFiscalEntriesForYear(year) {
+  return getExternalFiscalFlatEntries().filter(entry => {
+    if (!entry) return false;
+    const referenceYear = entry.referenceYear || entry.competenceYear;
+    return referenceYear === year || entry.competenceYear === year;
+  });
+}
+
+function getImportedFiscalEntriesForYear(year) {
+  return getExternalFiscalFlatEntries().filter(entry => {
     if (!entry) return false;
     const referenceYear = entry.referenceYear || entry.competenceYear;
     return referenceYear === year || entry.competenceYear === year || entry.dueYear === year;
@@ -4277,20 +4285,23 @@ function buildForfettarioRowsForScadenziario(year) {
   };
 }
 
-function buildScadenziarioYearMeta(year) {
+function buildScadenziarioYearMeta(year, options) {
+  const opts = options || {};
   const yearData = getYearDataFor(year);
   const settings = yearData && yearData.settings ? yearData.settings : getDefaultSettings(year);
   const hasLocalYearData = !!yearData;
+  const isTrailingSettlementYear = !!opts.isTrailingSettlementYear;
   const invoiceCount = getYearInvoiceCount(yearData);
   const realRevenue = ceil2(getTotalAnnuoForYear(year, { includeEstimates: false }));
   const estimatedRevenue = isClosedFiscalYear(year) ? 0 : ceil2(Math.max(0, getTotalAnnuoForYear(year, { includeEstimates: true }) - realRevenue));
   const importedEntries = getImportedFiscalEntriesForYear(year);
+  const importedCompetenceEntries = getImportedCompetenceFiscalEntriesForYear(year);
   const importedFamilies = Array.from(new Set(importedEntries.map(entry => entry && entry.family).filter(Boolean)));
   const overrideCount = getScadenziarioOverrideCount(yearData);
   const regimeGuess = getScadenziarioYearTypeFromSettings(settings);
   const regimeType = regimeGuess === 'vuoto' ? 'forfettario' : regimeGuess;
   const shouldBuildAutoSchedule = regimeType === 'forfettario'
-    && (hasLocalYearData || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0 || importedEntries.length > 0);
+    && (isTrailingSettlementYear || hasLocalYearData || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0 || importedEntries.length > 0);
   const bundle = regimeType === 'forfettario'
     ? (shouldBuildAutoSchedule
       ? buildForfettarioRowsForScadenziario(year)
@@ -4342,6 +4353,11 @@ function buildScadenziarioYearMeta(year) {
         amountPaid: totals.amountPaid
       })
     : (rows.length > 0 || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0);
+  const hasFiscalAnchor = !!(
+    invoiceCount > 0
+    || realRevenue > 0
+    || importedCompetenceEntries.length > 0
+  );
 
   return {
     year,
@@ -4356,10 +4372,13 @@ function buildScadenziarioYearMeta(year) {
     estimatedRevenue,
     invoiceCount,
     importedEntries,
+    importedCompetenceEntries,
     importedFamilies,
     overrideCount,
     isClosedYear: isClosedFiscalYear(year),
     isRelevant,
+    hasFiscalAnchor,
+    isTrailingSettlementYear,
     methodPolicy,
     currentMethod: settings && settings.scadenziarioMetodoAcconti === 'previsionale' ? 'previsionale' : 'storico',
     isSelectedYear: year === currentYear
@@ -4371,11 +4390,29 @@ function collectRelevantFiscalYears(options) {
   const includeHistoricalYears = opts.includeHistoricalYears !== undefined ? !!opts.includeHistoricalYears : !!scadenziarioUiState.showHistoricalYears;
   const includeEmptyYears = opts.includeEmptyYears !== undefined ? !!opts.includeEmptyYears : !!scadenziarioUiState.showEmptyYears;
   const years = new Set([...getAllStoredYears(), ...getKnownExternalFiscalYears(), currentYear]);
-  return Array.from(years)
+  let metas = Array.from(years)
     .sort((a, b) => b - a)
-    .map(year => buildScadenziarioYearMeta(year))
-    .filter(meta => includeEmptyYears || meta.isRelevant)
-    .filter(meta => includeHistoricalYears || meta.classification === 'forfettario');
+    .map(year => buildScadenziarioYearMeta(year));
+  const anchorYears = metas
+    .filter(meta => meta.hasFiscalAnchor)
+    .map(meta => meta.year);
+  const lastAnchorYear = anchorYears.length > 0 ? Math.max(...anchorYears) : null;
+  if (lastAnchorYear !== null) {
+    const trailingSettlementYear = lastAnchorYear + 1;
+    if (!years.has(trailingSettlementYear)) {
+      metas.push(buildScadenziarioYearMeta(trailingSettlementYear, { isTrailingSettlementYear: true }));
+    }
+  }
+  return metas
+    .map(meta => {
+      const trailingSettlementYear = lastAnchorYear !== null && meta.year === lastAnchorYear + 1;
+      return trailingSettlementYear && !meta.isTrailingSettlementYear
+        ? buildScadenziarioYearMeta(meta.year, { isTrailingSettlementYear: true })
+        : meta;
+    })
+    .sort((a, b) => b.year - a.year)
+    .filter(meta => includeEmptyYears || meta.hasFiscalAnchor || meta.isTrailingSettlementYear)
+    .filter(meta => includeHistoricalYears || meta.classification === 'forfettario' || meta.isTrailingSettlementYear);
 }
 
 function getScadenziarioTimingChip(row) {
@@ -4535,6 +4572,9 @@ function renderScadenziarioNotes(meta) {
   }
   if (meta.classification === 'misto') {
     notes.push('Anno misto: utile per leggere la liquidita storica, ma non affidabile come base automatica per acconti forfettari.');
+  }
+  if (meta.isTrailingSettlementYear && !meta.hasFiscalAnchor) {
+    notes.push(`Anno ${meta.year} mostrato anche senza fatturato reale per includere saldi e uscite che cadono dopo l ultimo anno con ricavi.`);
   }
   if (meta.overrideCount > 0) {
     notes.push(`Sono presenti ${meta.overrideCount} override manuali per questo anno.`);

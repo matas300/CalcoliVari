@@ -27,6 +27,30 @@
 - `Impostazioni annuali`: variabili operative dell anno selezionato
 - `Scadenziario`: calendario + confronto storico/previsionale + pagamenti collegati
 
+## Scadenziario multi-anno
+
+- La vista principale dello `Scadenziario` va letta per anno di competenza fiscale, non per semplice anno di pagamento.
+- Di default vanno mostrati solo gli anni fiscalmente rilevanti in forfettario.
+- Un anno e rilevante se ha almeno una di queste ancore reali:
+  - fatture / ricavi reali sopra zero
+  - import storico Fiscozen o prospetti legati a quell anno di competenza
+- Gli anni solo creati in storage o con impostazioni vuote non devono comparire.
+- Eccezione voluta: va mantenuto visibile anche l anno immediatamente successivo all ultimo anno con ricavi, perche puo contenere saldi e uscite cross-year.
+- Gli anni `ordinario` e `misto` restano disponibili solo tramite toggle e vanno trattati come storico di supporto, non come base automatica del forfettario.
+
+## UI / tema
+
+- Il tema visuale dell app e stato centralizzato nei token globali CSS in `style.css`.
+- Font:
+  - `Satoshi` per titoli e heading
+  - `Inter` per testo UI, tabelle, input e numeri
+- Palette corrente:
+  - fondo carbone / petrolio
+  - superfici scure a contrasto
+  - accento teal desaturato
+  - stati pagato / warning / errore separati in modo leggibile
+- Il tab `Scadenziario` ha regole dedicate per evitare overflow di testi, badge e controlli sia desktop sia mobile.
+
 ## Fonti mock locali
 
 - `fiscozen/tasse_pagate.json`
