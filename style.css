@@ -798,6 +798,44 @@ input:disabled, select:disabled { opacity: .4; cursor: not-allowed; }
   opacity: 1;
 }
 
+/* ── F24 Guide ── */
+.f24-guide-row td { padding: 0 !important; border: none !important; }
+.f24-guide {
+  padding: 16px 20px;
+  background: rgba(74,158,255,.06);
+  border: 1px solid rgba(74,158,255,.15);
+  border-radius: 10px;
+  margin: 8px 10px 12px;
+}
+.f24-guide h4 { color: var(--blue); font-size: .9rem; margin-bottom: 10px; }
+.f24-guide-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.f24-guide-meta span {
+  padding: 4px 10px; border-radius: 6px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+  font-size: .78rem; color: var(--text2);
+}
+.f24-guide-meta span b { color: var(--text); }
+.f24-guide ol { padding-left: 20px; font-size: .82rem; color: var(--text2); line-height: 1.6; }
+.f24-guide ol li { margin-bottom: 4px; }
+.f24-guide-note {
+  margin-top: 10px; padding: 10px 12px;
+  background: rgba(245,166,35,.08); border: 1px solid rgba(245,166,35,.15);
+  border-radius: 8px; font-size: .78rem; color: var(--yellow); line-height: 1.5;
+}
+.f24-btn {
+  background: rgba(74,158,255,.12);
+  color: var(--blue);
+  border: 1px solid rgba(74,158,255,.28);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: .65rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+.f24-btn:hover { background: rgba(74,158,255,.22); }
+
 /* ── Fatture payment date ── */
 .pag-cell {
   display: flex; align-items: center; gap: 4px; flex-wrap: nowrap;
@@ -1053,6 +1091,12 @@ input:disabled, select:disabled { opacity: .4; cursor: not-allowed; }
   .payment-date-popup {
     width: min(320px, calc(100vw - 20px));
   }
+  /* ── F24 guide mobile ── */
+  .f24-guide-row { background: transparent !important; border: none !important; padding: 0 !important; }
+  .f24-guide-row td { display: block !important; padding: 0 !important; }
+  .f24-guide-row td::before { display: none !important; }
+  .f24-guide { margin: 4px 0 8px; }
+
   .scad-table { display: block; overflow-x: visible; }
   .scad-table thead { display: none; }
   .scad-table tbody, .scad-table tfoot { display: block; }

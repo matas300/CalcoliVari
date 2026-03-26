@@ -34,6 +34,11 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
     scadenziarioSaldoContributi, scadenziarioAccontoContributi,
     scadenziarioRangePct,     // projection range percentage
     scadenziarioBollo, scadenziarioInail, scadenziarioCameraDiCommercio,
+    primoAnnoFatturatoPrec,       // first-year onboarding: prior year revenue (optional)
+    primoAnnoImpostaPrec,         // first-year onboarding: prior year tax (optional)
+    primoAnnoAccontiImpostaPrec,  // first-year onboarding: prior year tax acconti paid (optional)
+    primoAnnoContribVariabiliPrec,// first-year onboarding: prior year variable contributions (optional)
+    primoAnnoAccontiContribPrec,  // first-year onboarding: prior year contribution acconti paid (optional)
     ...
   },
   calendar: { "M-D": activityCode },     // M=1-12, D=1-31
@@ -87,12 +92,44 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 
 ### Scadenziario Engine
 - `buildForfettarioScheduleForYear(year)` — main schedule builder
-- Saldo (June 30): prior year's tax minus acconti paid
-- Acconto primo (June 30): 40% of projected tax; Acconto secondo (Nov 30): 60%
-- Thresholds: < 51.65€ = no acconti; < 257.52€ = single acconto in November
-- INPS fixed dates: May 16, Aug 20, Nov 16, Feb 16
 - Manual overrides per schedule entry (saldo/acconto imposta/contributi)
 - Method comparison via `buildForfettarioMethodComparisonForYear`
+
+#### Payment Calendar (Forfettario)
+- **Imposta sostitutiva**: saldo year N-1 + 1° acconto year N (40%) on June 30; 2° acconto year N (60%) on Nov 30; saldo year N on June 30 of N+1
+- **INPS fixed** (artigiani/commercianti): 4 quarterly rates on May 16, Aug 20, Nov 16, Feb 16 (next year)
+- **INPS variable** (contributi eccedenti il minimale): same saldo/acconto structure as imposta sostitutiva
+- **Saldo** = actual tax/contribution for the year minus acconti already paid
+- **Thresholds**: < 51.65€ = no acconti; < 257.52€ = single acconto in November (100%); otherwise 40/60 split
+
+#### First-Year Onboarding
+- When no previous year data exists in localStorage, the schedule builder uses `primoAnno*` settings as fallback
+- Settings: `primoAnnoFatturatoPrec`, `primoAnnoImpostaPrec`, `primoAnnoAccontiImpostaPrec`, `primoAnnoContribVariabiliPrec`, `primoAnnoAccontiContribPrec`
+- Stored as empty string (not set) or number, using `saveOptionalNumberSetting`
+- Shown in scadenziario "Opzioni avanzate" section, auto-disabled when previous year data exists
+- Used as fallback in `buildForfettarioScheduleForYear()` for saldo and storico acconto calculations
+
+#### F24 Payment Guide
+- `F24_GUIDE` constant: maps schedule entry types to F24 payment instructions
+- Each guide includes: codice tributo, sezione F24, anno di riferimento, step-by-step instructions, notes
+- `getF24GuideKey(scheduleRowKey)` — maps schedule row keys to guide keys
+- `renderF24Guide(guideKey, rowItem)` — renders inline guide HTML
+- `toggleF24Guide(key)` — toggles visibility of guide panel
+- Supported types: imposta_saldo, imposta_acc1, imposta_acc2, inps_fissi, contributi_saldo, contributi_acc1, contributi_acc2, camera, bollo, inail
+
+#### F24 Codici Tributo Reference
+| Tipo | Codice | Sezione |
+|------|--------|---------|
+| Imposta sostitutiva — 1° acconto | 1790 | Erario |
+| Imposta sostitutiva — 2° acconto | 1791 | Erario |
+| Imposta sostitutiva — saldo | 1792 | Erario |
+| Camera di commercio | 3850 | IMU e altri tributi locali |
+| Imposta di bollo — rata 1 | 2521 | Erario |
+| Imposta di bollo — rata 2 | 2522 | Erario |
+| Imposta di bollo — rata 3 | 2523 | Erario |
+| Imposta di bollo — rata 4 | 2524 | Erario |
+| INPS artigiani/commercianti | — | INPS (codice sede + matricola) |
+| INAIL | — | INAIL (codice sede + PAT) |
 
 ### Firebase Sync
 - Debounced (800ms) write on every save

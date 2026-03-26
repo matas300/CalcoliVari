@@ -110,6 +110,218 @@ const OFFICIAL_ARTCOM_INPS = {
     commerciante: { contribFissi: 4611.63, aliqContributi: 24.48 }
   }
 };
+const F24_GUIDE = {
+  imposta_saldo: {
+    titolo: 'Saldo Imposta Sostitutiva',
+    codiceTributo: '1792',
+    sezione: 'Erario',
+    annoRif: 'Anno di competenza (es. 2025 se saldo 2025)',
+    istruzioni: [
+      'Accedi al tuo <b>home banking</b> (sezione pagamenti/F24) oppure al sito dell\'Agenzia delle Entrate:',
+      'Se usi l\'home banking: cerca "Pagamento F24" o "F24 semplificato" nel menu pagamenti',
+      'Se usi il sito AdE: vai su <b>agenziaentrate.gov.it</b> > Area riservata > Servizi > F24 Web',
+      'Nella sezione <b>Erario</b> del modello F24, inserisci il codice tributo <b>1792</b>',
+      'Nel campo "Anno di riferimento" indica l\'anno a cui si riferisce il saldo (es. 2025)',
+      'Nel campo "Importi a debito versati" inserisci l\'importo indicato nello scadenziario',
+      'Rateazione/regione/prov: lascia vuoto per il forfettario',
+      'Verifica il totale e conferma il pagamento entro la scadenza (30 giugno)'
+    ],
+    note: 'Se il saldo risulta a credito (hai pagato piu acconti del dovuto), puoi usare il codice 1792 nella colonna "importi a credito" per compensare altri tributi nello stesso F24.'
+  },
+  imposta_acc1: {
+    titolo: '1° Acconto Imposta Sostitutiva',
+    codiceTributo: '1790',
+    sezione: 'Erario',
+    annoRif: 'Anno corrente (es. 2026 se acconto 2026)',
+    istruzioni: [
+      'Accedi al tuo <b>home banking</b> (sezione pagamenti/F24) oppure al sito dell\'Agenzia delle Entrate',
+      'Home banking: cerca "Pagamento F24" nel menu. Molte banche hanno un modello precompilabile',
+      'Sito AdE: <b>agenziaentrate.gov.it</b> > Accedi con SPID/CIE > Servizi > F24 Web',
+      'Nella sezione <b>Erario</b>, inserisci il codice tributo <b>1790</b>',
+      'Anno di riferimento: l\'anno per cui stai versando l\'acconto (es. 2026)',
+      'Importo a debito: il 40% della base calcolata (metodo storico o previsionale)',
+      'Scadenza ordinaria: <b>30 giugno</b>, stesso giorno del saldo anno precedente'
+    ],
+    note: 'Il primo acconto e pari al 40% dell\'imposta dell\'anno precedente (storico) o dell\'imposta prevista (previsionale). Si paga insieme al saldo dell\'anno prima.'
+  },
+  imposta_acc2: {
+    titolo: '2° Acconto Imposta Sostitutiva',
+    codiceTributo: '1791',
+    sezione: 'Erario',
+    annoRif: 'Anno corrente',
+    istruzioni: [
+      'Accedi al tuo <b>home banking</b> oppure al sito dell\'Agenzia delle Entrate',
+      'Home banking: "Pagamento F24" nel menu pagamenti',
+      'Sito AdE: <b>agenziaentrate.gov.it</b> > Accedi con SPID/CIE > Servizi > F24 Web',
+      'Nella sezione <b>Erario</b>, inserisci il codice tributo <b>1791</b>',
+      'Anno di riferimento: l\'anno corrente',
+      'Importo a debito: il 60% della base calcolata',
+      'Scadenza ordinaria: <b>30 novembre</b>'
+    ],
+    note: 'Il secondo acconto e pari al 60%. Non e rateizzabile ne compensabile con il primo acconto. Se l\'importo totale e sotto 257,52 EUR si versa tutto come unico acconto a novembre.'
+  },
+  inps_fissi: {
+    titolo: 'Rata Fissa INPS Artigiani/Commercianti',
+    codiceTributo: 'Precompilato INPS',
+    sezione: 'INPS',
+    annoRif: 'Anno corrente',
+    istruzioni: [
+      'Le rate fisse INPS si pagano tramite <b>F24 precompilato dall\'INPS</b>. Non devi compilarlo tu.',
+      'Vai su <b>inps.it</b> > Accedi con SPID/CIE',
+      'Cerca "Cassetto Previdenziale Artigiani e Commercianti" nella barra di ricerca',
+      'Nel menu laterale vai su <b>Versamenti</b> > <b>Mod. F24</b>',
+      'Troverai gli F24 precompilati con tutti i dati gia inseriti (codici, importi, scadenze)',
+      'Scarica il PDF dell\'F24 per la rata che devi pagare',
+      'Puoi pagarlo tramite <b>home banking</b> (carica l\'F24 o ricompila i dati) oppure in <b>banca/posta</b> con il cartaceo',
+      'Scadenze: 16 maggio, 20 agosto, 16 novembre, 16 febbraio (anno dopo)'
+    ],
+    note: 'Queste rate coprono i contributi minimi sul minimale. Se hai la riduzione 35% (nuove attivita), l\'importo e gia ridotto. L\'F24 precompilato INPS e il modo piu sicuro: eviti errori nei codici.'
+  },
+  contributi_saldo: {
+    titolo: 'Saldo Contributi INPS (eccedenza sul minimale)',
+    codiceTributo: 'Precompilato INPS',
+    sezione: 'INPS',
+    annoRif: 'Anno di competenza',
+    istruzioni: [
+      'Il saldo INPS sulla quota eccedente si paga con F24',
+      'Vai su <b>inps.it</b> > Accedi con SPID/CIE > Cassetto Previdenziale Artigiani e Commercianti',
+      'Sezione <b>Versamenti</b> > <b>Mod. F24</b>: cerca l\'F24 per il saldo eccedenza',
+      'Se l\'INPS non ha ancora generato l\'F24, puoi compilarlo manualmente:',
+      'Nella sezione <b>INPS</b> del modello F24 indica: codice sede, causale contributo, matricola INPS, periodo (mm/aaaa), importo',
+      'Il saldo = contributi effettivi anno precedente - acconti gia versati',
+      'Scadenza: <b>30 giugno</b> (insieme al saldo imposta)'
+    ],
+    note: 'Se il saldo e negativo, hai un credito. Puoi usarlo in compensazione nei prossimi F24. Verifica sempre sul Cassetto Previdenziale i dati esatti.'
+  },
+  contributi_acc1: {
+    titolo: '1° Acconto Contributi INPS (eccedenza)',
+    codiceTributo: 'Precompilato INPS',
+    sezione: 'INPS',
+    annoRif: 'Anno corrente',
+    istruzioni: [
+      'Il primo acconto INPS si paga con F24',
+      'Vai su <b>inps.it</b> > Cassetto Previdenziale > <b>Versamenti</b> > <b>Mod. F24</b>',
+      'Cerca l\'F24 precompilato per l\'acconto eccedenza. Se non disponibile:',
+      'Compila manualmente la sezione <b>INPS</b> del modello F24 con i dati della tua posizione',
+      'Importo: 40% dei contributi variabili dell\'anno precedente (storico) o previsti (previsionale)',
+      'Scadenza: <b>30 giugno</b>, insieme al saldo e al primo acconto imposta'
+    ],
+    note: 'Se i contributi variabili sono sotto la soglia di 51,65 EUR, non e dovuto alcun acconto.'
+  },
+  contributi_acc2: {
+    titolo: '2° Acconto Contributi INPS (eccedenza)',
+    codiceTributo: 'Precompilato INPS',
+    sezione: 'INPS',
+    annoRif: 'Anno corrente',
+    istruzioni: [
+      'Il secondo acconto INPS si paga con F24',
+      'Vai su <b>inps.it</b> > Cassetto Previdenziale > <b>Versamenti</b> > <b>Mod. F24</b>',
+      'Scarica l\'F24 precompilato o compilalo manualmente',
+      'Importo: 60% dei contributi variabili',
+      'Scadenza: <b>30 novembre</b>'
+    ],
+    note: 'Il secondo acconto non e rateizzabile. Se sotto soglia (51,65 EUR totali) non e dovuto; se sotto 257,52 EUR si versa tutto a novembre come unico acconto.'
+  },
+  camera: {
+    titolo: 'Diritto Annuale Camera di Commercio',
+    codiceTributo: '3850',
+    sezione: 'IMU e altri tributi locali',
+    annoRif: 'Anno corrente',
+    istruzioni: [
+      'Il diritto camerale si paga con F24',
+      'Accedi al tuo <b>home banking</b> > Pagamento F24, oppure:',
+      'Sito AdE: <b>agenziaentrate.gov.it</b> > Servizi > F24 Web',
+      'Nella sezione <b>"IMU e altri tributi locali"</b> (non Erario!):',
+      'Codice ente: il codice della tua Camera di Commercio (es. "TO" per Torino)',
+      'Codice tributo: <b>3850</b>',
+      'Anno di riferimento: anno corrente',
+      'Scadenza: <b>30 giugno</b>'
+    ],
+    note: 'L\'importo per i forfettari artigiani/commercianti e generalmente fisso (circa 53 EUR). Verifica l\'importo esatto sul sito della tua Camera di Commercio territoriale: registroimprese.it.'
+  },
+  bollo: {
+    titolo: 'Imposta di Bollo Fatture Elettroniche',
+    codiceTributo: '2521-2524',
+    sezione: 'Erario',
+    annoRif: 'Trimestre di competenza',
+    istruzioni: [
+      'L\'imposta di bollo si versa tramite il portale <b>"Fatture e Corrispettivi"</b> dell\'Agenzia delle Entrate',
+      'Vai su <b>agenziaentrate.gov.it</b> > Accedi con SPID/CIE',
+      'Cerca <b>"Fatture e Corrispettivi"</b> nei servizi disponibili',
+      'Nel menu vai su <b>"Consultazione" > "Fatture elettroniche e altri dati IVA"</b>',
+      'Poi <b>"Pagamento imposta di bollo"</b>',
+      'Il sistema calcola automaticamente l\'importo dovuto per trimestre dalle tue fatture',
+      'Puoi pagare <b>direttamente online</b> con addebito su conto corrente (IBAN)',
+      'Non serve compilare un F24 manuale! Il pagamento avviene tutto dal portale',
+      'Codici tributo (per riferimento): 2521 (1° trim), 2522 (2° trim), 2523 (3° trim), 2524 (4° trim)'
+    ],
+    note: 'Se l\'importo del 1° trimestre e sotto 5.000 EUR, si puo rimandare al 2° trimestre. Stessa regola per il 3° trimestre verso il 4°. Molti forfettari pagano tutto a novembre (Q1-Q3) e a febbraio (Q4).'
+  },
+  inail: {
+    titolo: 'Autoliquidazione INAIL',
+    codiceTributo: '—',
+    sezione: 'Altri enti previdenziali',
+    annoRif: 'Anno di competenza',
+    istruzioni: [
+      'L\'autoliquidazione INAIL si paga con F24 a febbraio',
+      'Vai su <b>inail.it</b> > Accedi con SPID/CIE > Servizi online',
+      'Cerca <b>"Autoliquidazione premi"</b> nei servizi disponibili',
+      'Scarica il modello F24 precompilato dalla sezione autoliquidazione',
+      'L\'importo e calcolato sulla base delle retribuzioni dichiarate',
+      'Scadenza: <b>16 febbraio</b>',
+      'Puoi pagare tramite home banking o in banca/posta'
+    ],
+    note: 'L\'INAIL e obbligatorio solo per chi ha una posizione assicurativa attiva (es. artigiani con rischio infortuni). Se non hai una posizione INAIL, ignora questa voce.'
+  }
+};
+
+function getF24GuideKey(scheduleRowKey) {
+  if (!scheduleRowKey) return null;
+  const prefixes = [
+    ['imposta_saldo_', 'imposta_saldo'],
+    ['imposta_acc1_', 'imposta_acc1'],
+    ['imposta_acc2_', 'imposta_acc2'],
+    ['inps_fissi_', 'inps_fissi'],
+    ['contributi_saldo_', 'contributi_saldo'],
+    ['contributi_acc1_', 'contributi_acc1'],
+    ['contributi_acc2_', 'contributi_acc2'],
+    ['camera_', 'camera'],
+    ['bollo_', 'bollo'],
+    ['inail_', 'inail']
+  ];
+  for (const [prefix, key] of prefixes) {
+    if (scheduleRowKey.startsWith(prefix)) return key;
+  }
+  return null;
+}
+
+function renderF24Guide(guideKey, rowItem) {
+  const guide = F24_GUIDE[guideKey];
+  if (!guide) return '';
+  const anno = rowItem && rowItem.fiscalYear ? rowItem.fiscalYear : currentYear;
+  let h = `<div class="f24-guide">`;
+  h += `<h4>${guide.titolo}</h4>`;
+  h += `<div class="f24-guide-meta">`;
+  h += `<span>Codice tributo: <b>${guide.codiceTributo}</b></span>`;
+  h += `<span>Sezione F24: <b>${guide.sezione}</b></span>`;
+  h += `<span>Anno rif.: <b>${guide.annoRif}</b></span>`;
+  h += `</div>`;
+  h += `<ol>`;
+  for (const step of guide.istruzioni) h += `<li>${step}</li>`;
+  h += `</ol>`;
+  if (guide.note) {
+    h += `<div class="f24-guide-note">${guide.note}</div>`;
+  }
+  h += `</div>`;
+  return h;
+}
+
+function toggleF24Guide(key) {
+  const safeId = 'f24guide_' + key.replace(/[^a-zA-Z0-9_]/g, '_');
+  const el = document.getElementById(safeId);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
 const FORFETTARIO_RULES = {
   accontoThreshold: 51.65,
   singleAccontoThreshold: 257.52,
@@ -385,7 +597,12 @@ function getDefaultSettings(year = currentYear) {
     scadenziarioBolloCorrente123: '',
     scadenziarioBolloCorrenteQ4: '',
     scadenziarioInailCorrente: '',
-    scadenziarioInailSuccessivo: ''
+    scadenziarioInailSuccessivo: '',
+    primoAnnoFatturatoPrec: '',
+    primoAnnoImpostaPrec: '',
+    primoAnnoAccontiImpostaPrec: '',
+    primoAnnoContribVariabiliPrec: '',
+    primoAnnoAccontiContribPrec: ''
   };
 }
 
@@ -2326,6 +2543,14 @@ function buildForfettarioScheduleForYear(year) {
   const projectionRange = isClosedYear ? null : getForfettarioProjectionRange(year, scheduleSettings.scadenziarioRangePct);
   const prevHasEst = yearHasEstimates(year - 1);
 
+  // Campi primo utilizzo: fallback manuale quando manca lo storico anno precedente
+  const primoAnnoImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoImpostaPrec);
+  const primoAnnoAccontiImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiImpostaPrec);
+  const primoAnnoContribVariabiliPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoContribVariabiliPrec);
+  const primoAnnoAccontiContribPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiContribPrec);
+  const hasPrimoAnnoData = primoAnnoImpostaPrec !== null || primoAnnoContribVariabiliPrec !== null;
+  let firstYearManualUsed = false;
+
   function pushDueRow(month, day, title, competence, amount, kind, method, note, options) {
     const opts = options || {};
     const normalized = centsToEuro(euroToCents(amount));
@@ -2368,6 +2593,9 @@ function buildForfettarioScheduleForYear(year) {
   if (!prevApplied) {
     if (prevYearData && prevYearData.settings && prevYearData.settings.regime !== 'forfettario') {
       notes.push(`Il ${year - 1} non risulta forfettario: l'imposta sostitutiva viene trattata come nuovo ciclo e non sottrae acconti storici.`);
+    } else if (hasPrimoAnnoData) {
+      firstYearManualUsed = true;
+      notes.push(`I dati dell'anno precedente sono stati inseriti manualmente (primo utilizzo).`);
     } else {
       notes.push(`Manca lo storico forfettario ${year - 1}: saldo e acconti imposta vengono stimati usando i dati dell'anno ${year}.`);
     }
@@ -2384,7 +2612,11 @@ function buildForfettarioScheduleForYear(year) {
     notes.push('Sono attivi uno o piu override manuali nello scadenziario: i relativi importi prevalgono sul calcolo automatico.');
   }
 
-  const autoImpostaSaldo = prevApplied ? prevApplied.tasse - prevImpostaAccontiPaid : 0;
+  const autoImpostaSaldo = prevApplied
+    ? prevApplied.tasse - prevImpostaAccontiPaid
+    : (firstYearManualUsed && primoAnnoImpostaPrec !== null
+      ? primoAnnoImpostaPrec - (primoAnnoAccontiImpostaPrec || 0)
+      : 0);
   const impostaSaldo = manualSaldoImposta !== null ? manualSaldoImposta : autoImpostaSaldo;
   if (impostaSaldo > 0) {
     pushDueRow(
@@ -2394,9 +2626,11 @@ function buildForfettarioScheduleForYear(year) {
       `Saldo ${year - 1}`,
       impostaSaldo,
       'tasse',
-      manualSaldoImposta !== null ? 'Importo manuale' : (prevImpostaAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`),
+      manualSaldoImposta !== null ? 'Importo manuale'
+        : (firstYearManualUsed ? 'Manuale primo utilizzo'
+          : (prevImpostaAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
     );
   } else if (manualSaldoImposta === null && autoImpostaSaldo < 0) {
     credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoImpostaSaldo), fiscalYear: year - 1 });
@@ -2404,7 +2638,11 @@ function buildForfettarioScheduleForYear(year) {
 
   const impostaAccontiBase = manualAccontoImposta !== null
     ? manualAccontoImposta
-    : (accontoMethod === 'previsionale' ? forecastImposta.amount : (prevApplied ? prevApplied.tasse : currentApplied.tasse));
+    : (accontoMethod === 'previsionale'
+      ? forecastImposta.amount
+      : (prevApplied
+        ? prevApplied.tasse
+        : (firstYearManualUsed && primoAnnoImpostaPrec !== null ? primoAnnoImpostaPrec : currentApplied.tasse)));
   const impostaAcconti = buildAccontoPlan(impostaAccontiBase);
   const impostaAccCertainty = manualAccontoImposta !== null ? 'fixed'
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
@@ -2420,7 +2658,7 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevApplied ? `Storico ${year - 1}` : `Stima ${year}`)),
+          : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
       { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
     );
@@ -2437,7 +2675,7 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevApplied ? `Storico ${year - 1}` : `Stima ${year}`)),
+          : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
       { key: `imposta_acc2_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
     );
@@ -2462,7 +2700,11 @@ function buildForfettarioScheduleForYear(year) {
     notes.push(`Con ${getContribLabel(currentApplied.inpsMode)} non risultano rate fisse trimestrali sul minimale per il ${year}.`);
   }
 
-  const autoContribSaldo = prevContribution ? prevContribution.saldoAccontoBase - prevContribAccontiPaid : 0;
+  const autoContribSaldo = prevContribution
+    ? prevContribution.saldoAccontoBase - prevContribAccontiPaid
+    : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null
+      ? primoAnnoContribVariabiliPrec - (primoAnnoAccontiContribPrec || 0)
+      : 0);
   const contribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoContribSaldo;
   if (contribSaldo > 0) {
     pushDueRow(
@@ -2472,9 +2714,11 @@ function buildForfettarioScheduleForYear(year) {
       `Saldo ${year - 1}`,
       contribSaldo,
       'contributi',
-      manualSaldoContributi !== null ? 'Importo manuale' : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`),
+      manualSaldoContributi !== null ? 'Importo manuale'
+        : (firstYearManualUsed ? 'Manuale primo utilizzo'
+          : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
     );
   } else if (manualSaldoContributi === null && autoContribSaldo < 0) {
     credits.push({ title: prevContribution ? prevContribution.saldoLabel : 'Contributi', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoContribSaldo), fiscalYear: year - 1 });
@@ -2484,7 +2728,11 @@ function buildForfettarioScheduleForYear(year) {
     ? manualAccontoContributi
     : (accontoMethod === 'previsionale'
       ? forecastContributi.amount
-      : (prevContribution ? prevContribution.saldoAccontoBase : (currentContribution ? currentContribution.saldoAccontoBase : 0)));
+      : (prevContribution
+        ? prevContribution.saldoAccontoBase
+        : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null
+          ? primoAnnoContribVariabiliPrec
+          : (currentContribution ? currentContribution.saldoAccontoBase : 0))));
   const contribAcconti = buildAccontoPlan(contribBase);
   const contribAccCertainty = manualAccontoContributi !== null ? 'fixed'
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
@@ -2500,7 +2748,7 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevContribution ? `Storico ${year - 1}` : `Stima ${year}`)),
+          : (prevContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
       { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year }
     );
@@ -2517,7 +2765,7 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevContribution ? `Storico ${year - 1}` : `Stima ${year}`)),
+          : (prevContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
       { key: `contributi_acc2_${year}`, certainty: contribAccCertainty, fiscalYear: year }
     );
@@ -2607,6 +2855,8 @@ function buildForfettarioScheduleForYear(year) {
     credits: visibleCredits,
     currentApplied,
     currentContribution,
+    prevApplied,
+    firstYearManualUsed,
     accontoMethod,
     isClosedYear,
     uiMethodLabel: isClosedYear ? 'Consuntivo' : (accontoMethod === 'previsionale' ? 'Previsionale' : 'Storico'),
@@ -2658,6 +2908,14 @@ function renderScadenziario() {
   const residuoDaPagare = ceil2(totalDue - totalPaid);
 
   let h = '';
+
+  // Banner primo utilizzo: mancano i dati anno precedente
+  if (!schedule.prevApplied && !schedule.firstYearManualUsed && !schedule.isClosedYear) {
+    h += `<div class="status-box warn" style="grid-column:1/-1;margin-bottom:8px"><div class="status-icon">&#9888;</div><div class="status-text">
+      Non risultano dati dell'anno precedente. Compila i dati nella sezione &laquo;Opzioni avanzate &gt; Dati anno precedente&raquo; per calcoli piu precisi di saldo e acconti.
+    </div></div>`;
+  }
+
   h += `<div class="panel"><h3>${schedule.isClosedYear ? 'Consuntivo' : 'Simulazione'}</h3>`;
   if (schedule.isClosedYear) {
     h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5">
@@ -2788,6 +3046,12 @@ function renderScadenziario() {
       } else {
         pagatoHtml = '';
       }
+      // Bottone guida F24
+      const f24Key = getF24GuideKey(rowItem.key);
+      const f24Btn = f24Key ? `<button class="f24-btn" onclick="toggleF24Guide('${rowItem.key.replace(/'/g, "\\'")}')">F24?</button>` : '';
+      const f24SafeId = 'f24guide_' + (rowItem.key || '').replace(/[^a-zA-Z0-9_]/g, '_');
+      const f24GuideHtml = f24Key ? renderF24Guide(f24Key, rowItem) : '';
+
       h += `<tr>
         <td data-label="Data">${rowItem.due.label}</td>
         <td data-label="Voce">
@@ -2797,10 +3061,13 @@ function renderScadenziario() {
         </td>
         <td data-label="Metodo"><span class="scad-chip info">${rowItem.method}</span></td>
         <td data-label="Importo" style="color:${rowItem.status.cls === 'danger' ? 'var(--red)' : 'var(--yellow)'}">${fmt(rowItem.amount)}${rangeHtml}</td>
-        <td data-label="Pagato">${pagatoHtml}</td>
+        <td data-label="Pagato">${pagatoHtml}${f24Btn}</td>
         <td data-label="Stato"><span class="scad-chip ${paymentState.tone}">${paymentState.label}</span></td>
         <td data-label="Timing"><span class="scad-chip ${rowItem.status.cls}">${rowItem.status.label}</span></td>
       </tr>`;
+      if (f24GuideHtml) {
+        h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="7">${f24GuideHtml}</td></tr>`;
+      }
     }
     const footerRange = hasRange ? `<div class="scad-range">(${fmt(totalLow)} – ${fmt(totalHigh)})</div>` : '';
     h += `</tbody><tfoot><tr>
@@ -2886,6 +3153,44 @@ function renderScadenziario() {
             <label>Autoliquidazione INAIL febbraio ${currentYear + 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().scadenziarioInailSuccessivo}" placeholder="0,00"
               onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
+          </div>
+        </div>
+        <div class="scad-advanced-block">
+          <h4>Dati anno precedente (primo utilizzo)</h4>
+          <div class="settings-group">
+            <label>Fatturato lordo ${currentYear - 1} (EUR)</label>
+            <input type="number" step="0.01" value="${S().primoAnnoFatturatoPrec}" placeholder="0,00"
+              ${schedule.prevApplied ? 'disabled' : ''}
+              onchange="saveOptionalNumberSetting('primoAnnoFatturatoPrec', this.value); recalcAll()">
+          </div>
+          <div class="settings-group">
+            <label>Imposta sostitutiva totale ${currentYear - 1} (EUR)</label>
+            <input type="number" step="0.01" value="${S().primoAnnoImpostaPrec}" placeholder="0,00"
+              ${schedule.prevApplied ? 'disabled' : ''}
+              onchange="saveOptionalNumberSetting('primoAnnoImpostaPrec', this.value); recalcAll()">
+          </div>
+          <div class="settings-group">
+            <label>Acconti imposta gia versati per il ${currentYear - 1} (EUR)</label>
+            <input type="number" step="0.01" value="${S().primoAnnoAccontiImpostaPrec}" placeholder="0,00"
+              ${schedule.prevApplied ? 'disabled' : ''}
+              onchange="saveOptionalNumberSetting('primoAnnoAccontiImpostaPrec', this.value); recalcAll()">
+          </div>
+          <div class="settings-group">
+            <label>Contributi variabili ${currentYear - 1} (EUR)</label>
+            <input type="number" step="0.01" value="${S().primoAnnoContribVariabiliPrec}" placeholder="0,00"
+              ${schedule.prevApplied ? 'disabled' : ''}
+              onchange="saveOptionalNumberSetting('primoAnnoContribVariabiliPrec', this.value); recalcAll()">
+          </div>
+          <div class="settings-group">
+            <label>Acconti contributi gia versati per il ${currentYear - 1} (EUR)</label>
+            <input type="number" step="0.01" value="${S().primoAnnoAccontiContribPrec}" placeholder="0,00"
+              ${schedule.prevApplied ? 'disabled' : ''}
+              onchange="saveOptionalNumberSetting('primoAnnoAccontiContribPrec', this.value); recalcAll()">
+          </div>
+          <div style="font-size:.78rem;color:var(--text2);line-height:1.5">
+            ${schedule.prevApplied
+              ? 'I dati dell\'anno precedente sono gia presenti nel sistema: questi campi sono disabilitati.'
+              : 'Compila questi campi solo se e il tuo primo anno di utilizzo del software e non hai lo storico dell\'anno precedente salvato.'}
           </div>
         </div>
       </div>
