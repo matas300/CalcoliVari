@@ -4285,12 +4285,32 @@ function buildForfettarioRowsForScadenziario(year) {
   };
 }
 
+function buildTrailingSettlementRowsForScadenziario(settlementYear, sourceYear) {
+  const sourceBundle = buildForfettarioRowsForScadenziario(sourceYear);
+  const rows = (sourceBundle.rows || []).filter(row => {
+    if (!row) return false;
+    if (row.dueYear === settlementYear) return true;
+    return (row.paymentEvents || []).some(event => event && event.cashYear === settlementYear);
+  });
+  return {
+    ...sourceBundle,
+    rows,
+    credits: [],
+    notes: [
+      `Anno ${settlementYear}: qui mostro solo le scadenze della competenza ${sourceYear} che finiscono per essere pagate nel ${settlementYear}.`
+    ],
+    isTrailingSettlementOnly: true,
+    sourceFiscalYear: sourceYear
+  };
+}
+
 function buildScadenziarioYearMeta(year, options) {
   const opts = options || {};
   const yearData = getYearDataFor(year);
   const settings = yearData && yearData.settings ? yearData.settings : getDefaultSettings(year);
   const hasLocalYearData = !!yearData;
   const isTrailingSettlementYear = !!opts.isTrailingSettlementYear;
+  const trailingSourceYear = Number.isFinite(opts.trailingSourceYear) ? opts.trailingSourceYear : null;
   const invoiceCount = getYearInvoiceCount(yearData);
   const realRevenue = ceil2(getTotalAnnuoForYear(year, { includeEstimates: false }));
   const estimatedRevenue = isClosedFiscalYear(year) ? 0 : ceil2(Math.max(0, getTotalAnnuoForYear(year, { includeEstimates: true }) - realRevenue));
@@ -4301,12 +4321,14 @@ function buildScadenziarioYearMeta(year, options) {
   const regimeGuess = getScadenziarioYearTypeFromSettings(settings);
   const regimeType = regimeGuess === 'vuoto' ? 'forfettario' : regimeGuess;
   const shouldBuildAutoSchedule = regimeType === 'forfettario'
-    && (isTrailingSettlementYear || hasLocalYearData || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0 || importedEntries.length > 0);
-  const bundle = regimeType === 'forfettario'
-    ? (shouldBuildAutoSchedule
-      ? buildForfettarioRowsForScadenziario(year)
-      : { rows: [], notes: [], credits: [], isClosedYear: isClosedFiscalYear(year) })
-    : buildHistoricalRowsForScadenziario(year, regimeType);
+    && (!isTrailingSettlementYear && (hasLocalYearData || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0 || importedEntries.length > 0));
+  const bundle = isTrailingSettlementYear && trailingSourceYear !== null
+    ? buildTrailingSettlementRowsForScadenziario(year, trailingSourceYear)
+    : (regimeType === 'forfettario'
+      ? (shouldBuildAutoSchedule
+        ? buildForfettarioRowsForScadenziario(year)
+        : { rows: [], notes: [], credits: [], isClosedYear: isClosedFiscalYear(year) })
+      : buildHistoricalRowsForScadenziario(year, regimeType));
   const rows = bundle && Array.isArray(bundle.rows) ? bundle.rows : [];
   const scadEngine = getScadenziarioEngine();
   const totals = scadEngine
@@ -4379,6 +4401,7 @@ function buildScadenziarioYearMeta(year, options) {
     isRelevant,
     hasFiscalAnchor,
     isTrailingSettlementYear,
+    trailingSourceYear,
     methodPolicy,
     currentMethod: settings && settings.scadenziarioMetodoAcconti === 'previsionale' ? 'previsionale' : 'storico',
     isSelectedYear: year === currentYear
@@ -4400,14 +4423,14 @@ function collectRelevantFiscalYears(options) {
   if (lastAnchorYear !== null) {
     const trailingSettlementYear = lastAnchorYear + 1;
     if (!years.has(trailingSettlementYear)) {
-      metas.push(buildScadenziarioYearMeta(trailingSettlementYear, { isTrailingSettlementYear: true }));
+      metas.push(buildScadenziarioYearMeta(trailingSettlementYear, { isTrailingSettlementYear: true, trailingSourceYear: lastAnchorYear }));
     }
   }
   return metas
     .map(meta => {
       const trailingSettlementYear = lastAnchorYear !== null && meta.year === lastAnchorYear + 1;
       return trailingSettlementYear && !meta.isTrailingSettlementYear
-        ? buildScadenziarioYearMeta(meta.year, { isTrailingSettlementYear: true })
+        ? buildScadenziarioYearMeta(meta.year, { isTrailingSettlementYear: true, trailingSourceYear: lastAnchorYear })
         : meta;
     })
     .sort((a, b) => b.year - a.year)
@@ -4519,6 +4542,11 @@ function renderScadenziarioRowsTable(rows, options) {
 
 function renderScadenziarioMethodBox(meta) {
   if (!meta || meta.classification !== 'forfettario') return '';
+  if (meta.isTrailingSettlementYear) {
+    return `<div class="scad-method-box">
+      <div class="scad-note">Anno ${meta.year}: qui mostro solo le code della competenza ${meta.trailingSourceYear}. Non genero un nuovo prospetto fiscale completo del ${meta.year}.</div>
+    </div>`;
+  }
   const schedule = meta.bundle || {};
   if (meta.isClosedYear) {
     return `<div class="scad-method-box">
@@ -4574,7 +4602,7 @@ function renderScadenziarioNotes(meta) {
     notes.push('Anno misto: utile per leggere la liquidita storica, ma non affidabile come base automatica per acconti forfettari.');
   }
   if (meta.isTrailingSettlementYear && !meta.hasFiscalAnchor) {
-    notes.push(`Anno ${meta.year} mostrato anche senza fatturato reale per includere saldi e uscite che cadono dopo l ultimo anno con ricavi.`);
+    notes.push(`Anno ${meta.year} mostrato come coda di pagamento della competenza ${meta.trailingSourceYear}: qui non genero il fiscale del ${meta.year}, ma solo le scadenze del ${meta.trailingSourceYear} che cadono nel ${meta.year}.`);
   }
   if (meta.overrideCount > 0) {
     notes.push(`Sono presenti ${meta.overrideCount} override manuali per questo anno.`);
@@ -4599,7 +4627,9 @@ function renderScadenziarioYearCard(meta) {
     <div class="scad-year-header">
       <div>
         <div class="scad-year-title">Anno ${meta.year}</div>
-        <div class="scad-year-sub">${meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta'}</div>
+        <div class="scad-year-sub">${meta.isTrailingSettlementYear
+          ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
+          : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
       </div>
       <div class="scad-year-badges">
         <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
@@ -4611,7 +4641,7 @@ function renderScadenziarioYearCard(meta) {
       <div class="scad-stat"><span>Dovuto</span><b>${fmt(meta.totals.amountDue)}</b></div>
       <div class="scad-stat"><span>Pagato</span><b>${fmt(meta.totals.amountPaid)}</b></div>
       <div class="scad-stat"><span>Residuo</span><b>${fmt(meta.totals.residualAmount)}</b></div>
-      <div class="scad-stat"><span>Ricavi anno</span><b>${fmt(meta.realRevenue)}</b></div>
+      <div class="scad-stat"><span>${meta.isTrailingSettlementYear ? 'Competenza origine' : 'Ricavi anno'}</span><b>${meta.isTrailingSettlementYear ? meta.trailingSourceYear : fmt(meta.realRevenue)}</b></div>
     </div>
     ${renderScadenziarioMethodBox(meta)}
     <div class="scad-section">
