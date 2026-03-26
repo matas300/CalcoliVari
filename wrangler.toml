@@ -1,0 +1,5 @@
+name = "calcoli-vari-rossima"
+compatibility_date = "2026-03-26"
+
+[assets]
+directory = ".cloudflare-dist"

@@ -1,0 +1,71 @@
+﻿{
+  "bundleId": "340897",
+  "source": "tasse_pagate.json",
+  "sourceDescription": "Scarica e paga l'F24 relativo a: <ul><li><small>Imposta sostitutiva redditi di capitale esteri</small></li><li><small>IRPEF - Acconto - I Rata</small></li><li><small>IRPEF - Saldo</small></li><li><small>INPS ART - Contributi eccedenti il minimale</small></li><li><small>Addizionale regionale all'IRPEF</small></li><li><small>Addizionale comunale IRPEF - Acconto</small></li><li><small>Addizionale comunale IRPEF - Saldo</small></li></ul>",
+  "dueDate": "2025-07-21",
+  "total": 3831.0,
+  "allocationStatus": "unallocated",
+  "lines": [
+    {
+      "label": "Imposta sostitutiva redditi di capitale esteri",
+      "family": "other",
+      "subfamily": "capital_income_substitute_tax",
+      "referenceYear": 2024,
+      "dueYear": 2025,
+      "scheduleKey": "other_capital_income_substitute_tax_2024"
+    },
+    {
+      "label": "IRPEF - Acconto - I Rata",
+      "family": "irpef",
+      "subfamily": "income_tax",
+      "referenceYear": 2025,
+      "dueYear": 2025,
+      "scheduleKey": "irpef_acc1_2025"
+    },
+    {
+      "label": "IRPEF - Saldo",
+      "family": "irpef",
+      "subfamily": "income_tax",
+      "referenceYear": 2024,
+      "dueYear": 2025,
+      "scheduleKey": "irpef_saldo_2024"
+    },
+    {
+      "label": "INPS ART - Contributi eccedenti il minimale",
+      "family": "inps_variable",
+      "subfamily": "art_com_variable",
+      "referenceYear": 2024,
+      "dueYear": 2025,
+      "scheduleKey": "contributi_saldo_2024"
+    },
+    {
+      "label": "Addizionale regionale all'IRPEF",
+      "family": "regional_surtax",
+      "subfamily": "regional_irpef",
+      "referenceYear": 2024,
+      "dueYear": 2025,
+      "scheduleKey": "regional_surtax_2024"
+    },
+    {
+      "label": "Addizionale comunale IRPEF - Acconto",
+      "family": "municipal_surtax",
+      "subfamily": "municipal_irpef",
+      "referenceYear": 2025,
+      "dueYear": 2025,
+      "scheduleKey": "municipal_surtax_acc1_2025"
+    },
+    {
+      "label": "Addizionale comunale IRPEF - Saldo",
+      "family": "municipal_surtax",
+      "subfamily": "municipal_irpef",
+      "referenceYear": 2024,
+      "dueYear": 2025,
+      "scheduleKey": "municipal_surtax_saldo_2024"
+    }
+  ],
+  "notes": [
+    "Fixture di supporto: i singoli importi del bundle non sono allocati nel JSON pagato originale.",
+    "Serve per la normalizzazione bundle-aware e per confronti di famiglia.",
+    "Se serve il breakdown monetario preciso, va estratto dal PDF F24 o da una trascrizione manuale."
+  ]
+}

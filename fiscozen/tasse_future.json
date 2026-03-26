@@ -1,0 +1,140 @@
+[
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2026-05-18",
+        "description": "Prima rata dei contributi minimi INPS ART (rif. 2026)"
+    },
+    {
+        "amount": "53.00",
+        "amount_range": "50-60",
+        "due_date": "2026-06-30",
+        "description": "Versamento diritto annuale Camera di Commercio"
+    },
+    {
+        "amount": "6143.58",
+        "amount_range": "5.840-6.450",
+        "due_date": "2026-06-30",
+        "description": "Saldo imposta sostitutiva (rif. 2025) - INPS Artigiani"
+    },
+    {
+        "amount": "3071.79",
+        "amount_range": "2.920-3.230",
+        "due_date": "2026-06-30",
+        "description": "Primo acconto imposta sostitutiva (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "1406.87",
+        "amount_range": "1.340-1.480",
+        "due_date": "2026-06-30",
+        "description": "Saldo contributi INPS (rif. 2025) - INPS Artigiani"
+    },
+    {
+        "amount": "2731.32",
+        "amount_range": "2.590-2.870",
+        "due_date": "2026-06-30",
+        "description": "Primo acconto contributi INPS (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2026-08-20",
+        "description": "Seconda rata dei contributi minimi INPS ART (rif. 2026)"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2026-11-16",
+        "description": "Terza rata dei contributi minimi INPS ART (rif. 2026)"
+    },
+    {
+        "amount": "4.00",
+        "amount_range": "0-10",
+        "due_date": "2026-11-30",
+        "description": "Imposta di bollo sulle fatture elettroniche - I/II/III trimestre"
+    },
+    {
+        "amount": "3071.79",
+        "amount_range": "2.920-3.230",
+        "due_date": "2026-12-01",
+        "description": "Secondo acconto imposta sostitutiva (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "2731.32",
+        "amount_range": "2.590-2.870",
+        "due_date": "2026-12-01",
+        "description": "Secondo acconto contributi INPS (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2027-02-16",
+        "description": "Quarta rata dei contributi minimi INPS ART (rif. 2026)"
+    },
+    {
+        "amount": "0.00",
+        "amount_range": "0",
+        "due_date": "2027-02-16",
+        "description": "Versamento Autoliquidazione INAIL (rif. 2027)"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2027-05-18",
+        "description": "Prima rata dei contributi minimi INPS ART (rif. 2027)"
+    },
+    {
+        "amount": "0.00",
+        "amount_range": "0",
+        "due_date": "2027-06-30",
+        "description": "Saldo imposta sostitutiva (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "740.09",
+        "amount_range": "700-780",
+        "due_date": "2027-06-30",
+        "description": "Primo acconto imposta sostitutiva (rif. 2027) - INPS Artigiani"
+    },
+    {
+        "amount": "0.00",
+        "amount_range": "0",
+        "due_date": "2027-06-30",
+        "description": "Saldo contributi INPS (rif. 2026) - INPS Artigiani"
+    },
+    {
+        "amount": "0.00",
+        "amount_range": "0",
+        "due_date": "2027-06-30",
+        "description": "Primo acconto contributi INPS (rif. 2027) - INPS Artigiani"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2027-08-20",
+        "description": "Seconda rata dei contributi minimi INPS ART (rif. 2027)"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2027-11-16",
+        "description": "Terza rata dei contributi minimi INPS ART (rif. 2027)"
+    },
+    {
+        "amount": "0.00",
+        "amount_range": "0",
+        "due_date": "2027-11-30",
+        "description": "Secondo acconto contributi INPS (rif. 2027) - INPS Artigiani"
+    },
+    {
+        "amount": "740.09",
+        "amount_range": "700-780",
+        "due_date": "2027-12-01",
+        "description": "Secondo acconto imposta sostitutiva (rif. 2027) - INPS Artigiani"
+    },
+    {
+        "amount": "1130.34",
+        "amount_range": "1.070-1.190",
+        "due_date": "2028-02-16",
+        "description": "Quarta rata dei contributi minimi INPS ART (rif. 2027)"
+    }
+]

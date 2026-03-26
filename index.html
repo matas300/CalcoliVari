@@ -19,7 +19,13 @@
 </div>
 
 <header>
-  <h1>Calcoli P.IVA <span id="profileBadge" class="profile-badge"></span></h1>
+  <div class="header-brand">
+    <h1>Calcoli Partita IVA</h1>
+    <button id="profileBadge" class="profile-trigger" type="button" onclick="openProfileFiscalModal()" aria-haspopup="dialog" aria-controls="profileFiscalModal" title="Apri il profilo fiscale">
+      <span class="profile-trigger-kicker">Profilo fiscale</span>
+      <span id="profileBadgeName" class="profile-trigger-name"></span>
+    </button>
+  </div>
   <div class="header-right">
     <div id="syncStatus" class="sync-indicator"></div>
     <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
@@ -83,41 +89,14 @@
   </div>
 
   <div id="tab-settings" class="tab-content">
-    <div class="panel" style="max-width:500px">
-      <h3>Impostazioni</h3>
+    <div class="panel" style="max-width:560px">
+      <h3>Impostazioni Annuali</h3>
+      <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
+        Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome accanto a <b>Calcoli Partita IVA</b>.
+      </div>
       <div class="settings-group">
         <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
         <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Coefficiente redditivita forfettario (%)</label>
-        <input type="number" id="settCoeff" value="67" onchange="saveSetting('coefficiente', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Imposta sostitutiva forfettario (%)</label>
-        <input type="number" id="settImposta" value="15" onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Contributi INPS fissi annui (EUR, solo Artig./Comm.)</label>
-        <input type="number" id="settContribFissi" value="4427.04" step="0.01" onchange="saveSetting('contribFissi', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Minimale INPS (EUR, solo Artig./Comm.)</label>
-        <input type="number" id="settMinimale" value="18415" onchange="saveSetting('minimaleInps', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Aliquota contributi previdenziali (%)</label>
-        <input type="number" id="settAliqContr" value="24.0" step="0.1" onchange="saveSetting('aliqContributi', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Gestione previdenziale</label>
-        <select id="settInpsMode" onchange="saveTextSetting('inpsMode', this.value); recalcAll()">
-          <option value="artigiani_commercianti">Artigiani / Commercianti</option>
-          <option value="gestione_separata">Gestione Separata</option>
-        </select>
-        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-          Artigiani/Commercianti: contributi fissi + eccedenza sul minimale. Gestione Separata: niente fissi, aliquota su tutto l'imponibile.
-        </div>
       </div>
       <div class="settings-group">
         <label>Anno con reddito da lavoro dipendente</label>
@@ -128,32 +107,6 @@
         <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
           Serve per segnalare correttamente gli anni misti e avvisare quando il metodo storico puo essere conservativo.
         </div>
-      </div>
-      <div class="settings-group">
-        <label>Categoria artigiani/commercianti</label>
-        <select id="settInpsCategory" onchange="saveTextSetting('inpsCategoria', this.value); recalcAll()">
-          <option value="artigiano">Artigiano</option>
-          <option value="commerciante">Commerciante</option>
-        </select>
-      </div>
-      <div class="settings-group">
-        <label>Parametri INPS per l'anno selezionato</label>
-        <select id="settInpsOfficial" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
-          <option value="1">Usa parametri ufficiali</option>
-          <option value="0">Inserimento manuale</option>
-        </select>
-        <div id="settInpsOfficialHint" style="margin-top:6px;color:var(--text2);font-size:.75rem"></div>
-      </div>
-      <div class="settings-group">
-        <label>Riduzione contributi 35% (nuove attivita)</label>
-        <select id="settRiduzione" onchange="saveSetting('riduzione35', this.value); recalcAll()">
-          <option value="0">No</option>
-          <option value="1">Si</option>
-        </select>
-      </div>
-      <div class="settings-group">
-        <label>Limite fatturato forfettario (EUR)</label>
-        <input type="number" id="settLimite" value="85000" onchange="saveSetting('limiteForfettario', this.value); recalcAll()">
       </div>
       <div class="settings-group">
         <label>Giorni medi per incasso fattura</label>
@@ -173,9 +126,15 @@
 <div id="pickerPopup" class="picker-popup"></div>
 <div id="paymentDateOverlay" class="picker-overlay" onclick="closePaymentDatePicker()"></div>
 <div id="paymentDatePopup" class="payment-date-popup"></div>
+<div id="profileFiscalModal" class="profile-modal" aria-hidden="true" onclick="if(event.target===this) closeProfileFiscalModal()">
+  <div class="profile-modal-panel" role="dialog" aria-modal="true" aria-labelledby="profileFiscalTitle">
+    <div id="profileFiscalContent"></div>
+  </div>
+</div>
 
 <script src="firebase-sync.js"></script>
 <script src="tax-engine.js"></script>
+<script src="scadenziario-engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
