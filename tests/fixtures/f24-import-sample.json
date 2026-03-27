@@ -1,0 +1,39 @@
+{
+  "rawImport": {
+    "source": "bank-export",
+    "records": [
+      {
+        "payment_date": "30/06/2026",
+        "amount": "1.792,00",
+        "descrizione": "Pagamento F24 saldo imposta sostitutiva rif. 2025",
+        "codice_tributo": "1792"
+      },
+      {
+        "date": "16/02/2026",
+        "paid_amount": "1106,76",
+        "description": "Quarta rata dei contributi minimi INPS ART (rif. 2025)"
+      }
+    ]
+  },
+  "ledgerRows": [
+    {
+      "id": "ledger_saldo_2025",
+      "title": "Saldo Imposta Sostitutiva",
+      "scheduleKey": "imposta_saldo_2025",
+      "amount": 1792,
+      "dueDate": "2026-06-30",
+      "kind": "tasse",
+      "paymentCode": "1792",
+      "referenceYear": 2025
+    },
+    {
+      "id": "ledger_inps_q4_2025",
+      "title": "Contributi INPS minimi - quarta rata",
+      "scheduleKey": "inps_fissi_4_2025",
+      "amount": 1106.76,
+      "dueDate": "2026-02-16",
+      "kind": "contributi",
+      "referenceYear": 2025
+    }
+  ]
+}

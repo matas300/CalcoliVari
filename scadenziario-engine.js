@@ -5,6 +5,19 @@
     root.ScadenziarioEngine = factory();
   }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  var paymentLedger = null;
+  if (typeof module === 'object' && module.exports) {
+    try {
+      paymentLedger = require('./payment-ledger.js');
+    } catch (error) {
+      paymentLedger = null;
+    }
+  } else if (typeof globalThis !== 'undefined' && globalThis.PaymentLedger) {
+    paymentLedger = globalThis.PaymentLedger;
+  } else if (typeof root !== 'undefined' && root && root.PaymentLedger) {
+    paymentLedger = root.PaymentLedger;
+  }
+
   function toNumber(value) {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
@@ -19,6 +32,9 @@
   }
 
   function sumPaymentEvents(events) {
+    if (paymentLedger && typeof paymentLedger.sumPaymentEvents === 'function') {
+      return paymentLedger.sumPaymentEvents(events);
+    }
     return ceil2((events || []).reduce(function (sum, event) {
       return sum + toNumber(event && event.amount);
     }, 0));
@@ -36,6 +52,9 @@
   }
 
   function buildPaymentStatus(row, paymentEvents, options) {
+    if (paymentLedger && typeof paymentLedger.buildPaymentStatus === 'function') {
+      return paymentLedger.buildPaymentStatus(row, paymentEvents, options);
+    }
     var opts = options || {};
     var dueAmount = ceil2(row && row.amountDue !== undefined ? row.amountDue : row && row.amount);
     var low = ceil2(row && row.low !== undefined ? row.low : dueAmount);
@@ -134,6 +153,17 @@
   }
 
   function computeScheduleTotals(rows) {
+    if (paymentLedger && typeof paymentLedger.computeLedgerTotals === 'function') {
+      var totals = paymentLedger.computeLedgerTotals(rows);
+      return {
+        amountDue: totals.amountDue || 0,
+        amountPaid: totals.amountPaid || 0,
+        residualAmount: totals.residualAmount || 0,
+        crossYearCount: (rows || []).reduce(function (count, row) {
+          return count + (row && row.paymentStatus && row.paymentStatus.isCrossYear ? 1 : 0);
+        }, 0)
+      };
+    }
     return (rows || []).reduce(function (acc, row) {
       var due = ceil2(row && row.amountDue !== undefined ? row.amountDue : row && row.amount);
       var paid = row && row.paymentStatus ? ceil2(row.paymentStatus.amountPaid) : 0;
@@ -159,6 +189,9 @@
   }
 
   function groupPaymentEventsByCashYear(rows) {
+    if (paymentLedger && typeof paymentLedger.groupPaymentEventsByCashYear === 'function') {
+      return paymentLedger.groupPaymentEventsByCashYear(rows);
+    }
     var groups = {};
     for (var i = 0; i < (rows || []).length; i++) {
       var row = rows[i] || {};

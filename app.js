@@ -830,6 +830,7 @@ function getDefaultSettings(year = currentYear) {
     scadenziarioBolloCorrenteQ4: '',
     scadenziarioInailCorrente: '',
     scadenziarioInailSuccessivo: '',
+    vatStartYear: '',
     primoAnnoFatturatoPrec: '',
     primoAnnoImpostaPrec: '',
     primoAnnoAccontiImpostaPrec: '',
@@ -1311,8 +1312,16 @@ function getTaxEngine() {
   return typeof window !== 'undefined' ? window.TaxEngine || null : null;
 }
 
+function getFiscalLedgerBuilder() {
+  return typeof window !== 'undefined' ? window.FiscalLedgerBuilder || null : null;
+}
+
 function getScadenziarioEngine() {
   return typeof window !== 'undefined' ? window.ScadenziarioEngine || null : null;
+}
+
+function getPaymentLedgerEngine() {
+  return typeof window !== 'undefined' ? window.PaymentLedger || null : null;
 }
 
 function helpPill(text) {
@@ -2712,6 +2721,10 @@ function getTotalDovutoAccantonamento() {
 }
 
 function getTotalPagamenti() {
+  const ledger = getPaymentLedgerEngine();
+  if (ledger && typeof ledger.sumPaymentEvents === 'function') {
+    return ledger.sumPaymentEvents(getPagamenti());
+  }
   let total = 0;
   for (const p of getPagamenti()) {
     total = ceil2(total + ceil2(parseFloat(p.importo) || 0));
@@ -3590,7 +3603,122 @@ function getForfettarioProjectionRange(year, variancePct) {
   };
 }
 
+function getForfettarioLedgerContextForYear(year) {
+  const yearData = getYearDataFor(year);
+  const scheduleSettings = yearData && yearData.settings ? yearData.settings : S();
+  const isClosedYear = isClosedFiscalYear(year);
+  const accontoMethod = isClosedYear ? 'storico' : getScadenziarioMetodoAcconti(scheduleSettings);
+  const currentApplied = getAppliedForfettarioForYear(year, { requireForfettarioRegime: true })
+    || getAppliedForfettarioValues(calcForfettarioValues(0, scheduleSettings, year), scheduleSettings);
+  const prevApplied = getAppliedForfettarioForYear(year - 1, { requireForfettarioRegime: true });
+  const prevPrevApplied = getAppliedForfettarioForYear(year - 2, { requireForfettarioRegime: true });
+  const currentContribution = getContributionBaseForYear(year, { includeEstimates: true });
+  const prevContribution = getContributionBaseForYear(year - 1, { includeEstimates: true });
+  const prevPrevContribution = getContributionBaseForYear(year - 2, { includeEstimates: true });
+  const prevYearData = getYearDataFor(year - 1);
+  const prevYearRegime = prevYearData && prevYearData.settings ? prevYearData.settings.regime : '';
+  const prevYearWasForfettario = prevYearRegime === 'forfettario';
+  const transitionFromNonForfettario = !!prevYearRegime && prevYearRegime !== 'forfettario';
+  const prevForfettarioContribution = prevYearWasForfettario ? prevContribution : null;
+  const forecastImposta = resolveScadenziarioForecastBase(scheduleSettings.scadenziarioPrevisionaleImposta, currentApplied.tasse);
+  const forecastContributi = resolveScadenziarioForecastBase(
+    scheduleSettings.scadenziarioPrevisionaleContributi,
+    currentContribution ? currentContribution.saldoAccontoBase : 0
+  );
+  const manualSaldoImposta = getOptionalAmountSetting(scheduleSettings.scadenziarioSaldoImposta);
+  const manualAccontoImposta = getOptionalAmountSetting(scheduleSettings.scadenziarioAccontoImposta);
+  const manualSaldoContributi = getOptionalAmountSetting(scheduleSettings.scadenziarioSaldoContributi);
+  const manualAccontoContributi = getOptionalAmountSetting(scheduleSettings.scadenziarioAccontoContributi);
+  const manualCamera = getOptionalAmountSetting(scheduleSettings.scadenziarioDirittoCamerale);
+  const manualBolloPrevQ4 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloPrecedenteQ4);
+  const manualBollo123 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloCorrente123);
+  const manualBolloQ4 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloCorrenteQ4);
+  const manualInailCurrent = getOptionalAmountSetting(scheduleSettings.scadenziarioInailCorrente);
+  const manualInailNext = getOptionalAmountSetting(scheduleSettings.scadenziarioInailSuccessivo);
+  const projectionRange = isClosedYear ? null : getForfettarioProjectionRange(year, scheduleSettings.scadenziarioRangePct);
+  const prevHasEst = yearHasEstimates(year - 1);
+  const primoAnnoImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoImpostaPrec);
+  const primoAnnoAccontiImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiImpostaPrec);
+  const primoAnnoContribVariabiliPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoContribVariabiliPrec);
+  const primoAnnoAccontiContribPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiContribPrec);
+  const hasPrimoAnnoData = primoAnnoImpostaPrec !== null || primoAnnoContribVariabiliPrec !== null;
+  const allPay = getPagamenti();
+  const paymentLedger = getPaymentLedgerEngine();
+  const prevImpostaAccontiPaid = paymentLedger && typeof paymentLedger.sumPaymentsForScheduleKeys === 'function'
+    ? paymentLedger.sumPaymentsForScheduleKeys(allPay, [`imposta_acc1_${year - 1}`, `imposta_acc2_${year - 1}`])
+    : allPay
+      .filter(p => p.scheduleKey === `imposta_acc1_${year - 1}` || p.scheduleKey === `imposta_acc2_${year - 1}`)
+      .reduce((s, p) => s + (parseFloat(p.importo) || 0), 0);
+  const prevContribAccontiPaid = paymentLedger && typeof paymentLedger.sumPaymentsForScheduleKeys === 'function'
+    ? paymentLedger.sumPaymentsForScheduleKeys(allPay, [`contributi_acc1_${year - 1}`, `contributi_acc2_${year - 1}`])
+    : allPay
+      .filter(p => p.scheduleKey === `contributi_acc1_${year - 1}` || p.scheduleKey === `contributi_acc2_${year - 1}`)
+      .reduce((s, p) => s + (parseFloat(p.importo) || 0), 0);
+
+  return {
+    year,
+    yearData,
+    scheduleSettings,
+    isClosedYear,
+    accontoMethod,
+    currentApplied,
+    prevApplied,
+    prevPrevApplied,
+    currentContribution,
+    prevContribution,
+    prevPrevContribution,
+    prevYearData,
+    prevYearRegime,
+    prevYearWasForfettario,
+    transitionFromNonForfettario,
+    prevForfettarioContribution,
+    forecastImposta,
+    forecastContributi,
+    manualSaldoImposta,
+    manualAccontoImposta,
+    manualSaldoContributi,
+    manualAccontoContributi,
+    manualCamera,
+    manualBolloPrevQ4,
+    manualBollo123,
+    manualBolloQ4,
+    manualInailCurrent,
+    manualInailNext,
+    projectionRange,
+    prevHasEst,
+    primoAnnoImpostaPrec,
+    primoAnnoAccontiImpostaPrec,
+    primoAnnoContribVariabiliPrec,
+    primoAnnoAccontiContribPrec,
+    hasPrimoAnnoData,
+    firstYearManualUsed: false,
+    prevImpostaAccontiPaid,
+    prevContribAccontiPaid,
+    vatStartYear: scheduleSettings.vatStartYear,
+    hasPayments: allPay.length > 0,
+    hasOverrides: !!(
+      manualSaldoImposta !== null
+      || manualAccontoImposta !== null
+      || manualSaldoContributi !== null
+      || manualAccontoContributi !== null
+      || manualCamera !== null
+      || manualBolloPrevQ4 !== null
+      || manualBollo123 !== null
+      || manualBolloQ4 !== null
+      || manualInailCurrent !== null
+      || manualInailNext !== null
+    ),
+    hasImportedData: false,
+    importedFamilies: [],
+    isHoliday
+  };
+}
+
 function buildForfettarioScheduleForYear(year) {
+  const ledgerBuilder = getFiscalLedgerBuilder();
+  if (ledgerBuilder && typeof ledgerBuilder.buildForfettarioLedger === 'function') {
+    return ledgerBuilder.buildForfettarioLedger(getForfettarioLedgerContextForYear(year));
+  }
   const yearData = getYearDataFor(year);
   const scheduleSettings = yearData && yearData.settings ? yearData.settings : S();
   const isClosedYear = isClosedFiscalYear(year);
@@ -3676,12 +3804,23 @@ function buildForfettarioScheduleForYear(year) {
 
   // Subtract only actually registered payments linked to prior year acconto keys
   const allPay = getPagamenti();
-  const prevImpostaAccontiPaid = allPay
-    .filter(p => p.scheduleKey === `imposta_acc1_${year - 1}` || p.scheduleKey === `imposta_acc2_${year - 1}`)
-    .reduce((s, p) => s + p.importo, 0);
-  const prevContribAccontiPaid = allPay
-    .filter(p => p.scheduleKey === `contributi_acc1_${year - 1}` || p.scheduleKey === `contributi_acc2_${year - 1}`)
-    .reduce((s, p) => s + p.importo, 0);
+  const paymentLedger = getPaymentLedgerEngine();
+  const prevImpostaAccontiPaid = paymentLedger && typeof paymentLedger.sumPaymentsForScheduleKeys === 'function'
+    ? paymentLedger.sumPaymentsForScheduleKeys(allPay, [`imposta_acc1_${year - 1}`, `imposta_acc2_${year - 1}`])
+    : allPay
+      .filter(p => p.scheduleKey === `imposta_acc1_${year - 1}` || p.scheduleKey === `imposta_acc2_${year - 1}`)
+      .reduce((s, p) => s + p.importo, 0);
+  const prevContribAccontiPaid = paymentLedger && typeof paymentLedger.sumPaymentsForScheduleKeys === 'function'
+    ? paymentLedger.sumPaymentsForScheduleKeys(allPay, [`contributi_acc1_${year - 1}`, `contributi_acc2_${year - 1}`])
+    : allPay
+      .filter(p => p.scheduleKey === `contributi_acc1_${year - 1}` || p.scheduleKey === `contributi_acc2_${year - 1}`)
+      .reduce((s, p) => s + p.importo, 0);
+  const bridgeImpostaTotal = primoAnnoImpostaPrec !== null ? primoAnnoImpostaPrec : (prevApplied ? prevApplied.tasse : null);
+  const bridgeImpostaAccontiPaid = primoAnnoAccontiImpostaPrec !== null ? primoAnnoAccontiImpostaPrec : prevImpostaAccontiPaid;
+  const bridgeContribTotal = primoAnnoContribVariabiliPrec !== null
+    ? primoAnnoContribVariabiliPrec
+    : (prevForfettarioContribution ? prevForfettarioContribution.saldoAccontoBase : null);
+  const bridgeContribAccontiPaid = primoAnnoAccontiContribPrec !== null ? primoAnnoAccontiContribPrec : prevContribAccontiPaid;
 
   if (!prevApplied) {
     if (transitionFromNonForfettario) {
@@ -3695,6 +3834,9 @@ function buildForfettarioScheduleForYear(year) {
   } else if (prevImpostaAccontiPaid > 0) {
     notes.push(`Il saldo imposta ${year - 1} sottrae gli acconti registrati come pagati (${fmt(prevImpostaAccontiPaid)}). Per aggiungerne, usa "Segna pagato" nello scadenziario ${year - 1}.`);
   }
+  if ((bridgeImpostaManual || bridgeContribManual) && prevApplied) {
+    notes.push('Sono attivi override manuali di primo utilizzo / anno misto: questi campi prevalgono sui dati storici del ledger per la ricostruzione dell anno precedente.');
+  }
   if (accontoMethod === 'previsionale') {
     notes.push(`Base previsionale imposta sostitutiva: ${fmt(forecastImposta.amount)} (${forecastImposta.source === 'manual' ? 'manuale' : 'stima automatica dal ' + year}).`);
     if (currentContribution) {
@@ -3705,11 +3847,9 @@ function buildForfettarioScheduleForYear(year) {
     notes.push('Sono attivi uno o piu override manuali nello scadenziario: i relativi importi prevalgono sul calcolo automatico.');
   }
 
-  const autoImpostaSaldo = prevApplied
-    ? prevApplied.tasse - prevImpostaAccontiPaid
-    : (firstYearManualUsed && primoAnnoImpostaPrec !== null
-      ? primoAnnoImpostaPrec - (primoAnnoAccontiImpostaPrec || 0)
-      : 0);
+  const autoImpostaSaldo = bridgeImpostaTotal !== null
+    ? bridgeImpostaTotal - bridgeImpostaAccontiPaid
+    : 0;
   const impostaSaldo = manualSaldoImposta !== null ? manualSaldoImposta : autoImpostaSaldo;
   if (impostaSaldo > 0) {
     pushDueRow(
@@ -3720,10 +3860,10 @@ function buildForfettarioScheduleForYear(year) {
       impostaSaldo,
       'tasse',
       manualSaldoImposta !== null ? 'Importo manuale'
-        : (firstYearManualUsed ? 'Manuale primo utilizzo'
+        : (bridgeImpostaManual ? 'Override manuale'
           : (prevImpostaAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (bridgeImpostaManual ? 'fixed' : ((firstYearManualUsed || prevHasEst) ? 'estimated' : 'fixed')), fiscalYear: year - 1, source: manualSaldoImposta !== null ? 'manual' : (bridgeImpostaManual ? 'manual' : 'calculated') }
     );
   } else if (manualSaldoImposta === null && autoImpostaSaldo < 0) {
     credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoImpostaSaldo), fiscalYear: year - 1 });
@@ -3733,14 +3873,12 @@ function buildForfettarioScheduleForYear(year) {
     ? manualAccontoImposta
     : (accontoMethod === 'previsionale'
       ? forecastImposta.amount
-      : (prevApplied
-        ? prevApplied.tasse
-        : (firstYearManualUsed && primoAnnoImpostaPrec !== null
-          ? primoAnnoImpostaPrec
-          : (transitionFromNonForfettario ? 0 : currentApplied.tasse))));
+      : (bridgeImpostaTotal !== null
+        ? bridgeImpostaTotal
+        : (transitionFromNonForfettario ? 0 : currentApplied.tasse)));
   const impostaAcconti = buildAccontoPlan(impostaAccontiBase);
   const impostaAccCertainty = manualAccontoImposta !== null ? 'fixed'
-    : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
+    : (bridgeImpostaManual ? 'fixed' : ((accontoMethod === 'previsionale' || prevHasEst) ? 'estimated' : 'fixed'));
   if (impostaAcconti.first > 0) {
     pushDueRow(
       FORFETTARIO_RULES.saldoMonth,
@@ -3753,9 +3891,10 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
+          : (bridgeImpostaManual ? 'Override manuale'
+            : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`)))),
       '',
-      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
+      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year, source: manualAccontoImposta !== null ? 'manual' : (bridgeImpostaManual ? 'manual' : 'calculated') }
     );
   }
   if (impostaAcconti.second > 0) {
@@ -3770,9 +3909,10 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
+          : (bridgeImpostaManual ? 'Override manuale'
+            : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`)))),
       '',
-      { key: `imposta_acc2_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
+      { key: `imposta_acc2_${year}`, certainty: impostaAccCertainty, fiscalYear: year, source: manualAccontoImposta !== null ? 'manual' : (bridgeImpostaManual ? 'manual' : 'calculated') }
     );
   }
 
@@ -3795,11 +3935,9 @@ function buildForfettarioScheduleForYear(year) {
     notes.push(`Con ${getContribLabel(currentApplied.inpsMode)} non risultano rate fisse trimestrali sul minimale per il ${year}.`);
   }
 
-  const autoContribSaldo = prevForfettarioContribution
-    ? prevForfettarioContribution.saldoAccontoBase - prevContribAccontiPaid
-    : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null
-      ? primoAnnoContribVariabiliPrec - (primoAnnoAccontiContribPrec || 0)
-      : 0);
+  const autoContribSaldo = bridgeContribTotal !== null
+    ? bridgeContribTotal - bridgeContribAccontiPaid
+    : 0;
   const contribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoContribSaldo;
   if (contribSaldo > 0) {
     pushDueRow(
@@ -3810,10 +3948,10 @@ function buildForfettarioScheduleForYear(year) {
       contribSaldo,
       'contributi',
       manualSaldoContributi !== null ? 'Importo manuale'
-        : (firstYearManualUsed ? 'Manuale primo utilizzo'
+        : (bridgeContribManual ? 'Override manuale'
           : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (bridgeContribManual ? 'fixed' : ((firstYearManualUsed || prevHasEst) ? 'estimated' : 'fixed')), fiscalYear: year - 1, source: manualSaldoContributi !== null ? 'manual' : (bridgeContribManual ? 'manual' : 'calculated') }
     );
   } else if (manualSaldoContributi === null && autoContribSaldo < 0) {
     credits.push({ title: prevContribution ? prevContribution.saldoLabel : 'Contributi', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoContribSaldo), fiscalYear: year - 1 });
@@ -3823,14 +3961,12 @@ function buildForfettarioScheduleForYear(year) {
     ? manualAccontoContributi
     : (accontoMethod === 'previsionale'
       ? forecastContributi.amount
-      : (prevForfettarioContribution
-        ? prevForfettarioContribution.saldoAccontoBase
-        : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null
-          ? primoAnnoContribVariabiliPrec
-          : (transitionFromNonForfettario ? 0 : (currentContribution ? currentContribution.saldoAccontoBase : 0)))));
+      : (bridgeContribTotal !== null
+        ? bridgeContribTotal
+        : (transitionFromNonForfettario ? 0 : (currentContribution ? currentContribution.saldoAccontoBase : 0))));
   const contribAcconti = buildAccontoPlan(contribBase);
   const contribAccCertainty = manualAccontoContributi !== null ? 'fixed'
-    : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
+    : (bridgeContribManual ? 'fixed' : ((accontoMethod === 'previsionale' || prevHasEst) ? 'estimated' : 'fixed'));
   if (contribAcconti.first > 0) {
     pushDueRow(
       FORFETTARIO_RULES.saldoMonth,
@@ -3843,9 +3979,10 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
+          : (bridgeContribManual ? 'Override manuale'
+            : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`)))),
       '',
-      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year }
+      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year, source: manualAccontoContributi !== null ? 'manual' : (bridgeContribManual ? 'manual' : 'calculated') }
     );
   }
   if (contribAcconti.second > 0) {
@@ -3860,9 +3997,10 @@ function buildForfettarioScheduleForYear(year) {
         ? 'Importo manuale'
         : (accontoMethod === 'previsionale'
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
-          : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
+          : (bridgeContribManual ? 'Override manuale'
+            : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`)))),
       '',
-      { key: `contributi_acc2_${year}`, certainty: contribAccCertainty, fiscalYear: year }
+      { key: `contributi_acc2_${year}`, certainty: contribAccCertainty, fiscalYear: year, source: manualAccontoContributi !== null ? 'manual' : (bridgeContribManual ? 'manual' : 'calculated') }
     );
   }
 
@@ -3878,23 +4016,23 @@ function buildForfettarioScheduleForYear(year) {
       'altro',
       manualCamera !== null ? 'Importo configurato' : 'Default artigiani/commercianti',
       '',
-      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year }
+      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year, source: manualCamera !== null ? 'manual' : 'calculated' }
     );
   }
   if (manualBolloPrevQ4 !== null && manualBolloPrevQ4 > 0) {
-    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, manualBolloPrevQ4, 'altro', 'Importo configurato', '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1 });
+    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, manualBolloPrevQ4, 'altro', 'Importo configurato', '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1, source: 'manual' });
   }
   if (manualBollo123 !== null && manualBollo123 > 0) {
-    pushDueRow(11, 30, 'Imposta di bollo fatture elettroniche', `1o-3o trimestre ${year}`, manualBollo123, 'altro', 'Importo configurato', '', { key: `bollo_q123_${year}`, certainty: 'fixed', fiscalYear: year });
+    pushDueRow(11, 30, 'Imposta di bollo fatture elettroniche', `1o-3o trimestre ${year}`, manualBollo123, 'altro', 'Importo configurato', '', { key: `bollo_q123_${year}`, certainty: 'fixed', fiscalYear: year, source: 'manual' });
   }
   if (manualBolloQ4 !== null && manualBolloQ4 > 0) {
-    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year}`, manualBolloQ4, 'altro', 'Importo configurato', '', { key: `bollo_q4_${year}`, certainty: 'fixed', fiscalYear: year });
+    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year}`, manualBolloQ4, 'altro', 'Importo configurato', '', { key: `bollo_q4_${year}`, certainty: 'fixed', fiscalYear: year, source: 'manual' });
   }
   if (manualInailCurrent !== null && manualInailCurrent > 0) {
-    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, manualInailCurrent, 'altro', 'Importo configurato', '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year });
+    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, manualInailCurrent, 'altro', 'Importo configurato', '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year, source: 'manual' });
   }
   if (manualInailNext !== null && manualInailNext > 0) {
-    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, manualInailNext, 'altro', 'Importo configurato', '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1 });
+    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, manualInailNext, 'altro', 'Importo configurato', '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1, source: 'manual' });
   }
 
   if (isClosedYear) {
@@ -3907,10 +4045,10 @@ function buildForfettarioScheduleForYear(year) {
         'Imposta sostitutiva',
         `Saldo ${year}`,
         currentImpostaSaldo,
-        'tasse',
-        manualSaldoImposta !== null ? 'Importo manuale' : `${year} netto acconti`,
-        '',
-        { dueYear: year + 1, key: `imposta_saldo_${year}`, certainty: 'fixed', fiscalYear: year }
+      'tasse',
+      manualSaldoImposta !== null ? 'Importo manuale' : `${year} netto acconti`,
+      '',
+      { dueYear: year + 1, key: `imposta_saldo_${year}`, certainty: 'fixed', fiscalYear: year, source: manualSaldoImposta !== null ? 'manual' : 'calculated' }
       );
     } else if (manualSaldoImposta === null && autoCurrentImpostaSaldo < 0) {
       credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year}`, amount: Math.abs(autoCurrentImpostaSaldo), fiscalYear: year });
@@ -3925,10 +4063,10 @@ function buildForfettarioScheduleForYear(year) {
         currentContribution ? currentContribution.saldoLabel : getContribLabel(currentApplied.inpsMode),
         `Saldo ${year}`,
         currentContribSaldo,
-        'contributi',
-        manualSaldoContributi !== null ? 'Importo manuale' : `${year} netto acconti`,
-        '',
-        { dueYear: year + 1, key: `contributi_saldo_${year}`, certainty: 'fixed', fiscalYear: year }
+      'contributi',
+      manualSaldoContributi !== null ? 'Importo manuale' : `${year} netto acconti`,
+      '',
+      { dueYear: year + 1, key: `contributi_saldo_${year}`, certainty: 'fixed', fiscalYear: year, source: manualSaldoContributi !== null ? 'manual' : 'calculated' }
       );
     } else if (manualSaldoContributi === null && autoCurrentContribSaldo < 0) {
       credits.push({ title: currentContribution ? currentContribution.saldoLabel : 'Contributi', competence: `Credito da saldo ${year}`, amount: Math.abs(autoCurrentContribSaldo), fiscalYear: year });
@@ -4091,14 +4229,24 @@ function toggleScadenziarioEmptyYears() {
   renderScadenziario();
 }
 
-function getScadenziarioYearTypeFromSettings(settings) {
+function getScadenziarioYearTypeFromSettings(settings, year = currentYear) {
+  const ledgerBuilder = getFiscalLedgerBuilder();
+  if (ledgerBuilder && typeof ledgerBuilder.classifyFiscalYear === 'function') {
+    return ledgerBuilder.classifyFiscalYear({
+      year,
+      vatStartYear: settings && settings.vatStartYear,
+      regime: settings && settings.regime ? settings.regime : '',
+      hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente)
+    });
+  }
   const regime = settings && settings.regime ? settings.regime : '';
   const hasEmployeeIncome = !!Number(settings && settings.haRedditoDipendente);
+  if (!regime && !hasEmployeeIncome) return 'irrilevante';
   if (regime === 'forfettario' && !hasEmployeeIncome) return 'forfettario';
   if (regime === 'ordinario' && hasEmployeeIncome) return 'misto';
   if (regime === 'ordinario') return 'ordinario';
   if (hasEmployeeIncome) return 'misto';
-  return regime || 'vuoto';
+  return regime || 'irrilevante';
 }
 
 function getKnownExternalFiscalYears() {
@@ -4107,7 +4255,7 @@ function getKnownExternalFiscalYears() {
     const year = parseInt(value, 10);
     if (Number.isFinite(year)) years.add(year);
   };
-  const flatEntries = getExternalFiscalFlatEntries();
+  const flatEntries = getHistoricalExternalFiscalFlatEntries();
   for (const entry of flatEntries) {
     pushYear(entry && (entry.referenceYear || entry.competenceYear));
   }
@@ -4128,6 +4276,119 @@ function getScadenziarioOverrideCount(yearData) {
   }, 0);
 }
 
+function getScadenziarioVatStartYear(settings) {
+  const year = parseInt(settings && settings.vatStartYear, 10);
+  return Number.isFinite(year) && year > 0 ? year : null;
+}
+
+function getScadenziarioBridgeOverrideCount(yearData) {
+  if (!yearData || !yearData.settings) return 0;
+  const keys = [
+    'primoAnnoFatturatoPrec',
+    'primoAnnoImpostaPrec',
+    'primoAnnoAccontiImpostaPrec',
+    'primoAnnoContribVariabiliPrec',
+    'primoAnnoAccontiContribPrec'
+  ];
+  return keys.reduce((count, key) => {
+    const value = yearData.settings[key];
+    return value !== '' && value !== null && value !== undefined ? count + 1 : count;
+  }, 0);
+}
+
+function getScadenziarioRowSource(row) {
+  const source = row && row.source ? String(row.source) : 'calculated';
+  if (source === 'manual_override' || source === 'manual') return 'manual';
+  if (source === 'fiscozen_import' || source === 'imported') return 'imported';
+  if (source === 'historical') return 'historical';
+  return 'calculated';
+}
+
+function getScadenziarioRowSourceLabel(row) {
+  const source = getScadenziarioRowSource(row);
+  if (source === 'manual') return 'Manuale';
+  if (source === 'imported') return 'Importato';
+  if (source === 'historical') return 'Storico';
+  return 'Calcolato';
+}
+
+function getScadenziarioRowSourceTone(row) {
+  const source = getScadenziarioRowSource(row);
+  if (source === 'manual') return 'warn';
+  if (source === 'imported') return 'ok';
+  if (source === 'historical') return 'info';
+  return 'info';
+}
+
+function renderScadenziarioBadge(label, tone, title) {
+  return `<span class="scad-chip ${tone || 'info'}"${title ? ` title="${title}"` : ''}>${label}</span>`;
+}
+
+function renderScadenziarioBadgeList(badges) {
+  if (!Array.isArray(badges) || badges.length === 0) return '';
+  return `<div class="scad-row-badges">${badges.map(badge => renderScadenziarioBadge(badge.label, badge.tone, badge.title)).join('')}</div>`;
+}
+
+function getScadenziarioRowBadges(row) {
+  const badges = [];
+  if (!row) return badges;
+  const source = getScadenziarioRowSource(row);
+  badges.push({
+    label: getScadenziarioRowSourceLabel(row),
+    tone: getScadenziarioRowSourceTone(row),
+    title: source === 'manual'
+      ? 'Importo o competenza impostati manualmente.'
+      : (source === 'imported'
+        ? 'Voce importata dal prospetto esterno.'
+        : 'Voce calcolata dal motore fiscale.')
+  });
+  if (row.paymentStatus && row.paymentStatus.isArchived) {
+    badges.push({
+      label: 'Archiviata',
+      tone: 'ok',
+      title: 'La riga risulta chiusa: il dovuto e coperto dai versamenti registrati.'
+    });
+  }
+  if (row.paymentStatus && row.paymentStatus.isCrossYear) {
+    badges.push({
+      label: 'Cross-year',
+      tone: 'warn',
+      title: 'La stessa riga fiscale attraversa competenza e cassa su anni diversi.'
+    });
+  }
+  if (Array.isArray(row.paymentEvents) && row.paymentEvents.length > 1) {
+    badges.push({
+      label: `${row.paymentEvents.length} versamenti`,
+      tone: 'info',
+      title: 'Più versamenti sono collegati a questa stessa riga fiscale.'
+    });
+  }
+  const cashYears = Array.isArray(row.cashYears) ? row.cashYears.filter(Boolean) : [];
+  if (cashYears.length > 0) {
+    badges.push({
+      label: `Cassa ${Array.from(new Set(cashYears)).join(', ')}`,
+      tone: 'info',
+      title: 'Anni di cassa collegati a questa riga.'
+    });
+  }
+  return badges;
+}
+
+function getScadenziarioRowWarnings(row) {
+  const warnings = [];
+  if (!row) return warnings;
+  if (row.paymentStatus && row.paymentStatus.isCrossYear) {
+    warnings.push('La riga vive in competenza sull anno fiscale, ma i versamenti possono cadere in uno o piu anni di cassa diversi.');
+  }
+  if (getScadenziarioRowSource(row) === 'manual') {
+    warnings.push('Questa riga deriva da un override manuale e prevale sul calcolo automatico.');
+  }
+  if (getScadenziarioRowSource(row) === 'imported') {
+    warnings.push('Questa riga arriva da un import esterno e resta separata dal calcolo del ledger interno.');
+  }
+  return warnings;
+}
+
 function getYearInvoiceCount(yearData) {
   if (!yearData || !yearData.fatture) return 0;
   let count = 0;
@@ -4139,15 +4400,13 @@ function getYearInvoiceCount(yearData) {
   return count;
 }
 
-function getExternalFiscalFlatEntries() {
+function getHistoricalExternalFiscalFlatEntries() {
   const external = getExternalFiscalData();
-  return []
-    .concat(external && Array.isArray(external.paidFlatEntries) ? external.paidFlatEntries : [])
-    .concat(external && Array.isArray(external.futureFlatEntries) ? external.futureFlatEntries : []);
+  return [].concat(external && Array.isArray(external.paidFlatEntries) ? external.paidFlatEntries : []);
 }
 
 function getImportedCompetenceFiscalEntriesForYear(year) {
-  return getExternalFiscalFlatEntries().filter(entry => {
+  return getHistoricalExternalFiscalFlatEntries().filter(entry => {
     if (!entry) return false;
     const referenceYear = entry.referenceYear || entry.competenceYear;
     return referenceYear === year || entry.competenceYear === year;
@@ -4155,7 +4414,7 @@ function getImportedCompetenceFiscalEntriesForYear(year) {
 }
 
 function getImportedFiscalEntriesForYear(year) {
-  return getExternalFiscalFlatEntries().filter(entry => {
+  return getHistoricalExternalFiscalFlatEntries().filter(entry => {
     if (!entry) return false;
     const referenceYear = entry.referenceYear || entry.competenceYear;
     return referenceYear === year || entry.competenceYear === year || entry.dueYear === year;
@@ -4171,6 +4430,10 @@ function buildIsoDateFromDue(due) {
 }
 
 function getScadenziarioFallbackStatus(row) {
+  const ledger = getPaymentLedgerEngine();
+  if (ledger && typeof ledger.buildPaymentStatus === 'function') {
+    return ledger.buildPaymentStatus(row, row && Array.isArray(row.paymentEvents) ? row.paymentEvents : [], { now: new Date() });
+  }
   const dueAmount = ceil2(row && row.amountDue !== undefined ? row.amountDue : row && row.amount);
   const paid = ceil2((row && row.paymentEvents || []).reduce((sum, event) => sum + ceil2(event.amount), 0));
   if (paid >= dueAmount && dueAmount > 0) return { code: 'paid', label: 'Pagato', tone: 'ok', amountPaid: paid, residualAmount: ceil2(dueAmount - paid), isArchived: true, isCrossYear: false };
@@ -4181,7 +4444,13 @@ function getScadenziarioFallbackStatus(row) {
 
 function mapScheduleRowToScadenziario(rowItem, year) {
   const scadEngine = getScadenziarioEngine();
+  const paymentLedger = getPaymentLedgerEngine();
   const paymentEvents = rowItem && rowItem.key ? getPaymentEventsForScheduleKey(rowItem.key) : [];
+  const source = rowItem && rowItem.source ? rowItem.source : 'calculated';
+  const cashYears = Array.from(new Set([
+    ...(rowItem && rowItem.due && rowItem.due.year ? [rowItem.due.year] : []),
+    ...paymentEvents.map(event => event && event.cashYear).filter(Boolean)
+  ])).sort((a, b) => a - b);
   const mapped = {
     id: rowItem && rowItem.key ? rowItem.key : `sched_${year}_${Math.random().toString(36).slice(2, 8)}`,
     scheduleKey: rowItem && rowItem.key ? rowItem.key : '',
@@ -4200,17 +4469,23 @@ function mapScheduleRowToScadenziario(rowItem, year) {
     amount: ceil2(rowItem && rowItem.amount),
     low: ceil2(rowItem && rowItem.low !== undefined ? rowItem.low : rowItem && rowItem.amount),
     high: ceil2(rowItem && rowItem.high !== undefined ? rowItem.high : rowItem && rowItem.amount),
-    source: 'calculated',
+    source,
+    sourceLabel: getScadenziarioRowSourceLabel({ source }),
+    origin: getScadenziarioRowSource({ source }),
     regimeType: 'forfettario',
     isCrossYear: !!(rowItem && rowItem.fiscalYear && rowItem.due && rowItem.fiscalYear !== rowItem.due.year),
     supportsPartialPayment: true,
     paymentMode: 'partial_allowed',
     paymentEvents,
+    cashYears,
     note: rowItem && rowItem.note ? rowItem.note : '',
     warnings: [],
     due: rowItem && rowItem.due ? rowItem.due : null,
     legacyRow: rowItem
   };
+  if (paymentLedger && typeof paymentLedger.reconcileLedgerRow === 'function') {
+    return paymentLedger.reconcileLedgerRow(mapped, paymentEvents, { now: new Date() });
+  }
   mapped.paymentStatus = scadEngine
     ? scadEngine.buildPaymentStatus(mapped, paymentEvents, { now: new Date() })
     : getScadenziarioFallbackStatus(mapped);
@@ -4252,17 +4527,24 @@ function mapHistoricalEntryToScadenziarioRow(entry, year, regimeType) {
     low: amount,
     high: amount,
     source: 'fiscozen_import',
+    sourceLabel: 'Importato',
+    origin: 'imported',
     regimeType,
     isCrossYear: dueYear !== year,
     supportsPartialPayment: false,
     paymentMode: 'manual_only',
     paymentEvents,
+    cashYears: [dueYear],
     note: entry && entry.isAggregateBundle ? `F24 storico con ${entry.bundleCount || 0} sottovoci.` : '',
     warnings: [],
     due: { year: dueYear, label: dueDate ? formatPaymentDateDisplay(dueDate) : `Anno ${dueYear}`, date: parsed ? new Date(parsed.year, parsed.month - 1, parsed.day) : new Date(dueYear, 0, 1) },
     legacyRow: null
   };
   const scadEngine = getScadenziarioEngine();
+  const paymentLedger = getPaymentLedgerEngine();
+  if (paymentLedger && typeof paymentLedger.reconcileLedgerRow === 'function') {
+    return paymentLedger.reconcileLedgerRow(mapped, paymentEvents, { now: new Date() });
+  }
   mapped.paymentStatus = scadEngine
     ? scadEngine.buildPaymentStatus(mapped, paymentEvents, { now: new Date() })
     : getScadenziarioFallbackStatus(mapped);
@@ -4308,7 +4590,7 @@ function buildScadenziarioYearMeta(year, options) {
   const opts = options || {};
   const yearData = getYearDataFor(year);
   const settings = yearData && yearData.settings ? yearData.settings : getDefaultSettings(year);
-  const hasLocalYearData = !!yearData;
+  const vatStartYear = getScadenziarioVatStartYear(settings);
   const isTrailingSettlementYear = !!opts.isTrailingSettlementYear;
   const trailingSourceYear = Number.isFinite(opts.trailingSourceYear) ? opts.trailingSourceYear : null;
   const invoiceCount = getYearInvoiceCount(yearData);
@@ -4318,10 +4600,27 @@ function buildScadenziarioYearMeta(year, options) {
   const importedCompetenceEntries = getImportedCompetenceFiscalEntriesForYear(year);
   const importedFamilies = Array.from(new Set(importedEntries.map(entry => entry && entry.family).filter(Boolean)));
   const overrideCount = getScadenziarioOverrideCount(yearData);
-  const regimeGuess = getScadenziarioYearTypeFromSettings(settings);
-  const regimeType = regimeGuess === 'vuoto' ? 'forfettario' : regimeGuess;
+  const ledgerBuilder = getFiscalLedgerBuilder();
+  const regimeGuess = getScadenziarioYearTypeFromSettings(settings, year);
+  const regimeType = ledgerBuilder && typeof ledgerBuilder.classifyFiscalYear === 'function'
+    ? ledgerBuilder.classifyFiscalYear({
+        year,
+        vatStartYear,
+        regime: settings && settings.regime ? settings.regime : '',
+        hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
+        hasActivity: invoiceCount > 0 || realRevenue > 0,
+        hasRows: false,
+        hasPayments: importedEntries.length > 0,
+        hasOverrides: overrideCount > 0,
+        hasImportedData: importedEntries.length > 0,
+        importedFamilies
+      })
+    : regimeGuess;
+  const hasCompiledRevenueAnchor = invoiceCount > 0 || realRevenue > 0;
+  const hasHistoricalAnchor = importedCompetenceEntries.length > 0;
   const shouldBuildAutoSchedule = regimeType === 'forfettario'
-    && (!isTrailingSettlementYear && (hasLocalYearData || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0 || importedEntries.length > 0));
+    && !isTrailingSettlementYear
+    && hasCompiledRevenueAnchor;
   const bundle = isTrailingSettlementYear && trailingSourceYear !== null
     ? buildTrailingSettlementRowsForScadenziario(year, trailingSourceYear)
     : (regimeType === 'forfettario'
@@ -4331,6 +4630,11 @@ function buildScadenziarioYearMeta(year, options) {
       : buildHistoricalRowsForScadenziario(year, regimeType));
   const rows = bundle && Array.isArray(bundle.rows) ? bundle.rows : [];
   const scadEngine = getScadenziarioEngine();
+  const sourceSummary = rows.reduce((acc, row) => {
+    const source = getScadenziarioRowSource(row);
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, { calculated: 0, manual: 0, imported: 0, historical: 0 });
   const totals = scadEngine
     ? scadEngine.computeScheduleTotals(rows)
     : rows.reduce((acc, row) => {
@@ -4343,7 +4647,7 @@ function buildScadenziarioYearMeta(year, options) {
         return acc;
       }, { amountDue: 0, amountPaid: 0, residualAmount: 0, crossYearCount: 0 });
   const previousSettings = getYearDataFor(year - 1);
-  const previousYearType = getScadenziarioYearTypeFromSettings(previousSettings && previousSettings.settings ? previousSettings.settings : null);
+  const previousYearType = getScadenziarioYearTypeFromSettings(previousSettings && previousSettings.settings ? previousSettings.settings : null, year - 1);
   const methodPolicy = scadEngine
     ? scadEngine.chooseMethodPolicy({
         isClosedYear: isClosedFiscalYear(year),
@@ -4351,8 +4655,10 @@ function buildScadenziarioYearMeta(year, options) {
         previousYearComplete: previousYearType === 'forfettario' && !yearHasEstimates(year - 1)
       })
     : { recommendedMethod: 'previsionale', methodWarning: '', methodConfidence: 'normal' };
-  const classification = scadEngine
-    ? scadEngine.classifyFiscalYear({
+  const classification = ledgerBuilder && typeof ledgerBuilder.classifyFiscalYear === 'function'
+    ? ledgerBuilder.classifyFiscalYear({
+        year,
+        vatStartYear,
         regime: settings && settings.regime ? settings.regime : '',
         hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
         importedFamilies,
@@ -4362,9 +4668,20 @@ function buildScadenziarioYearMeta(year, options) {
         hasOverrides: overrideCount > 0,
         hasImportedData: importedEntries.length > 0
       })
-    : regimeType;
-  const isRelevant = scadEngine
-    ? scadEngine.isRelevantFiscalYear({
+    : (scadEngine
+      ? scadEngine.classifyFiscalYear({
+          regime: settings && settings.regime ? settings.regime : '',
+          hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
+          importedFamilies,
+          hasActivity: invoiceCount > 0 || realRevenue > 0,
+          hasRows: rows.length > 0,
+          hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
+          hasOverrides: overrideCount > 0,
+          hasImportedData: importedEntries.length > 0
+        })
+      : regimeType);
+  const isRelevant = ledgerBuilder && typeof ledgerBuilder.isRelevantFiscalYear === 'function'
+    ? ledgerBuilder.isRelevantFiscalYear({
         hasRows: rows.length > 0,
         hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
         hasOverrides: overrideCount > 0,
@@ -4374,11 +4691,22 @@ function buildScadenziarioYearMeta(year, options) {
         amountDue: totals.amountDue,
         amountPaid: totals.amountPaid
       })
-    : (rows.length > 0 || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0);
+    : (scadEngine
+      ? scadEngine.isRelevantFiscalYear({
+          hasRows: rows.length > 0,
+          hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
+          hasOverrides: overrideCount > 0,
+          hasImportedData: importedEntries.length > 0,
+          realRevenue,
+          estimatedRevenue,
+          amountDue: totals.amountDue,
+          amountPaid: totals.amountPaid
+        })
+      : (rows.length > 0 || realRevenue > 0 || estimatedRevenue > 0 || overrideCount > 0));
+  const bridgeOverrideCount = getScadenziarioBridgeOverrideCount(yearData);
   const hasFiscalAnchor = !!(
-    invoiceCount > 0
-    || realRevenue > 0
-    || importedCompetenceEntries.length > 0
+    hasCompiledRevenueAnchor
+    || hasHistoricalAnchor
   );
 
   return {
@@ -4397,9 +4725,16 @@ function buildScadenziarioYearMeta(year, options) {
     importedCompetenceEntries,
     importedFamilies,
     overrideCount,
+    bridgeOverrideCount,
+    vatStartYear,
+    isPreVatYear: vatStartYear !== null && year < vatStartYear,
+    isVatStartYear: vatStartYear !== null && year === vatStartYear,
+    sourceSummary,
     isClosedYear: isClosedFiscalYear(year),
     isRelevant,
     hasFiscalAnchor,
+    hasCompiledRevenueAnchor,
+    hasHistoricalAnchor,
     isTrailingSettlementYear,
     trailingSourceYear,
     methodPolicy,
@@ -4411,31 +4746,36 @@ function buildScadenziarioYearMeta(year, options) {
 function collectRelevantFiscalYears(options) {
   const opts = options || {};
   const includeHistoricalYears = opts.includeHistoricalYears !== undefined ? !!opts.includeHistoricalYears : !!scadenziarioUiState.showHistoricalYears;
-  const includeEmptyYears = opts.includeEmptyYears !== undefined ? !!opts.includeEmptyYears : !!scadenziarioUiState.showEmptyYears;
   const years = new Set([...getAllStoredYears(), ...getKnownExternalFiscalYears(), currentYear]);
   let metas = Array.from(years)
     .sort((a, b) => b - a)
     .map(year => buildScadenziarioYearMeta(year));
-  const anchorYears = metas
-    .filter(meta => meta.hasFiscalAnchor)
+  const trailingSourceCandidates = metas
+    .filter(meta => meta.classification === 'forfettario' && meta.hasCompiledRevenueAnchor)
     .map(meta => meta.year);
-  const lastAnchorYear = anchorYears.length > 0 ? Math.max(...anchorYears) : null;
-  if (lastAnchorYear !== null) {
-    const trailingSettlementYear = lastAnchorYear + 1;
+  const trailingSourceYear = trailingSourceCandidates.length > 0 ? Math.max(...trailingSourceCandidates) : null;
+  if (trailingSourceYear !== null) {
+    const trailingSettlementYear = trailingSourceYear + 1;
     if (!years.has(trailingSettlementYear)) {
-      metas.push(buildScadenziarioYearMeta(trailingSettlementYear, { isTrailingSettlementYear: true, trailingSourceYear: lastAnchorYear }));
+      const trailingMeta = buildScadenziarioYearMeta(trailingSettlementYear, { isTrailingSettlementYear: true, trailingSourceYear });
+      if ((trailingMeta.rows || []).length > 0) metas.push(trailingMeta);
     }
   }
   return metas
     .map(meta => {
-      const trailingSettlementYear = lastAnchorYear !== null && meta.year === lastAnchorYear + 1;
-      return trailingSettlementYear && !meta.isTrailingSettlementYear
-        ? buildScadenziarioYearMeta(meta.year, { isTrailingSettlementYear: true, trailingSourceYear: lastAnchorYear })
-        : meta;
+      const trailingSettlementYear = trailingSourceYear !== null && meta.year === trailingSourceYear + 1;
+      if (trailingSettlementYear && !meta.isTrailingSettlementYear) {
+        return buildScadenziarioYearMeta(meta.year, { isTrailingSettlementYear: true, trailingSourceYear });
+      }
+      return meta;
     })
     .sort((a, b) => b.year - a.year)
-    .filter(meta => includeEmptyYears || meta.hasFiscalAnchor || meta.isTrailingSettlementYear)
-    .filter(meta => includeHistoricalYears || meta.classification === 'forfettario' || meta.isTrailingSettlementYear);
+    .filter(meta => {
+      if (meta.isTrailingSettlementYear) return (meta.rows || []).length > 0;
+      if (meta.classification === 'forfettario') return meta.hasCompiledRevenueAnchor;
+      if (includeHistoricalYears) return meta.hasHistoricalAnchor || meta.hasCompiledRevenueAnchor;
+      return false;
+    });
 }
 
 function getScadenziarioTimingChip(row) {
@@ -4457,8 +4797,11 @@ function renderScadenziarioPaymentEvents(row) {
   if (!row) return '';
   const dueIso = row.dueDate || '';
   if (row.source !== 'calculated' || !row.scheduleKey) {
-    if (!row.paymentEvents || row.paymentEvents.length === 0) return `<div class="scad-sub">Nessun versamento registrato.</div>`;
-    return `<div class="scad-payment-history">${row.paymentEvents.map(event => `
+    const badges = renderScadenziarioBadgeList(getScadenziarioRowBadges(row));
+    if (!row.paymentEvents || row.paymentEvents.length === 0) {
+      return `${badges}<div class="scad-sub">Nessun versamento registrato.</div>`;
+    }
+    return `${badges}<div class="scad-payment-history">${row.paymentEvents.map(event => `
       <div class="scad-payment-tag">
         <span>${event.paymentDate ? formatPaymentDateDisplay(event.paymentDate) : 'Storico'}</span>
         <b>${fmt(event.amount)}</b>
@@ -4508,17 +4851,21 @@ function renderScadenziarioRowsTable(rows, options) {
   for (const row of rows) {
     const timing = getScadenziarioTimingChip(row);
     const explanation = getScadenziarioExplanation(row);
+    const rowBadges = renderScadenziarioBadgeList(getScadenziarioRowBadges(row));
+    const rowWarnings = getScadenziarioRowWarnings(row);
     const rangeHtml = row.low !== row.high ? `<div class="scad-range">(${fmt(row.low)} - ${fmt(row.high)})</div>` : '';
     const crossYearMeta = row.paymentStatus && row.paymentStatus.isCrossYear
-      ? `<div class="scad-sub">Competenza ${row.competenceYear}, cassa ${row.paymentEvents.map(event => event.cashYear).filter(Boolean).join(', ')}</div>`
+      ? `<div class="scad-sub">Competenza ${row.competenceYear}, cassa ${Array.from(new Set((row.paymentEvents || []).map(event => event.cashYear).filter(Boolean))).join(', ')}</div>`
       : '';
     h += `<tr>
       <td data-label="Data">${row.due && row.due.label ? row.due.label : (row.dueDate ? formatPaymentDateDisplay(row.dueDate) : `Anno ${row.dueYear}`)}</td>
       <td data-label="Voce">
         <div class="scad-main">${row.title}</div>
         <div class="scad-sub">${row.competenceLabel || row.competence || `Competenza ${row.competenceYear}`}</div>
+        ${rowBadges}
         ${explanation ? `<div class="scad-sub">${explanation}</div>` : ''}
         ${crossYearMeta}
+        ${rowWarnings.length > 0 ? `<div class="scad-warning-list">${rowWarnings.map(note => `<div class="scad-warning">${note}</div>`).join('')}</div>` : ''}
       </td>
       <td data-label="Importo">
         <div>${fmt(row.amountDue)}</div>
@@ -4556,6 +4903,7 @@ function renderScadenziarioMethodBox(meta) {
   const recommended = meta.methodPolicy && meta.methodPolicy.recommendedMethod ? meta.methodPolicy.recommendedMethod : 'previsionale';
   const warning = meta.methodPolicy && meta.methodPolicy.methodWarning ? meta.methodPolicy.methodWarning : '';
   const recommendedLabel = recommended === 'storico' ? 'Storico' : 'Previsionale';
+  const vatStartYear = meta.vatStartYear;
   let h = `<div class="scad-method-box">
     <div class="scad-method-head">
       <div>
@@ -4577,17 +4925,30 @@ function renderScadenziarioMethodBox(meta) {
   if (schedule.transitionFromNonForfettario) {
     h += `<div class="scad-note">Il ${meta.year - 1} non era forfettario puro: il metodo storico resta disponibile, ma puo sovrastimare gli acconti del ${meta.year}.</div>`;
   }
-  if (meta.currentMethod === 'previsionale') {
-    h += `<div class="scad-method-inputs">
+  h += `<div class="scad-method-inputs">
       <div class="settings-group">
+        <label>Anno inizio IVA / ledger</label>
+        <input type="number" step="1" min="1900" value="${meta.settings.vatStartYear || ''}" placeholder="${vatStartYear ? String(vatStartYear) : `es. ${meta.year}`}"
+          onchange="saveYearOptionalNumberSetting(${meta.year}, 'vatStartYear', this.value); recalcAll()">
+        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
+          Indica da quale anno le righe fiscali vanno lette come competenza attiva. Gli anni precedenti restano visibili ma vengono interpretati come storico / pre-IVA.
+        </div>
+      </div>`;
+  if (meta.currentMethod === 'previsionale') {
+    h += `<div class="settings-group">
         <label>Base previsionale imposta sostitutiva</label>
         <input type="number" step="0.01" value="${meta.settings.scadenziarioPrevisionaleImposta}" placeholder="${fmt(schedule.currentApplied ? schedule.currentApplied.tasse : 0)}" onchange="saveYearOptionalNumberSetting(${meta.year}, 'scadenziarioPrevisionaleImposta', this.value); recalcAll()">
       </div>
       <div class="settings-group">
         <label>Base previsionale contributi</label>
         <input type="number" step="0.01" value="${meta.settings.scadenziarioPrevisionaleContributi}" placeholder="${fmt(schedule.forecastContributi ? schedule.forecastContributi.amount : 0)}" onchange="saveYearOptionalNumberSetting(${meta.year}, 'scadenziarioPrevisionaleContributi', this.value); recalcAll()">
-      </div>
-    </div>`;
+      </div>`;
+  }
+  h += `</div>`;
+  if (vatStartYear && meta.year < vatStartYear) {
+    h += `<div class="scad-note">Questo anno precede l avvio IVA impostato: leggilo come anno storico / di coda, non come nuovo ciclo fiscale.</div>`;
+  } else if (vatStartYear && meta.year === vatStartYear) {
+    h += `<div class="scad-note">Questo e l anno di avvio IVA: le righe manuali e gli eventuali import storici diventano il riferimento di partenza del ledger.</div>`;
   }
   h += `</div>`;
   return h;
@@ -4595,17 +4956,36 @@ function renderScadenziarioMethodBox(meta) {
 
 function renderScadenziarioNotes(meta) {
   const notes = [];
+  if (meta.classification === 'irrilevante') {
+    notes.push('Anno irrilevante: nessun ledger automatico senza segnali fiscali espliciti o override manuali.');
+  }
   if (meta.classification === 'ordinario') {
     notes.push('Anno ordinario: mostrato solo come storico di supporto e non usato per generare scadenze automatiche forfettarie.');
   }
   if (meta.classification === 'misto') {
     notes.push('Anno misto: utile per leggere la liquidita storica, ma non affidabile come base automatica per acconti forfettari.');
   }
+  if (meta.vatStartYear) {
+    notes.push(meta.year < meta.vatStartYear
+      ? `L anno IVA parte dal ${meta.vatStartYear}: questo anno e pre-IVA e va letto come storico.`
+      : `L anno IVA parte dal ${meta.vatStartYear}: la competenza fiscale si aggancia da qui in avanti.`);
+  }
   if (meta.isTrailingSettlementYear && !meta.hasFiscalAnchor) {
     notes.push(`Anno ${meta.year} mostrato come coda di pagamento della competenza ${meta.trailingSourceYear}: qui non genero il fiscale del ${meta.year}, ma solo le scadenze del ${meta.trailingSourceYear} che cadono nel ${meta.year}.`);
   }
   if (meta.overrideCount > 0) {
     notes.push(`Sono presenti ${meta.overrideCount} override manuali per questo anno.`);
+  }
+  if (meta.bridgeOverrideCount > 0) {
+    notes.push(`Sono presenti ${meta.bridgeOverrideCount} campi di primo utilizzo / anno misto per allineare il passaggio tra storico e ledger attivo.`);
+  }
+  if (meta.sourceSummary) {
+    if ((meta.sourceSummary.manual || 0) > 0) {
+      notes.push(`Ci sono ${meta.sourceSummary.manual} righe generate da override manuali.`);
+    }
+    if ((meta.sourceSummary.imported || 0) > 0) {
+      notes.push(`Ci sono ${meta.sourceSummary.imported} righe importate da prospetti esterni.`);
+    }
   }
   if (meta.bundle && Array.isArray(meta.bundle.notes)) {
     notes.push(...meta.bundle.notes);
@@ -4623,20 +5003,39 @@ function renderScadenziarioYearCard(meta) {
     credits: []
   };
   const badgeTone = meta.classification === 'forfettario' ? 'ok' : (meta.classification === 'misto' ? 'warn' : 'info');
+  const classificationLabel = meta.classification === 'forfettario'
+    ? 'Forfettario'
+    : (meta.classification === 'ordinario'
+      ? 'Ordinario'
+      : (meta.classification === 'misto' ? 'Misto' : 'Irrilevante'));
+  const sourceBadges = [];
+  if ((meta.sourceSummary && meta.sourceSummary.calculated) > 0) sourceBadges.push({ label: `${meta.sourceSummary.calculated} calcolate`, tone: 'info', title: 'Righe generate dal motore fiscale.' });
+  if ((meta.sourceSummary && meta.sourceSummary.manual) > 0) sourceBadges.push({ label: `${meta.sourceSummary.manual} manuali`, tone: 'warn', title: 'Righe provenienti da override manuali.' });
+  if ((meta.sourceSummary && meta.sourceSummary.imported) > 0) sourceBadges.push({ label: `${meta.sourceSummary.imported} importate`, tone: 'ok', title: 'Righe importate da prospetti esterni.' });
+  if (meta.bridgeOverrideCount > 0) sourceBadges.push({ label: `${meta.bridgeOverrideCount} bridge`, tone: 'warn', title: 'Campi di primo utilizzo o anno misto attivi.' });
+  if (meta.vatStartYear) {
+    sourceBadges.push({
+      label: meta.isPreVatYear ? `Pre-IVA ${meta.vatStartYear}` : `IVA da ${meta.vatStartYear}`,
+      tone: meta.isPreVatYear ? 'warn' : 'info',
+      title: 'Anno di avvio IVA / ledger configurato per questo profilo.'
+    });
+  }
   let h = `<section class="panel scad-year-card ${meta.isSelectedYear ? 'is-current' : ''}">
     <div class="scad-year-header">
       <div>
         <div class="scad-year-title">Anno ${meta.year}</div>
         <div class="scad-year-sub">${meta.isTrailingSettlementYear
           ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
-          : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
+          : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale, con cassa e archivio solo come lettura secondaria' : (meta.classification === 'irrilevante' ? 'Anno non rilevante fiscalmente senza dati espliciti' : 'Storico visibile su richiesta'))}</div>
       </div>
       <div class="scad-year-badges">
-        <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
+        <span class="scad-chip ${badgeTone}">${classificationLabel}</span>
         ${meta.isSelectedYear ? '<span class="scad-chip info">Anno selezionato</span>' : ''}
         ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
+        ${meta.totals.amountPaid > 0 && meta.totals.residualAmount <= 0 ? '<span class="scad-chip ok">Archiviato</span>' : ''}
       </div>
     </div>
+    ${sourceBadges.length > 0 ? renderScadenziarioBadgeList(sourceBadges) : ''}
     <div class="scad-year-stats">
       <div class="scad-stat"><span>Dovuto</span><b>${fmt(meta.totals.amountDue)}</b></div>
       <div class="scad-stat"><span>Pagato</span><b>${fmt(meta.totals.amountPaid)}</b></div>
@@ -4686,6 +5085,9 @@ function renderScadenziarioToolbar(displayedMetas, allMetas) {
         <button class="scad-filter-btn ${scadenziarioUiState.showHistoricalYears ? 'active' : ''}" onclick="toggleScadenziarioHistoricalYears()">
           ${scadenziarioUiState.showHistoricalYears ? 'Nascondi anni ordinari e misti' : 'Mostra anni ordinari e misti'}
         </button>
+        <button class="scad-filter-btn ${scadenziarioUiState.showEmptyYears ? 'active' : ''}" onclick="toggleScadenziarioEmptyYears()">
+          ${scadenziarioUiState.showEmptyYears ? 'Nascondi anni vuoti' : 'Mostra anni vuoti'}
+        </button>
       </div>
     </div>
     <div class="scad-inline-meta">
@@ -4693,23 +5095,59 @@ function renderScadenziarioToolbar(displayedMetas, allMetas) {
       ${historicalCount > 0 ? `<span>Anni ordinari o misti disponibili: <b>${historicalCount}</b></span>` : ''}
       <span>Anno selezionato: <b>${currentYear}</b></span>
     </div>
+    <div class="scad-toolbar-legend">
+      <span class="scad-chip info">Competenza primaria</span>
+      <span class="scad-chip warn">Cassa secondaria</span>
+      <span class="scad-chip ok">Archiviata = pagata</span>
+      <span class="scad-chip info">Calcolato</span>
+      <span class="scad-chip warn">Manuale</span>
+      <span class="scad-chip ok">Importato</span>
+    </div>
   </div>`;
 }
 
 function collectCashViewGroups(metas) {
-  const scadEngine = getScadenziarioEngine();
   const groups = {};
   for (const meta of metas) {
-    const grouped = scadEngine ? scadEngine.groupPaymentEventsByCashYear(meta.rows) : {};
-    for (const [cashYear, entries] of Object.entries(grouped)) {
-      if (!groups[cashYear]) groups[cashYear] = [];
-      groups[cashYear].push(...entries.map(entry => ({
-        ...entry,
-        regimeType: meta.classification
-      })));
+    for (const row of (meta.rows || [])) {
+      const events = Array.isArray(row.paymentEvents) ? row.paymentEvents : [];
+      if (events.length === 0) continue;
+      for (const event of events) {
+        const cashYear = event && event.cashYear ? event.cashYear : (row.cashYear || row.dueYear || meta.year);
+        if (!groups[cashYear]) groups[cashYear] = {};
+        const bucketKey = `${row.scheduleKey || row.id || row.title}_${cashYear}`;
+        if (!groups[cashYear][bucketKey]) {
+          groups[cashYear][bucketKey] = {
+            row,
+            cashYear,
+            paymentEvents: [],
+            paymentCount: 0,
+            amount: 0,
+            firstPaymentDate: '',
+            lastPaymentDate: '',
+            source: row.source || 'calculated',
+            sourceLabel: row.sourceLabel || getScadenziarioRowSourceLabel(row),
+            origin: row.origin || getScadenziarioRowSource(row),
+            regimeType: meta.classification
+          };
+        }
+        const bucket = groups[cashYear][bucketKey];
+        bucket.paymentEvents.push(event);
+        bucket.paymentCount += 1;
+        bucket.amount = ceil2(bucket.amount + ceil2(event.amount));
+        const paymentDate = event.paymentDate || event.data || '';
+        if (paymentDate && (!bucket.firstPaymentDate || paymentDate < bucket.firstPaymentDate)) bucket.firstPaymentDate = paymentDate;
+        if (paymentDate && (!bucket.lastPaymentDate || paymentDate > bucket.lastPaymentDate)) bucket.lastPaymentDate = paymentDate;
+        if (!bucket.cashYears) bucket.cashYears = [];
+        bucket.cashYears.push(cashYear);
+        bucket.competenceYears = Array.from(new Set([...(bucket.competenceYears || []), row.competenceYear || meta.year]));
+      }
     }
   }
-  return groups;
+  return Object.fromEntries(Object.entries(groups).map(([cashYear, rows]) => [
+    cashYear,
+    Object.values(rows)
+  ]));
 }
 
 function renderScadenziarioCashView(metas) {
@@ -4721,7 +5159,7 @@ function renderScadenziarioCashView(metas) {
 
   let h = '';
   for (const cashYear of cashYears) {
-    const rows = cashGroups[cashYear].sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || '') || (a.competenceYear || 0) - (b.competenceYear || 0));
+    const rows = cashGroups[cashYear].sort((a, b) => (b.lastPaymentDate || b.firstPaymentDate || '').localeCompare(a.lastPaymentDate || a.firstPaymentDate || '') || (a.row && a.row.competenceYear || 0) - (b.row && b.row.competenceYear || 0));
     const total = rows.reduce((sum, row) => sum + ceil2(row.amount), 0);
     h += `<section class="panel scad-year-card">
       <div class="scad-year-header">
@@ -4731,23 +5169,34 @@ function renderScadenziarioCashView(metas) {
         </div>
         <div class="scad-year-badges"><span class="scad-chip info">${fmt(total)}</span></div>
       </div>
-      <table class="scad-table scad-year-table"><thead><tr>
+      <table class="scad-table scad-year-table scad-cash-table"><thead><tr>
         <th style="text-align:left">Data pagamento</th>
         <th style="text-align:left">Voce</th>
         <th>Competenza</th>
         <th>Importo</th>
+        <th>Stato</th>
         <th>Origine</th>
       </tr></thead><tbody>`;
     for (const row of rows) {
+      const sourceBadges = renderScadenziarioBadgeList(getScadenziarioRowBadges(row.row));
+      const paymentBadge = row.paymentCount > 1 ? renderScadenziarioBadge(`${row.paymentCount} movimenti`, 'info', 'Più versamenti aggregati nella stessa cassa.') : '';
+      const cashBadge = renderScadenziarioBadge(`Cassa ${cashYear}`, 'info', 'Movimenti registrati in questo anno di cassa.');
+      const stateBadge = row.row && row.row.paymentStatus
+        ? renderScadenziarioBadge(row.row.paymentStatus.label, row.row.paymentStatus.tone, 'Stato attuale della riga fiscale nella vista competenza.')
+        : '';
+      const originBadge = renderScadenziarioBadge(row.sourceLabel || getScadenziarioRowSourceLabel(row.row), row.origin === 'manual' ? 'warn' : (row.origin === 'imported' ? 'ok' : 'info'), 'Origine della riga fiscale nella ledger view.');
       h += `<tr>
-        <td data-label="Data pagamento">${row.paymentDate ? formatPaymentDateDisplay(row.paymentDate) : `Anno ${cashYear}`}</td>
+        <td data-label="Data pagamento">${row.firstPaymentDate ? formatPaymentDateDisplay(row.firstPaymentDate) : `Anno ${cashYear}`}</td>
         <td data-label="Voce">
-          <div class="scad-main">${row.title}</div>
-          <div class="scad-sub">Competenza ${row.competenceYear}${row.competenceYear !== cashYear ? `, pagata nel ${cashYear}` : ''}</div>
+          <div class="scad-main">${row.row && row.row.title ? row.row.title : row.title}</div>
+          <div class="scad-sub">Competenza ${row.row && row.row.competenceYear ? row.row.competenceYear : cashYear}${row.row && row.row.competenceYear !== cashYear ? `, pagata nel ${cashYear}` : ''}</div>
+          ${sourceBadges}
+          ${paymentBadge ? `<div class="scad-row-badges">${paymentBadge}</div>` : ''}
         </td>
-        <td data-label="Competenza">${row.competenceYear}</td>
+        <td data-label="Competenza">${row.row && row.row.competenceYear ? renderScadenziarioBadge(`Comp. ${row.row.competenceYear}`, 'info', 'Competenza della riga fiscale.') : renderScadenziarioBadge(`Comp. ${cashYear}`, 'info', 'Competenza della riga fiscale.')}</td>
         <td data-label="Importo">${fmt(row.amount)}</td>
-        <td data-label="Origine"><span class="scad-chip ${row.regimeType === 'forfettario' ? 'ok' : 'info'}">${row.regimeType}</span></td>
+        <td data-label="Stato">${stateBadge}${row.row && row.row.paymentStatus && row.row.paymentStatus.isCrossYear ? renderScadenziarioBadge('Cross-year', 'warn', 'La riga fiscale attraversa anni diversi tra competenza e cassa.') : ''}</td>
+        <td data-label="Origine">${cashBadge}${originBadge}</td>
       </tr>`;
     }
     h += `</tbody></table></section>`;
@@ -5089,41 +5538,39 @@ function renderScadenziario() {
           </div>
         </div>
         <div class="scad-advanced-block">
-          <h4>Dati anno precedente (primo utilizzo)</h4>
+          <h4>Ponte manuale competenza / cassa</h4>
+          <div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-bottom:12px">
+            Usa questi campi per chiudere il passaggio tra anni o correggere un anno misto. Se compili uno o piu valori, questi prevalgono sulla ricostruzione automatica del ledger.
+          </div>
           <div class="settings-group">
-            <label>Fatturato lordo ${currentYear - 1} (EUR)</label>
+            <label>Fatturato lordo competenza ${currentYear - 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().primoAnnoFatturatoPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
               onchange="saveOptionalNumberSetting('primoAnnoFatturatoPrec', this.value); recalcAll()">
           </div>
           <div class="settings-group">
-            <label>Imposta sostitutiva totale ${currentYear - 1} (EUR)</label>
+            <label>Imposta sostitutiva totale competenza ${currentYear - 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().primoAnnoImpostaPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
               onchange="saveOptionalNumberSetting('primoAnnoImpostaPrec', this.value); recalcAll()">
           </div>
           <div class="settings-group">
-            <label>Acconti imposta gia versati per il ${currentYear - 1} (EUR)</label>
+            <label>Acconti imposta gia versati per competenza ${currentYear - 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().primoAnnoAccontiImpostaPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
               onchange="saveOptionalNumberSetting('primoAnnoAccontiImpostaPrec', this.value); recalcAll()">
           </div>
           <div class="settings-group">
-            <label>Contributi variabili ${currentYear - 1} (EUR)</label>
+            <label>Contributi variabili competenza ${currentYear - 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().primoAnnoContribVariabiliPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
               onchange="saveOptionalNumberSetting('primoAnnoContribVariabiliPrec', this.value); recalcAll()">
           </div>
           <div class="settings-group">
-            <label>Acconti contributi gia versati per il ${currentYear - 1} (EUR)</label>
+            <label>Acconti contributi gia versati per competenza ${currentYear - 1} (EUR)</label>
             <input type="number" step="0.01" value="${S().primoAnnoAccontiContribPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
               onchange="saveOptionalNumberSetting('primoAnnoAccontiContribPrec', this.value); recalcAll()">
           </div>
           <div style="font-size:.78rem;color:var(--text2);line-height:1.5">
             ${schedule.prevApplied
-              ? 'I dati dell\'anno precedente sono gia presenti nel sistema: questi campi sono disabilitati.'
-              : 'Compila questi campi solo se e il tuo primo anno di utilizzo del software e non hai lo storico dell\'anno precedente salvato.'}
+              ? 'Il ledger storico esiste gia: questi campi ora funzionano come override manuale per gli anni misti o per correzioni puntuali.'
+              : 'Compila questi campi solo se e il tuo primo anno di utilizzo del software o se devi ricucire un anno misto senza storico pulito.'}
           </div>
         </div>
       </div>
@@ -5720,6 +6167,7 @@ function seedMattiaData() {
     settings: buildSeedSettings(2024, {
       dailyRate: 400, coefficiente: 67, impostaSostitutiva: 15,
       riduzione35: 0, limiteForfettario: 85000, regime: 'ordinario',
+      vatStartYear: 2024,
       haRedditoDipendente: 1
     }),
     fatture: {
@@ -5750,7 +6198,8 @@ function seedMattiaData() {
   const data2025 = {
     settings: buildSeedSettings(2025, {
       dailyRate: 315, coefficiente: 67, impostaSostitutiva: 15,
-      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+      vatStartYear: 2024
     }),
     fatture: {
       1:  { importo: 5003.37, pagMese: null, pagAnno: null },
@@ -5776,7 +6225,8 @@ function seedMattiaData() {
   const data2026 = {
     settings: buildSeedSettings(2026, {
       dailyRate: 315, coefficiente: 67, impostaSostitutiva: 15,
-      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+      vatStartYear: 2024
     }),
     fatture: {
       1: { importo: 5670, pagMese: null, pagAnno: null },
@@ -5833,7 +6283,8 @@ function seedPeruData() {
   const data2024 = {
     settings: buildSeedSettings(2024, {
       dailyRate: 400, coefficiente: 67, impostaSostitutiva: 15,
-      riduzione35: 0, limiteForfettario: 85000, regime: 'ordinario'
+      riduzione35: 0, limiteForfettario: 85000, regime: 'ordinario',
+      vatStartYear: 2024
     }),
     fatture: {
       10: { importo: 3341.38, pagMese: null, pagAnno: null },
@@ -5868,7 +6319,8 @@ function seedPeruData() {
   const data2025 = {
     settings: buildSeedSettings(2025, {
       dailyRate: 150, coefficiente: 67, impostaSostitutiva: 15,
-      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+      vatStartYear: 2024
     }),
     fatture: {
       1:  { importo: 3000, pagMese: null, pagAnno: null },
@@ -5897,7 +6349,8 @@ function seedPeruData() {
   const data2026 = {
     settings: buildSeedSettings(2026, {
       dailyRate: 175, coefficiente: 67, impostaSostitutiva: 15,
-      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario'
+      riduzione35: 0, limiteForfettario: 85000, regime: 'forfettario',
+      vatStartYear: 2024
     }),
     fatture: {
       1: { importo: 3150, pagMese: null, pagAnno: null }
