@@ -9,12 +9,7 @@ const requiredFiles = [
   "style.css",
   "app.js",
   "firebase-sync.js",
-  "tax-engine.js",
-  "f24-import.js",
-  "fiscal-ledger.js",
-  "scadenziario-engine.js",
-  "payment-ledger.js",
-  "fiscal-ledger-builder.js"
+  "tax-engine.js"
 ];
 
 const optionalFiles = [

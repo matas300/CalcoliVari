@@ -1216,47 +1216,12 @@ body.profile-modal-open {
 .scad-year-table td[data-label="Timing"] {
   width: 12%;
 }
-.scad-cash-table th:nth-child(1),
-.scad-cash-table td[data-label="Data pagamento"] {
-  width: 13%;
-}
-.scad-cash-table th:nth-child(2),
-.scad-cash-table td[data-label="Voce"] {
-  width: 31%;
-}
-.scad-cash-table th:nth-child(3),
-.scad-cash-table td[data-label="Competenza"] {
-  width: 14%;
-}
-.scad-cash-table th:nth-child(4),
-.scad-cash-table td[data-label="Importo"] {
-  width: 12%;
-}
-.scad-cash-table th:nth-child(5),
-.scad-cash-table td[data-label="Stato"] {
-  width: 15%;
-}
-.scad-cash-table th:nth-child(6),
-.scad-cash-table td[data-label="Origine"] {
-  width: 15%;
-}
 .scad-year-table td[data-label="Versamenti"] {
   min-width: 0;
   text-align: left;
 }
 .scad-year-table td[data-label="Versamenti"] > * {
   min-width: 0;
-}
-.scad-cash-table td[data-label="Competenza"],
-.scad-cash-table td[data-label="Stato"],
-.scad-cash-table td[data-label="Origine"] {
-  text-align: left;
-}
-.scad-cash-table td[data-label="Competenza"] .scad-chip,
-.scad-cash-table td[data-label="Stato"] .scad-chip,
-.scad-cash-table td[data-label="Origine"] .scad-chip {
-  margin-right: 6px;
-  margin-bottom: 4px;
 }
 .scad-table tfoot td {
   font-weight: 700;
@@ -1304,30 +1269,6 @@ body.profile-modal-open {
   background: rgba(111,174,106,.12);
   border-color: rgba(111,174,106,.24);
 }
-.scad-row-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.scad-row-badges .scad-chip {
-  padding: 3px 8px;
-  font-size: .66rem;
-}
-.scad-warning-list {
-  display: grid;
-  gap: 6px;
-  margin-top: 8px;
-}
-.scad-warning {
-  padding: 8px 10px;
-  border-radius: 12px;
-  color: var(--yellow);
-  background: rgba(216,166,87,.08);
-  border: 1px solid rgba(216,166,87,.16);
-  font-size: .76rem;
-  line-height: 1.45;
-}
 .scad-note-list {
   display: grid;
   gap: 8px;
@@ -1354,16 +1295,6 @@ body.profile-modal-open {
   border: 1px solid rgba(255,255,255,.06);
   font-size: .75rem;
   color: var(--text2);
-}
-.scad-toolbar-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-.scad-toolbar-legend .scad-chip {
-  padding: 4px 10px;
-  font-size: .66rem;
 }
 .scad-collapsible {
   width: 100%;
