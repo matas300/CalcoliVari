@@ -4599,6 +4599,7 @@ function buildScadenziarioYearMeta(year, options) {
   const importedEntries = getImportedFiscalEntriesForYear(year);
   const importedCompetenceEntries = getImportedCompetenceFiscalEntriesForYear(year);
   const importedFamilies = Array.from(new Set(importedEntries.map(entry => entry && entry.family).filter(Boolean)));
+  const importedCompetenceFamilies = Array.from(new Set(importedCompetenceEntries.map(entry => entry && entry.family).filter(Boolean)));
   const overrideCount = getScadenziarioOverrideCount(yearData);
   const ledgerBuilder = getFiscalLedgerBuilder();
   const regimeGuess = getScadenziarioYearTypeFromSettings(settings, year);
@@ -4610,10 +4611,10 @@ function buildScadenziarioYearMeta(year, options) {
         hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
         hasActivity: invoiceCount > 0 || realRevenue > 0,
         hasRows: false,
-        hasPayments: importedEntries.length > 0,
+        hasPayments: importedCompetenceEntries.length > 0,
         hasOverrides: overrideCount > 0,
-        hasImportedData: importedEntries.length > 0,
-        importedFamilies
+        hasImportedData: importedCompetenceEntries.length > 0,
+        importedFamilies: importedCompetenceFamilies
       })
     : regimeGuess;
   const hasCompiledRevenueAnchor = invoiceCount > 0 || realRevenue > 0;
@@ -4661,23 +4662,23 @@ function buildScadenziarioYearMeta(year, options) {
         vatStartYear,
         regime: settings && settings.regime ? settings.regime : '',
         hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
-        importedFamilies,
+        importedFamilies: importedCompetenceFamilies,
         hasActivity: invoiceCount > 0 || realRevenue > 0,
         hasRows: rows.length > 0,
         hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
         hasOverrides: overrideCount > 0,
-        hasImportedData: importedEntries.length > 0
+        hasImportedData: importedCompetenceEntries.length > 0
       })
     : (scadEngine
       ? scadEngine.classifyFiscalYear({
           regime: settings && settings.regime ? settings.regime : '',
           hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
-          importedFamilies,
+          importedFamilies: importedCompetenceFamilies,
           hasActivity: invoiceCount > 0 || realRevenue > 0,
           hasRows: rows.length > 0,
           hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
           hasOverrides: overrideCount > 0,
-          hasImportedData: importedEntries.length > 0
+          hasImportedData: importedCompetenceEntries.length > 0
         })
       : regimeType);
   const isRelevant = ledgerBuilder && typeof ledgerBuilder.isRelevantFiscalYear === 'function'
