@@ -63,3 +63,8 @@
 
 - Gli F24 aggregati Fiscozen non hanno sempre il breakdown monetario per singola riga.
 - Il bilancino 2025 di Mattia va ancora riallineato ai dati fatture salvati in app se si vuole chiudere anche il confronto mensile, non solo quello annuale.
+
+## Regression coverage note
+
+- Il refactor grosso aveva testato bene i nuovi helper puri, ma non copriva abbastanza i casi legacy della UI: saldi dell'anno chiuso, primo anno forfettario dopo ordinario, coda dell'ultimo anno compilato e presenza delle guide F24 nel markup.
+- La suite di regressione deve quindi proteggere sia i dati normalizzati sia i segnali testuali/strutturali che l'utente usa davvero nello scadenziario.

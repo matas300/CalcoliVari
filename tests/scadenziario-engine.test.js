@@ -75,6 +75,92 @@ test('groups payment events by cash year preserving competence year', () => {
   assert.equal(grouped[2027][0].amount, 50);
 });
 
+test('normalizes a legacy row once and reuses the same row object in cash grouping', () => {
+  const row = ScadenziarioEngine.normalizeLegacyScheduleRow({
+    key: 'imposta_saldo_2025',
+    title: 'Saldo imposta sostitutiva',
+    competence: 'Saldo 2025',
+    due: { year: 2026, label: '30 Giu 2026', date: new Date('2026-06-30T00:00:00Z') },
+    amount: 1200,
+    fiscalYear: 2025,
+    paymentEvents: [
+      { amount: 1200, cashYear: 2026, paymentDate: '2026-06-30' }
+    ]
+  }, { now: new Date('2026-03-27T00:00:00Z') });
+
+  assert.equal(row.scheduleKey, 'imposta_saldo_2025');
+  assert.equal(row.competenceYear, 2025);
+  assert.equal(row.dueYear, 2026);
+  assert.equal(row.dueDate, '2026-06-30');
+  assert.equal(row.isCrossYear, true);
+  assert.equal(row.paymentStatus.code, 'paid');
+
+  const grouped = ScadenziarioEngine.groupRowsByCashYear([row]);
+  assert.equal(grouped[2026].length, 1);
+  assert.equal(grouped[2026][0].row, row);
+  assert.equal(grouped[2026][0].paymentEvent.amount, 1200);
+});
+
+test('normalizes imported historical rows as manual-only cross-year entries', () => {
+  const row = ScadenziarioEngine.normalizeImportedFiscalEntry({
+    id: 'import-1',
+    scheduleKey: 'irpef_acc1_2025',
+    label: 'IRPEF - Acconto - I Rata',
+    referenceYear: 2025,
+    dueYear: 2026,
+    dueDate: '2026-06-30',
+    paidAmount: 946,
+    isTax: true
+  }, { year: 2025, regimeType: 'ordinario' });
+
+  assert.equal(row.source, 'fiscozen_import');
+  assert.equal(row.paymentMode, 'manual_only');
+  assert.equal(row.supportsPartialPayment, false);
+  assert.equal(row.paymentStatus.code, 'paid');
+  assert.equal(row.isCrossYear, true);
+});
+
+test('picks the trailing settlement source only from compiled forfettario years', () => {
+  const trailingYear = ScadenziarioEngine.resolveTrailingSettlementSourceYear([
+    { year: 2025, classification: 'forfettario', hasCompiledRevenueAnchor: true },
+    { year: 2026, classification: 'forfettario', hasCompiledRevenueAnchor: true },
+    { year: 2027, classification: 'forfettario', hasCompiledRevenueAnchor: false },
+    { year: 2024, classification: 'misto', hasCompiledRevenueAnchor: false, hasHistoricalAnchor: true }
+  ]);
+
+  assert.equal(trailingYear, 2026);
+});
+
+test('displays only compiled forfettario years plus historical years on demand', () => {
+  assert.equal(ScadenziarioEngine.shouldDisplayFiscalYear({
+    year: 2026,
+    classification: 'forfettario',
+    hasCompiledRevenueAnchor: true,
+    hasHistoricalAnchor: false
+  }, { includeHistoricalYears: false, includeEmptyYears: false }), true);
+
+  assert.equal(ScadenziarioEngine.shouldDisplayFiscalYear({
+    year: 2027,
+    classification: 'forfettario',
+    hasCompiledRevenueAnchor: false,
+    hasHistoricalAnchor: false
+  }, { includeHistoricalYears: false, includeEmptyYears: false }), false);
+
+  assert.equal(ScadenziarioEngine.shouldDisplayFiscalYear({
+    year: 2024,
+    classification: 'misto',
+    hasCompiledRevenueAnchor: false,
+    hasHistoricalAnchor: true
+  }, { includeHistoricalYears: false, includeEmptyYears: false }), false);
+
+  assert.equal(ScadenziarioEngine.shouldDisplayFiscalYear({
+    year: 2024,
+    classification: 'misto',
+    hasCompiledRevenueAnchor: false,
+    hasHistoricalAnchor: true
+  }, { includeHistoricalYears: true, includeEmptyYears: false }), true);
+});
+
 test('recommends previsionale when previous year is ordinary or mixed', () => {
   const closed = ScadenziarioEngine.chooseMethodPolicy({ isClosedYear: true });
   assert.equal(closed.recommendedMethod, 'consuntivo');

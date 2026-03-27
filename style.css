@@ -1576,6 +1576,9 @@ body.profile-modal-open {
   margin-bottom: 8px;
   align-items: center;
 }
+.scad-f24-inline {
+  margin-top: 8px;
+}
 .scad-payment-events,
 .scad-payment-history,
 .scad-credit-list {
@@ -1637,40 +1640,67 @@ body.profile-modal-open {
 /* ── F24 Guide ── */
 .f24-guide-row td { padding: 0 !important; border: none !important; }
 .f24-guide {
-  padding: 16px 20px;
-  background: rgba(111,167,216,.06);
-  border: 1px solid rgba(111,167,216,.14);
-  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  background: linear-gradient(180deg, rgba(34,49,61,.92), rgba(19,28,36,.96));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   margin: 8px 10px 12px;
 }
-.f24-guide h4 { color: var(--blue); font-size: .9rem; margin-bottom: 10px; }
-.f24-guide-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.f24-guide-meta span {
-  padding: 4px 10px; border-radius: var(--radius-sm);
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06);
-  font-size: .78rem; color: var(--text2);
+.f24-guide h4 {
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: .95rem;
+  font-weight: 700;
+  margin-bottom: 10px;
 }
-.f24-guide-meta span b { color: var(--text); }
-.f24-guide ol { padding-left: 20px; font-size: .82rem; color: var(--text2); line-height: 1.6; }
+.f24-guide-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.f24-guide-meta span {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+  font-size: .76rem;
+  color: var(--color-text-muted);
+}
+.f24-guide-meta span b { color: var(--color-text); }
+.f24-guide ol {
+  padding-left: 20px;
+  font-size: .84rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
 .f24-guide ol li { margin-bottom: 4px; }
 .f24-guide-note {
   margin-top: 10px; padding: 10px 12px;
-  background: rgba(216,166,87,.08); border: 1px solid rgba(216,166,87,.15);
-  border-radius: var(--radius-sm); font-size: .78rem; color: var(--yellow); line-height: 1.5;
+  background: rgba(216,166,87,.08);
+  border: 1px solid rgba(216,166,87,.18);
+  border-radius: var(--radius-sm);
+  font-size: .8rem;
+  color: var(--color-warning);
+  line-height: 1.5;
 }
 .f24-btn {
   background: rgba(111,167,216,.12);
-  color: var(--blue);
-  border: 1px solid rgba(111,167,216,.24);
+  color: var(--color-info);
+  border: 1px solid rgba(111,167,216,.22);
   border-radius: 999px;
-  padding: 3px 8px;
-  font-size: .65rem;
+  padding: 4px 9px;
+  font-size: .68rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   margin-left: 4px;
 }
-.f24-btn:hover { background: rgba(111,167,216,.2); }
+.f24-btn:hover {
+  background: rgba(111,167,216,.2);
+  box-shadow: 0 0 0 1px rgba(111,167,216,.08) inset;
+}
 
 /* ── Fatture payment date ── */
 .pag-cell {

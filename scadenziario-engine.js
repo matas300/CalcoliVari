@@ -133,6 +133,170 @@
     return groups;
   }
 
+  function buildDueView(dueDate, dueYear, title) {
+    var parsed = dueDate && typeof dueDate === 'string' ? Date.parse(dueDate) : NaN;
+    var date = Number.isFinite(parsed) ? new Date(parsed) : (dueYear ? new Date(dueYear, 0, 1) : new Date());
+    return {
+      year: dueYear,
+      label: dueDate || (dueYear ? String(dueYear) : ''),
+      date: date,
+      title: title || ''
+    };
+  }
+
+  function toIsoDate(value) {
+    if (!(value instanceof Date)) return '';
+    var year = value.getFullYear();
+    var month = String(value.getMonth() + 1).padStart(2, '0');
+    var day = String(value.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+
+  function splitNormalizationArgs(overrides, options) {
+    var extra = overrides || {};
+    var opts = options || {};
+    var hasExplicitOverride = extra
+      && typeof extra === 'object'
+      && (
+        extra.id !== undefined
+        || extra.scheduleKey !== undefined
+        || extra.competenceYear !== undefined
+        || extra.cashYear !== undefined
+        || extra.dueDate !== undefined
+        || extra.dueYear !== undefined
+        || extra.title !== undefined
+        || extra.competenceLabel !== undefined
+        || extra.kind !== undefined
+        || extra.family !== undefined
+        || extra.amountDue !== undefined
+        || extra.paymentEvents !== undefined
+        || extra.source !== undefined
+        || extra.regimeType !== undefined
+      );
+    if (!options && !hasExplicitOverride) {
+      opts = extra || {};
+      extra = {};
+    }
+    return { extra: extra || {}, opts: opts || {} };
+  }
+
+  function buildNormalizedLedgerRow(base, overrides, options) {
+    var row = base || {};
+    var extra = overrides || {};
+    var opts = options || {};
+    var paymentEvents = Array.isArray(extra.paymentEvents)
+      ? extra.paymentEvents.slice()
+      : (Array.isArray(row.paymentEvents) ? row.paymentEvents.slice() : []);
+    var competenceYear = extra.competenceYear !== undefined
+      ? extra.competenceYear
+      : (row.competenceYear !== undefined ? row.competenceYear : (row.fiscalYear !== undefined ? row.fiscalYear : opts.year));
+    var dueYear = extra.dueYear !== undefined
+      ? extra.dueYear
+      : (row.dueYear !== undefined ? row.dueYear : (row.due && row.due.year !== undefined ? row.due.year : competenceYear));
+    var dueDate = extra.dueDate !== undefined
+      ? extra.dueDate
+      : (row.dueDate !== undefined ? row.dueDate : (row.due && row.due.date instanceof Date ? toIsoDate(row.due.date) : ''));
+    var amountDue = ceil2(extra.amountDue !== undefined ? extra.amountDue : (row.amountDue !== undefined ? row.amountDue : row.amount));
+    var low = ceil2(extra.low !== undefined ? extra.low : (row.low !== undefined ? row.low : amountDue));
+    var high = ceil2(extra.high !== undefined ? extra.high : (row.high !== undefined ? row.high : amountDue));
+    var normalized = {
+      id: extra.id !== undefined ? extra.id : (row.id || row.key || row.scheduleKey || ('sched_' + (competenceYear || '0') + '_' + Math.random().toString(36).slice(2, 8))),
+      scheduleKey: extra.scheduleKey !== undefined ? extra.scheduleKey : (row.scheduleKey || row.key || ''),
+      competenceYear: competenceYear,
+      cashYear: extra.cashYear !== undefined ? extra.cashYear : (dueYear !== undefined ? dueYear : competenceYear),
+      dueDate: dueDate,
+      dueYear: dueYear,
+      title: extra.title !== undefined ? extra.title : (row.title || 'Scadenza'),
+      competenceLabel: extra.competenceLabel !== undefined ? extra.competenceLabel : (row.competenceLabel || row.competence || ('Anno ' + (competenceYear || ''))),
+      competence: extra.competence !== undefined ? extra.competence : (row.competence || row.competenceLabel || ('Anno ' + (competenceYear || ''))),
+      kind: extra.kind !== undefined ? extra.kind : (row.kind || 'altro'),
+      family: extra.family !== undefined ? extra.family : (row.family || 'other'),
+      method: extra.method !== undefined ? extra.method : (row.method || 'Calcolato'),
+      certainty: extra.certainty !== undefined ? extra.certainty : (row.certainty || 'fixed'),
+      amountDue: amountDue,
+      amount: amountDue,
+      low: low,
+      high: high,
+      source: extra.source !== undefined ? extra.source : (row.source || 'calculated'),
+      regimeType: extra.regimeType !== undefined ? extra.regimeType : (row.regimeType || 'forfettario'),
+      isCrossYear: extra.isCrossYear !== undefined ? extra.isCrossYear : !!(competenceYear && dueYear && competenceYear !== dueYear),
+      supportsPartialPayment: extra.supportsPartialPayment !== undefined ? extra.supportsPartialPayment : (row.supportsPartialPayment !== undefined ? row.supportsPartialPayment : true),
+      paymentMode: extra.paymentMode !== undefined ? extra.paymentMode : (row.paymentMode || 'partial_allowed'),
+      paymentEvents: paymentEvents,
+      note: extra.note !== undefined ? extra.note : (row.note || ''),
+      warnings: extra.warnings !== undefined ? extra.warnings : (row.warnings ? row.warnings.slice() : []),
+      due: extra.due !== undefined ? extra.due : (row.due || buildDueView(dueDate, dueYear, row.title)),
+      legacyRow: extra.legacyRow !== undefined ? extra.legacyRow : (row.legacyRow !== undefined ? row.legacyRow : row)
+    };
+    normalized.paymentStatus = buildPaymentStatus(normalized, paymentEvents, { now: opts.now || new Date() });
+    return normalized;
+  }
+
+  function normalizeLegacyScheduleRow(row, overrides, options) {
+    var args = splitNormalizationArgs(overrides, options);
+    return buildNormalizedLedgerRow(row, Object.assign({
+      source: 'calculated',
+      regimeType: 'forfettario',
+      supportsPartialPayment: true,
+      paymentMode: 'partial_allowed',
+      legacyRow: row
+    }, args.extra), args.opts);
+  }
+
+  function normalizeImportedFiscalEntry(entry, overrides, options) {
+    var args = splitNormalizationArgs(overrides, options);
+    var extra = args.extra;
+    var opts = args.opts;
+    var amount = ceil2(entry && (entry.paidAmount || entry.amount));
+    var dueDate = entry && entry.dueDate ? entry.dueDate : '';
+    var parsed = dueDate && typeof dueDate === 'string' ? Date.parse(dueDate) : NaN;
+    var dueYear = entry && entry.dueYear !== undefined
+      ? entry.dueYear
+      : (Number.isFinite(parsed) ? new Date(parsed).getFullYear() : (opts.year || new Date().getFullYear()));
+    var competenceYear = entry && (entry.referenceYear || entry.competenceYear) !== undefined
+      ? (entry.referenceYear || entry.competenceYear)
+      : (opts.year !== undefined ? opts.year : dueYear);
+    var paymentEvents = amount > 0 ? [{
+      id: 'import_' + (entry && entry.id ? entry.id : (opts.year || dueYear)),
+      paymentId: 'import_' + (entry && entry.id ? entry.id : (opts.year || dueYear)),
+      scheduleKey: entry && entry.scheduleKey ? entry.scheduleKey : '',
+      paymentDate: dueDate,
+      data: dueDate,
+      cashYear: dueYear,
+      amount: amount,
+      note: 'Importato da Fiscozen / prospetto storico',
+      source: 'fiscozen_import'
+    }] : [];
+    return buildNormalizedLedgerRow(entry, Object.assign({
+      id: entry && entry.id ? 'imported_' + entry.id : 'imported_' + (opts.year || dueYear) + '_' + Math.random().toString(36).slice(2, 8),
+      scheduleKey: entry && entry.scheduleKey ? entry.scheduleKey : '',
+      competenceYear: competenceYear,
+      cashYear: dueYear,
+      dueDate: dueDate || (dueYear ? String(dueYear) : ''),
+      dueYear: dueYear,
+      title: entry && (entry.label || entry.description) ? (entry.label || entry.description) : 'Pagamento storico',
+      competenceLabel: 'Storico ' + (opts.year || dueYear),
+      competence: 'Storico ' + (opts.year || dueYear),
+      kind: entry && entry.isContribution ? 'contributi' : (entry && entry.isTax ? 'tasse' : 'altro'),
+      family: entry && entry.family ? entry.family : 'other',
+      method: 'Importato',
+      certainty: 'historical',
+      amountDue: amount,
+      low: amount,
+      high: amount,
+      source: 'fiscozen_import',
+      regimeType: opts.regimeType || 'ordinario',
+      isCrossYear: dueYear !== competenceYear,
+      supportsPartialPayment: false,
+      paymentMode: 'manual_only',
+      paymentEvents: paymentEvents,
+      note: entry && entry.isAggregateBundle ? ('F24 storico con ' + (entry.bundleCount || 0) + ' sottovoci.') : '',
+      warnings: [],
+      due: buildDueView(dueDate, dueYear, entry && (entry.label || entry.description) ? (entry.label || entry.description) : 'Pagamento storico'),
+      legacyRow: null
+    }, extra), { now: opts.now || new Date() });
+  }
+
   function computeScheduleTotals(rows) {
     return (rows || []).reduce(function (acc, row) {
       var due = ceil2(row && row.amountDue !== undefined ? row.amountDue : row && row.amount);
@@ -158,7 +322,7 @@
     return groups;
   }
 
-  function groupPaymentEventsByCashYear(rows) {
+  function groupRowsByCashYear(rows) {
     var groups = {};
     for (var i = 0; i < (rows || []).length; i++) {
       var row = rows[i] || {};
@@ -169,15 +333,11 @@
         if (!year) continue;
         if (!groups[year]) groups[year] = [];
         groups[year].push({
-          competenceYear: row.competenceYear,
-          dueYear: row.dueYear,
-          title: row.title,
-          competence: row.competence,
-          family: row.family,
-          kind: row.kind,
-          scheduleKey: row.key || row.scheduleKey,
+          row: row,
+          paymentEvent: event,
+          paymentIndex: j,
           paymentId: event.id || event.paymentId || (String(year) + '_' + j),
-          paymentDate: event.data || event.paymentDate || '',
+          paymentDate: event.paymentDate || event.data || '',
           cashYear: year,
           amount: ceil2(event.amount),
           note: event.note || event.descrizione || '',
@@ -186,6 +346,55 @@
       }
     }
     return groups;
+  }
+
+  function groupPaymentEventsByCashYear(rows) {
+    var groups = groupRowsByCashYear(rows);
+    var flattened = {};
+    Object.keys(groups).forEach(function (year) {
+      flattened[year] = groups[year].map(function (item) {
+        return {
+          competenceYear: item.row.competenceYear,
+          dueYear: item.row.dueYear,
+          title: item.row.title,
+          competence: item.row.competence,
+          family: item.row.family,
+          kind: item.row.kind,
+          scheduleKey: item.row.key || item.row.scheduleKey,
+          paymentId: item.paymentId,
+          paymentDate: item.paymentDate,
+          cashYear: item.cashYear,
+          amount: item.amount,
+          note: item.note,
+          statusCode: item.statusCode
+        };
+      });
+    });
+    return flattened;
+  }
+
+  function resolveTrailingSettlementSourceYear(metas) {
+    var sourceYears = (metas || [])
+      .filter(function (meta) {
+        return meta
+          && meta.classification === 'forfettario'
+          && !!meta.hasCompiledRevenueAnchor;
+      })
+      .map(function (meta) { return parseInt(meta.year, 10); })
+      .filter(Number.isFinite);
+    return sourceYears.length ? Math.max.apply(Math, sourceYears) : null;
+  }
+
+  function shouldDisplayFiscalYear(meta, options) {
+    var input = meta || {};
+    var opts = options || {};
+    if (opts.includeEmptyYears) return true;
+    if (input.isTrailingSettlementYear) return !!((input.rows || []).length);
+    if (input.classification === 'forfettario') return !!input.hasCompiledRevenueAnchor;
+    if (opts.includeHistoricalYears) {
+      return !!input.hasHistoricalAnchor || !!input.hasCompiledRevenueAnchor;
+    }
+    return false;
   }
 
   function classifyFiscalYear(meta) {
@@ -256,9 +465,15 @@
     sumPaymentEvents: sumPaymentEvents,
     buildPaymentStatus: buildPaymentStatus,
     splitRowsByPaymentState: splitRowsByPaymentState,
+    buildNormalizedLedgerRow: buildNormalizedLedgerRow,
+    normalizeLegacyScheduleRow: normalizeLegacyScheduleRow,
+    normalizeImportedFiscalEntry: normalizeImportedFiscalEntry,
     computeScheduleTotals: computeScheduleTotals,
     groupRowsByCompetenceYear: groupRowsByCompetenceYear,
+    groupRowsByCashYear: groupRowsByCashYear,
     groupPaymentEventsByCashYear: groupPaymentEventsByCashYear,
+    resolveTrailingSettlementSourceYear: resolveTrailingSettlementSourceYear,
+    shouldDisplayFiscalYear: shouldDisplayFiscalYear,
     classifyFiscalYear: classifyFiscalYear,
     isRelevantFiscalYear: isRelevantFiscalYear,
     chooseMethodPolicy: chooseMethodPolicy
