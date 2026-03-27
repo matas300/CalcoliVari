@@ -4603,6 +4603,12 @@ function buildScadenziarioYearMeta(year, options) {
   const overrideCount = getScadenziarioOverrideCount(yearData);
   const ledgerBuilder = getFiscalLedgerBuilder();
   const regimeGuess = getScadenziarioYearTypeFromSettings(settings, year);
+  const hasCompiledRevenueAnchor = invoiceCount > 0 || realRevenue > 0;
+  const preferLocalForfettarioClassification = hasCompiledRevenueAnchor
+    && settings
+    && settings.regime === 'forfettario'
+    && !Number(settings.haRedditoDipendente);
+  const importedFamiliesForClassification = preferLocalForfettarioClassification ? [] : importedCompetenceFamilies;
   const regimeType = ledgerBuilder && typeof ledgerBuilder.classifyFiscalYear === 'function'
     ? ledgerBuilder.classifyFiscalYear({
         year,
@@ -4614,10 +4620,9 @@ function buildScadenziarioYearMeta(year, options) {
         hasPayments: importedCompetenceEntries.length > 0,
         hasOverrides: overrideCount > 0,
         hasImportedData: importedCompetenceEntries.length > 0,
-        importedFamilies: importedCompetenceFamilies
+        importedFamilies: importedFamiliesForClassification
       })
     : regimeGuess;
-  const hasCompiledRevenueAnchor = invoiceCount > 0 || realRevenue > 0;
   const hasHistoricalAnchor = importedCompetenceEntries.length > 0;
   const shouldBuildAutoSchedule = regimeType === 'forfettario'
     && !isTrailingSettlementYear
@@ -4662,7 +4667,7 @@ function buildScadenziarioYearMeta(year, options) {
         vatStartYear,
         regime: settings && settings.regime ? settings.regime : '',
         hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
-        importedFamilies: importedCompetenceFamilies,
+        importedFamilies: importedFamiliesForClassification,
         hasActivity: invoiceCount > 0 || realRevenue > 0,
         hasRows: rows.length > 0,
         hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
@@ -4673,7 +4678,7 @@ function buildScadenziarioYearMeta(year, options) {
       ? scadEngine.classifyFiscalYear({
           regime: settings && settings.regime ? settings.regime : '',
           hasEmployeeIncome: !!Number(settings && settings.haRedditoDipendente),
-          importedFamilies: importedCompetenceFamilies,
+          importedFamilies: importedFamiliesForClassification,
           hasActivity: invoiceCount > 0 || realRevenue > 0,
           hasRows: rows.length > 0,
           hasPayments: rows.some(row => (row.paymentEvents || []).length > 0),
