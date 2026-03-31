@@ -45,8 +45,197 @@
   --yellow: var(--color-warning);
   --blue: var(--color-info);
 }
+/* ── Light theme ── */
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #F4F6F8;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F0F2F5;
+  --color-surface-3: #E4E8EC;
+  --color-border: #D0D7DE;
+  --color-text: #1A2028;
+  --color-text-muted: #4A5568;
+  --color-text-faint: #8896A6;
+  --color-primary: #3A8F91;
+  --color-primary-hover: #2E7B7D;
+  --color-primary-active: #257072;
+  --color-success: #2F8A2A;
+  --color-warning: #B8860B;
+  --color-error: #C0392B;
+  --color-info: #2874A6;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,.12);
+  --accent2: #B0D4D8;
+}
+html[data-theme="light"] .login-box button,
+html[data-theme="light"] .btn-add,
+html[data-theme="light"] .regime-btn.active,
+html[data-theme="light"] .btn-add-fatt {
+  color: #fff;
+}
+html[data-theme="light"] header {
+  background: rgba(255,255,255,.96);
+}
+html[data-theme="light"] nav button:hover {
+  background: rgba(0,0,0,.04);
+}
+html[data-theme="light"] nav button.active {
+  background: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .row {
+  border-bottom-color: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .row.highlight {
+  background: var(--color-surface-3);
+  border-color: rgba(58,143,145,.15);
+}
+html[data-theme="light"] .fatture-table th,
+html[data-theme="light"] .accant-table th,
+html[data-theme="light"] .monthly-breakdown th,
+html[data-theme="light"] .scad-table th {
+  background: rgba(0,0,0,.04);
+}
+html[data-theme="light"] .fatture-table tbody tr:nth-child(even) td,
+html[data-theme="light"] .accant-table tbody tr:nth-child(even) td,
+html[data-theme="light"] .monthly-breakdown tbody tr:nth-child(even) td,
+html[data-theme="light"] .scad-table tbody tr:nth-child(even) td {
+  background: rgba(0,0,0,.02);
+}
+html[data-theme="light"] .fatture-table td,
+html[data-theme="light"] .accant-table td,
+html[data-theme="light"] .monthly-breakdown td,
+html[data-theme="light"] .scad-table td {
+  border-bottom-color: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .progress-bar {
+  background: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .bar-track {
+  background: rgba(0,0,0,.05);
+}
+html[data-theme="light"] .budget-bar-track {
+  background: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .cal-day.act-WE {
+  background: rgba(0,0,0,.05);
+  color: var(--color-text-muted);
+}
+html[data-theme="light"] .cal-day.act- {
+  background: rgba(0,0,0,.03);
+  color: var(--color-text-muted);
+}
+html[data-theme="light"] .month-header {
+  background: var(--color-surface-3);
+  border-bottom-color: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .month-summary {
+  border-top-color: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .badge-WE {
+  background: rgba(0,0,0,.1);
+  color: var(--color-text-muted);
+}
+html[data-theme="light"] .profile-modal {
+  background: rgba(0,0,0,.4);
+}
+html[data-theme="light"] .profile-modal-panel {
+  background: linear-gradient(180deg, #f8f9fa, #eef1f5);
+}
+html[data-theme="light"] .profile-section {
+  background: rgba(255,255,255,.8);
+}
+html[data-theme="light"] .profile-meta-pill,
+html[data-theme="light"] .profile-hero-stat,
+html[data-theme="light"] .profile-field,
+html[data-theme="light"] .scad-stat,
+html[data-theme="light"] .scad-method-box,
+html[data-theme="light"] .scad-note,
+html[data-theme="light"] .scad-empty,
+html[data-theme="light"] .scad-advanced-block,
+html[data-theme="light"] .profile-history-item {
+  background: rgba(0,0,0,.03);
+  border-color: rgba(0,0,0,.08);
+}
+html[data-theme="light"] .scad-toolbar-panel {
+  background: linear-gradient(180deg, rgba(58,143,145,.08), rgba(0,0,0,.02));
+}
+html[data-theme="light"] .calc-param-card {
+  background: linear-gradient(180deg, rgba(184,134,11,.08), rgba(0,0,0,.02));
+  border-color: rgba(184,134,11,.18);
+}
+html[data-theme="light"] .f24-guide {
+  background: linear-gradient(180deg, #f0f2f5, #e8ecf0);
+}
+html[data-theme="light"] .payment-date-popup {
+  background: linear-gradient(180deg, #fff, #f5f7fa);
+}
+html[data-theme="light"] .payment-date-day {
+  background: rgba(0,0,0,.04);
+}
+html[data-theme="light"] .payment-date-empty {
+  background: rgba(0,0,0,.02);
+}
+html[data-theme="light"] .scad-inline-meta span,
+html[data-theme="light"] .scad-payment-tag,
+html[data-theme="light"] .scad-view-switch {
+  background: rgba(0,0,0,.04);
+  border-color: rgba(0,0,0,.08);
+}
+html[data-theme="light"] .scad-view-switch button.active,
+html[data-theme="light"] .scad-filter-btn.active {
+  background: rgba(58,143,145,.14);
+}
+html[data-theme="light"] .settings-group select,
+html[data-theme="light"] .budget-base-selector select,
+html[data-theme="light"] .pagamenti-row select,
+html[data-theme="light"] .pag-mese {
+  color-scheme: light;
+}
+html[data-theme="light"] .settings-group select option,
+html[data-theme="light"] .budget-base-selector select option,
+html[data-theme="light"] .pagamenti-row select option,
+html[data-theme="light"] .pag-mese option {
+  background: #fff;
+  color: var(--color-text);
+}
+html[data-theme="light"] ::selection {
+  background: rgba(58,143,145,.2);
+}
+html[data-theme="light"] .logout-btn:hover {
+  background: rgba(192,57,43,.08);
+  border-color: var(--color-error);
+}
+html[data-theme="light"] .settings-header-btn:hover,
+html[data-theme="light"] .settings-header-btn.active {
+  color: #fff;
+}
+/* ── Theme toggle ── */
+.theme-toggle {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+.theme-toggle:hover {
+  background: var(--color-surface-3);
+  border-color: rgba(79,163,165,.24);
+  color: var(--color-text);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
 body {
   font-family: var(--font-body);
   background: var(--bg);
@@ -1452,6 +1641,28 @@ body.profile-modal-open {
   display: grid;
   gap: 18px;
 }
+.scad-year-collapse {
+  display: grid;
+  gap: 18px;
+}
+.scad-year-collapse > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.scad-year-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+.scad-year-collapse > summary .scad-year-title::before {
+  content: '\25B6';
+  display: inline-block;
+  font-size: .65em;
+  margin-right: 8px;
+  transition: transform .2s;
+  vertical-align: middle;
+}
+.scad-year-collapse[open] > summary .scad-year-title::before {
+  transform: rotate(90deg);
+}
 .scad-year-card.is-current {
   border: 1px solid rgba(79,163,165,.22);
   box-shadow: var(--shadow-lg);
@@ -1779,7 +1990,7 @@ body.profile-modal-open {
   nav button[data-tab="settings"] { display: none !important; }
 
   /* ── Bottom navbar ── */
-  body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); overflow-x: hidden; }
   nav {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(72px, 1fr);
@@ -1788,8 +1999,12 @@ body.profile-modal-open {
     border-bottom: none;
     box-shadow: 0 -8px 24px rgba(0,0,0,.28);
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+  nav::-webkit-scrollbar { display: none; }
   nav button {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 1px; padding: 8px 2px; font-size: .62rem;
@@ -2046,7 +2261,6 @@ body.profile-modal-open {
   }
   .scad-view-switch {
     width: 100%;
-    justify-content: stretch;
   }
   .scad-view-switch button,
   .scad-filter-btn {
@@ -2062,7 +2276,7 @@ body.profile-modal-open {
   }
   .scad-row-actions {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   }
   .scad-payment-event {
     grid-template-columns: 1fr;
@@ -2100,6 +2314,7 @@ body.profile-modal-open {
   .profile-sheet {
     padding: 18px 16px 20px;
   }
+  .profile-sheet-copy h2 { font-size: 1.3rem; }
   .profile-sheet-header {
     flex-direction: column;
   }
@@ -2169,4 +2384,30 @@ body.profile-modal-open {
   .scad-advanced-grid { grid-template-columns: 1fr; }
   .scad-main { font-size: .84rem; }
   .scad-sub { font-size: .68rem; }
+}
+
+/* Light theme mobile card overrides */
+@media (max-width: 768px) {
+  html[data-theme="light"] .accant-table tr,
+  html[data-theme="light"] .fatture-table tr,
+  html[data-theme="light"] .monthly-breakdown tr,
+  html[data-theme="light"] .scad-table tr {
+    background: #fff;
+    border-color: rgba(0,0,0,.1);
+  }
+  html[data-theme="light"] .accant-table td,
+  html[data-theme="light"] .fatture-table td,
+  html[data-theme="light"] .monthly-breakdown td,
+  html[data-theme="light"] .scad-table td {
+    border-bottom-color: rgba(0,0,0,.06);
+  }
+  html[data-theme="light"] .accant-table td:first-child,
+  html[data-theme="light"] .fatture-table td:first-child,
+  html[data-theme="light"] .monthly-breakdown td:first-child {
+    border-bottom-color: rgba(0,0,0,.12);
+  }
+  html[data-theme="light"] nav {
+    background: #fff;
+    box-shadow: 0 -4px 12px rgba(0,0,0,.08);
+  }
 }

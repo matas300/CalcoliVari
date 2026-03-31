@@ -18,6 +18,7 @@ const PROFILE_FISCAL_LIBRARY = {
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
+    inailTasso: 5.19,
     agevolazioneStartUp: 0,
     primoAnnoAgevolato: 0,
     note: 'Profilo reale con transizione ordinario -> forfettario dal 2025.'
@@ -35,6 +36,7 @@ const PROFILE_FISCAL_LIBRARY = {
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
+    inailTasso: 0,
     agevolazioneStartUp: 0,
     primoAnnoAgevolato: 0,
     note: ''
@@ -52,6 +54,7 @@ const PROFILE_FISCAL_LIBRARY = {
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
+    inailTasso: 0,
     agevolazioneStartUp: 0,
     primoAnnoAgevolato: 0,
     note: ''
@@ -63,8 +66,8 @@ const PROFILE_SYNC_FIELDS = [
   'inpsMode',
   'inpsCategoria',
   'usaInpsUfficiale',
-  'riduzione35',
-  'limiteForfettario'
+  'limiteForfettario',
+  'inailTasso'
 ];
 let currentProfile = sessionStorage.getItem('currentProfile') || null;
 let profileFiscalState = { editing: false, draft: null, data: null };
@@ -145,6 +148,23 @@ async function doLogin() {
   recalcAll();
   loadProfileExternalFiscalData(profile).then(() => recalcAll());
 }
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.innerHTML = next === 'dark' ? '&#9790;' : '&#9728;';
+}
+(function initThemeIcon() {
+  const t = localStorage.getItem('theme') || 'dark';
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.innerHTML = t === 'dark' ? '&#9790;' : '&#9728;';
+  });
+})();
 
 function doLogout() {
   closeProfileFiscalModal();
@@ -227,6 +247,51 @@ const OFFICIAL_ARTCOM_INPS = {
     commerciante: { contribFissi: 4611.63, aliqContributi: 24.48 }
   }
 };
+// Retribuzione convenzionale INAIL (minimale di rendita) per artigiani senza dipendenti
+// Fonte: circolare INAIL annuale. Il premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%)
+const INAIL_MINIMALE_RENDITA = {
+  2024: 18415.40,
+  2025: 18415.40,
+  2026: 18689.79
+};
+function getInailMinimale(year) {
+  if (INAIL_MINIMALE_RENDITA[year]) return INAIL_MINIMALE_RENDITA[year];
+  const knownYears = Object.keys(INAIL_MINIMALE_RENDITA).map(Number).sort((a, b) => a - b);
+  const fallback = knownYears.filter(y => y <= year).pop() || knownYears[knownYears.length - 1];
+  return INAIL_MINIMALE_RENDITA[fallback];
+}
+function calcInailPremio(year, tassoPerMille) {
+  if (!tassoPerMille || tassoPerMille <= 0) return 0;
+  const base = getInailMinimale(year);
+  return Math.round(base * tassoPerMille / 1000 * 1.01 * 100) / 100;
+}
+
+// Imposta di bollo: 2€ per ogni fattura con importo > 77.47€
+// Scadenze: Q1 → 31/5, Q2 → 30/9, Q3 → 30/11, Q4 → 28/2 anno successivo
+// Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo
+const BOLLO_SOGLIA = 77.47;
+const BOLLO_IMPORTO = 2.00;
+const BOLLO_QUARTERS = [
+  { label: '1o trimestre', months: [1, 2, 3], dueMonth: 5, dueDay: 31, codice: '2521' },
+  { label: '2o trimestre', months: [4, 5, 6], dueMonth: 9, dueDay: 30, codice: '2522' },
+  { label: '3o trimestre', months: [7, 8, 9], dueMonth: 11, dueDay: 30, codice: '2523' },
+  { label: '4o trimestre', months: [10, 11, 12], dueMonth: 2, dueDay: 28, codice: '2524', nextYear: true }
+];
+function calcBolloPerQuarter(yearData) {
+  const fatture = yearData && yearData.fatture ? yearData.fatture : {};
+  return BOLLO_QUARTERS.map(q => {
+    let count = 0;
+    for (const m of q.months) {
+      const arr = fatture[m];
+      if (!Array.isArray(arr)) continue;
+      for (const f of arr) {
+        if ((parseFloat(f.importo) || 0) > BOLLO_SOGLIA) count++;
+      }
+    }
+    return { ...q, count, amount: count * BOLLO_IMPORTO };
+  });
+}
+
 const F24_GUIDE = {
   imposta_saldo: {
     titolo: 'Saldo Imposta Sostitutiva',
@@ -823,7 +888,7 @@ function getDefaultSettings(year = currentYear) {
   return {
     dailyRate: 0, coefficiente: profile.coefficiente, impostaSostitutiva: profile.impostaSostitutiva,
     contribFissi: official.contribFissi, minimaleInps: official.minimaleInps, aliqContributi: official.aliqContributi,
-    riduzione35: profile.riduzione35, limiteForfettario: profile.limiteForfettario, regime: 'forfettario',
+    riduzione35: 0, limiteForfettario: profile.limiteForfettario, regime: 'forfettario',
     haRedditoDipendente: 0,
     inpsMode: profile.inpsMode,
     inpsCategoria: official.category,
@@ -856,12 +921,24 @@ function applySettings() {
   const fields = {
     settDailyRate: 'dailyRate',
     settGiorniIncasso: 'giorniIncasso',
-    settDipendenteIncome: 'haRedditoDipendente'
+    settDipendenteIncome: 'haRedditoDipendente',
+    settRiduzione35: 'riduzione35'
   };
   for (const [id, key] of Object.entries(fields)) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.value = s[key];
+  }
+  // Optional number fields (empty string = not set)
+  const optFields = {
+    settInailCorrente: 'scadenziarioInailCorrente',
+    settInailSuccessivo: 'scadenziarioInailSuccessivo',
+    settDirittoCamerale: 'scadenziarioDirittoCamerale'
+  };
+  for (const [id, key] of Object.entries(optFields)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.value = s[key] !== '' && s[key] !== null && s[key] !== undefined ? s[key] : '';
   }
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
@@ -1649,16 +1726,16 @@ function drawDonut(netto, tasse, contributi, totalLabel = 'Totale lordo') {
   const arc = (off, len, col) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}"
     stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"/>`;
   let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
-  svg += arc(0, pN*C, '#4ecca3') + arc(pN*C, pT*C, '#e94560') + arc((pN+pT)*C, pC*C, '#f5a623');
-  svg += `<text x="${cx}" y="${cy-6}" text-anchor="middle" fill="#eee" font-size="14" font-weight="700">${fmtPct(pN)}</text>`;
-  svg += `<text x="${cx}" y="${cy+10}" text-anchor="middle" fill="#aaa" font-size="9">netto</text></svg>`;
+  svg += arc(0, pN*C, '#2eaadc') + arc(pN*C, pT*C, '#e94560') + arc((pN+pT)*C, pC*C, '#f5a623');
+  svg += `<text x="${cx}" y="${cy-6}" text-anchor="middle" fill="var(--color-text)" font-size="14" font-weight="700">${fmtPct(pN)}</text>`;
+  svg += `<text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--color-text-muted)" font-size="9">netto</text></svg>`;
   const tasseLabel = S().regime === 'ordinario' ? 'IRPEF' : 'Imposta sost.';
   const contribLabel = getContribLabel(getInpsMode(S()));
   return `<div class="chart-container">${svg}<div class="chart-legend">
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#4ecca3"></div><span>Netto</span><span class="chart-legend-val" style="color:#4ecca3">${fmt(netto)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#2eaadc"></div><span>Netto</span><span class="chart-legend-val" style="color:#2eaadc">${fmt(netto)}</span></div>
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#e94560"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:#e94560">${fmt(tasse)}</span></div>
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f5a623"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:#f5a623">${fmt(contributi)}</span></div>
-    <div class="chart-legend-item" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">
+    <div class="chart-legend-item" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--color-border)">
       <div class="chart-legend-dot" style="background:transparent"></div><span style="font-weight:600">${totalLabel}</span><span class="chart-legend-val">${fmt(total)}</span></div>
   </div></div>`;
 }
@@ -1679,14 +1756,14 @@ function drawMiniBars(perc) {
     h += `<div class="mini-bar-col">
       <div style="display:flex;flex-direction:column;width:100%;height:${hPx}px">
         <div class="mini-bar" style="height:${hT}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.6"></div>
-        <div class="mini-bar" style="height:${hN}px;background:var(--green);border-radius:0"></div>
+        <div class="mini-bar" style="height:${hN}px;background:#2eaadc;border-radius:0"></div>
       </div>
       <div class="mini-bar-label">${MONTHS_SHORT[m]}</div>
     </div>`;
   }
   h += '</div>';
   h += `<div style="display:flex;gap:12px;margin-top:8px;font-size:.7rem;color:var(--text2);justify-content:center">
-    <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#2eaadc;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);opacity:.6;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Tasse+C.</span>
   </div>`;
   return h;
@@ -1741,9 +1818,9 @@ function cancelProfileFiscalEdit() {
 function updateProfileFiscalDraftField(key, value) {
   if (!profileFiscalState.draft) profileFiscalState.draft = { ...getProfileFiscalData() };
   const draft = profileFiscalState.draft;
-  if (['coefficiente', 'impostaSostitutiva', 'limiteForfettario'].includes(key)) {
+  if (['coefficiente', 'impostaSostitutiva', 'limiteForfettario', 'inailTasso'].includes(key)) {
     draft[key] = value;
-  } else if (['usaInpsUfficiale', 'riduzione35', 'agevolazioneStartUp', 'primoAnnoAgevolato'].includes(key)) {
+  } else if (['usaInpsUfficiale', 'agevolazioneStartUp', 'primoAnnoAgevolato'].includes(key)) {
     draft[key] = parseInt(value, 10) === 1 ? 1 : 0;
   } else {
     draft[key] = value;
@@ -1953,16 +2030,8 @@ function renderProfiloFiscale() {
       { value: '0', label: 'Mantieni inserimento manuale' }
     ]
   });
-  h += renderProfileField('Riduzione contributiva 35%', profile.riduzione35 === 1 ? 'Attiva' : 'Non attiva', {
-    key: 'riduzione35',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Riduce la quota contributiva artigiani/commercianti e quindi impatta sia contributi sia imponibile fiscale.',
-    options: [
-      { value: '0', label: 'No' },
-      { value: '1', label: 'Si' }
-    ]
+  h += renderProfileField('Riduzione contributiva 35%', 'Gestita anno per anno', {
+    info: 'Questo flag non e globale: si imposta nelle Impostazioni Annuali dell anno selezionato.'
   });
   h += renderProfileField('Limite forfettario', fmt(profile.limiteForfettario), {
     key: 'limiteForfettario',
@@ -1973,6 +2042,16 @@ function renderProfiloFiscale() {
     step: '0.01',
     calcParam: true,
     info: 'Parametro informativo usato per warning e controlli di superamento regime.'
+  });
+  h += renderProfileField('Tasso INAIL', profile.inailTasso > 0 ? (profile.inailTasso + ' ‰') : 'Non configurato', {
+    key: 'inailTasso',
+    editable: true,
+    mode: 'number',
+    inputType: 'number',
+    min: 0,
+    step: '0.01',
+    calcParam: true,
+    info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL o nella visura. Per artigiani IT tipicamente ~5,19 ‰. Se impostato, il premio INAIL viene calcolato automaticamente nello scadenziario.'
   });
   h += renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
     key: 'agevolazioneStartUp',
@@ -2258,16 +2337,10 @@ function renderProfiloFiscale() {
           { value: '0', label: 'Mantieni inserimento manuale' }
         ]
       })}
-      ${renderProfileField('Riduzione contributiva 35%', profile.riduzione35 === 1 ? 'Attiva' : 'Non attiva', {
-        key: 'riduzione35',
-        editable: true,
-        mode: 'select',
-        calcParam: true,
-        info: 'Riduce la quota contributiva artigiani/commercianti e quindi impatta sia contributi sia imponibile fiscale.',
-        options: [
-          { value: '0', label: 'No' },
-          { value: '1', label: 'Si' }
-        ]
+      ${renderProfileField('Riduzione contributiva 35%', 'Gestita anno per anno', {
+        info: 'Questo flag non e globale: si imposta nelle Impostazioni Annuali dell anno selezionato.',
+        copyValue: 'Riduzione contributiva 35%: parametro annuale',
+        meta: 'Parametro annuale'
       })}
       ${renderProfileField('Limite forfettario', fmt(profile.limiteForfettario), {
         key: 'limiteForfettario',
@@ -2278,6 +2351,16 @@ function renderProfiloFiscale() {
         step: '0.01',
         calcParam: true,
         info: 'Parametro informativo usato per warning e controlli di superamento regime.'
+      })}
+      ${renderProfileField('Tasso INAIL', profile.inailTasso > 0 ? (profile.inailTasso + ' ‰') : 'Non configurato', {
+        key: 'inailTasso',
+        editable: true,
+        mode: 'number',
+        inputType: 'number',
+        min: 0,
+        step: '0.01',
+        calcParam: true,
+        info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL. Per artigiani IT tipicamente ~5,19 ‰.'
       })}
       ${renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
         key: 'agevolazioneStartUp',
@@ -3642,7 +3725,6 @@ function buildForfettarioScheduleForYear(year) {
   const manualAccontoContributi = getOptionalAmountSetting(scheduleSettings.scadenziarioAccontoContributi);
   const manualCamera = getOptionalAmountSetting(scheduleSettings.scadenziarioDirittoCamerale);
   const manualBolloPrevQ4 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloPrecedenteQ4);
-  const manualBollo123 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloCorrente123);
   const manualBolloQ4 = getOptionalAmountSetting(scheduleSettings.scadenziarioBolloCorrenteQ4);
   const manualInailCurrent = getOptionalAmountSetting(scheduleSettings.scadenziarioInailCorrente);
   const manualInailNext = getOptionalAmountSetting(scheduleSettings.scadenziarioInailSuccessivo);
@@ -3705,7 +3787,7 @@ function buildForfettarioScheduleForYear(year) {
           : `I dati dell'anno precedente sono stati inseriti manualmente (primo utilizzo).`
       );
     } else if (transitionFromNonForfettario) {
-      notes.push(`Il ${year - 1} non risulta forfettario: tratto il ${year} come inizio di un nuovo ciclo forfettario e non genero acconti storici del forfettario sullo stesso anno.`);
+      notes.push(`Il ${year - 1} non risulta forfettario: gli acconti ${year} sono stimati sul fatturato corrente. Per maggiore precisione, inserisci i dati dell'anno precedente o usa il metodo previsionale.`);
     } else {
       notes.push(`Manca lo storico forfettario ${year - 1}: saldo e acconti imposta vengono stimati usando i dati dell'anno ${year}.`);
     }
@@ -3754,7 +3836,7 @@ function buildForfettarioScheduleForYear(year) {
         ? prevApplied.tasse
         : (firstYearManualUsed && primoAnnoImpostaPrec !== null
           ? primoAnnoImpostaPrec
-          : (transitionFromNonForfettario ? 0 : currentApplied.tasse))));
+          : currentApplied.tasse)));
   const impostaAcconti = buildAccontoPlan(impostaAccontiBase);
   const impostaAccCertainty = manualAccontoImposta !== null ? 'fixed'
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
@@ -3844,7 +3926,7 @@ function buildForfettarioScheduleForYear(year) {
         ? prevForfettarioContribution.saldoAccontoBase
         : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null
           ? primoAnnoContribVariabiliPrec
-          : (transitionFromNonForfettario ? 0 : (currentContribution ? currentContribution.saldoAccontoBase : 0)))));
+          : (currentContribution ? currentContribution.saldoAccontoBase : 0))));
   const contribAcconti = buildAccontoPlan(contribBase);
   const contribAccCertainty = manualAccontoContributi !== null ? 'fixed'
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
@@ -3898,20 +3980,45 @@ function buildForfettarioScheduleForYear(year) {
       { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year }
     );
   }
-  if (manualBolloPrevQ4 !== null && manualBolloPrevQ4 > 0) {
-    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, manualBolloPrevQ4, 'altro', 'Importo configurato', '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1 });
+  // Bollo fatture elettroniche: calcolo automatico per trimestre
+  // Q4 anno precedente (scade feb anno corrente)
+  const prevYearBolloQ4 = calcBolloPerQuarter(getYearDataFor(year - 1))[3];
+  const bolloPrevQ4Amount = manualBolloPrevQ4 !== null ? manualBolloPrevQ4 : prevYearBolloQ4.amount;
+  if (bolloPrevQ4Amount > 0) {
+    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, bolloPrevQ4Amount, 'altro',
+      manualBolloPrevQ4 !== null ? 'Importo configurato' : `${prevYearBolloQ4.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`,
+      '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1 });
   }
-  if (manualBollo123 !== null && manualBollo123 > 0) {
-    pushDueRow(11, 30, 'Imposta di bollo fatture elettroniche', `1o-3o trimestre ${year}`, manualBollo123, 'altro', 'Importo configurato', '', { key: `bollo_q123_${year}`, certainty: 'fixed', fiscalYear: year });
+  // Q1-Q4 anno corrente
+  const currentBolloQuarters = calcBolloPerQuarter(yearData);
+  for (let qi = 0; qi < 4; qi++) {
+    const q = currentBolloQuarters[qi];
+    // Q1-Q3 always auto-calculated, Q4 can be overridden manually
+    const manualOverride = qi < 3 ? null : manualBolloQ4;
+    const autoAmount = q.amount;
+    const finalAmount = manualOverride !== null ? manualOverride : autoAmount;
+    if (finalAmount > 0) {
+      const dueYear = q.nextYear ? year + 1 : year;
+      pushDueRow(q.dueMonth, q.dueDay, 'Imposta di bollo fatture elettroniche',
+        `${q.label} ${year}`, finalAmount, 'altro',
+        manualOverride !== null ? 'Importo configurato' : `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`,
+        '', { dueYear, key: `bollo_q${qi + 1}_${year}`, certainty: 'fixed', fiscalYear: year });
+    }
   }
-  if (manualBolloQ4 !== null && manualBolloQ4 > 0) {
-    pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year}`, manualBolloQ4, 'altro', 'Importo configurato', '', { key: `bollo_q4_${year}`, certainty: 'fixed', fiscalYear: year });
+  const profileInailTasso = parseFloat(getProfileFiscalData().inailTasso) || 0;
+  const autoInailCurrent = profileInailTasso > 0 ? calcInailPremio(year, profileInailTasso) : 0;
+  const autoInailNext = profileInailTasso > 0 ? calcInailPremio(year + 1, profileInailTasso) : 0;
+  const inailCurrentAmount = manualInailCurrent !== null ? manualInailCurrent : autoInailCurrent;
+  const inailNextAmount = manualInailNext !== null ? manualInailNext : autoInailNext;
+  if (inailCurrentAmount > 0) {
+    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, inailCurrentAmount, 'altro',
+      manualInailCurrent !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year))}`,
+      '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year });
   }
-  if (manualInailCurrent !== null && manualInailCurrent > 0) {
-    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, manualInailCurrent, 'altro', 'Importo configurato', '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year });
-  }
-  if (manualInailNext !== null && manualInailNext > 0) {
-    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, manualInailNext, 'altro', 'Importo configurato', '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1 });
+  if (inailNextAmount > 0) {
+    pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, inailNextAmount, 'altro',
+      manualInailNext !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year + 1))}`,
+      '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1 });
   }
 
   const autoCurrentImpostaSaldo = currentApplied ? currentApplied.tasse - impostaAcconti.total : 0;
@@ -4738,39 +4845,42 @@ function renderScadenziarioYearCard(meta) {
     credits: []
   };
   const badgeTone = meta.classification === 'forfettario' ? 'ok' : (meta.classification === 'misto' ? 'warn' : 'info');
+  const isFullyPaid = split.open.length === 0 && split.archived.length > 0;
+  const defaultOpen = meta.isSelectedYear || (!isFullyPaid && split.open.length > 0);
   let h = `<section class="panel scad-year-card ${meta.isSelectedYear ? 'is-current' : ''}">
-    <div class="scad-year-header">
-      <div>
-        <div class="scad-year-title">Anno ${meta.year}</div>
-        <div class="scad-year-sub">${meta.isTrailingSettlementYear
-          ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
-          : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
-      </div>
-      <div class="scad-year-badges">
-        <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
-        ${meta.isSelectedYear ? '<span class="scad-chip info">Anno selezionato</span>' : ''}
-        ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
-      </div>
-    </div>
-    <div class="scad-year-stats">
-      <div class="scad-stat"><span>Dovuto</span><b>${fmt(meta.totals.amountDue)}</b></div>
-      <div class="scad-stat"><span>Pagato</span><b>${fmt(meta.totals.amountPaid)}</b></div>
-      <div class="scad-stat"><span>Residuo</span><b>${fmt(meta.totals.residualAmount)}</b></div>
-      <div class="scad-stat"><span>${meta.isTrailingSettlementYear ? 'Competenza origine' : 'Ricavi anno'}</span><b>${meta.isTrailingSettlementYear ? meta.trailingSourceYear : fmt(meta.realRevenue)}</b></div>
-    </div>
-    ${renderScadenziarioMethodBox(meta)}
-    <div class="scad-section">
-      <div class="scad-section-head"><h3>Da pagare</h3><span>${split.open.length} voci</span></div>
-      ${renderScadenziarioRowsTable(split.open, { totalLabel: `Aperte ${meta.year}`, emptyLabel: 'Nessuna voce aperta per questo anno.' })}
-    </div>
-    <div class="scad-section">
-      <details class="scad-collapsible">
-        <summary><span>Pagate / archiviate</span><span class="scad-collapsible-meta">${split.archived.length} voci</span></summary>
-        <div class="scad-collapsible-body">
-          ${renderScadenziarioRowsTable(split.archived, { totalLabel: `Pagate ${meta.year}`, emptyLabel: 'Nessuna voce completamente chiusa.' })}
+    <details class="scad-year-collapse" ${defaultOpen ? 'open' : ''}>
+      <summary class="scad-year-header" style="cursor:pointer;list-style:none">
+        <div>
+          <div class="scad-year-title">Anno ${meta.year}${isFullyPaid ? ' <span style="font-size:.7rem;color:var(--color-success);font-weight:500">— tutto pagato</span>' : ''}</div>
+          <div class="scad-year-sub">${meta.isTrailingSettlementYear
+            ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
+            : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
         </div>
-      </details>
-    </div>`;
+        <div class="scad-year-badges">
+          <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
+          ${meta.isSelectedYear ? '<span class="scad-chip info">Anno selezionato</span>' : ''}
+          ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
+        </div>
+      </summary>
+      <div class="scad-year-stats">
+        <div class="scad-stat"><span>Dovuto</span><b>${fmt(meta.totals.amountDue)}</b></div>
+        <div class="scad-stat"><span>Pagato</span><b>${fmt(meta.totals.amountPaid)}</b></div>
+        <div class="scad-stat"><span>Residuo</span><b>${fmt(meta.totals.residualAmount)}</b></div>
+        <div class="scad-stat"><span>${meta.isTrailingSettlementYear ? 'Competenza origine' : 'Ricavi anno'}</span><b>${meta.isTrailingSettlementYear ? meta.trailingSourceYear : fmt(meta.realRevenue)}</b></div>
+      </div>
+      ${renderScadenziarioMethodBox(meta)}
+      <div class="scad-section">
+        <div class="scad-section-head"><h3>Da pagare</h3><span>${split.open.length} voci</span></div>
+        ${renderScadenziarioRowsTable(split.open, { totalLabel: `Aperte ${meta.year}`, emptyLabel: 'Nessuna voce aperta per questo anno.' })}
+      </div>
+      <div class="scad-section">
+        <details class="scad-collapsible">
+          <summary><span>Pagate / archiviate</span><span class="scad-collapsible-meta">${split.archived.length} voci</span></summary>
+          <div class="scad-collapsible-body">
+            ${renderScadenziarioRowsTable(split.archived, { totalLabel: `Pagate ${meta.year}`, emptyLabel: 'Nessuna voce completamente chiusa.' })}
+          </div>
+        </details>
+      </div>`;
   if (meta.bundle && Array.isArray(meta.bundle.credits) && meta.bundle.credits.length > 0) {
     h += `<div class="scad-section"><div class="scad-section-head"><h3>Crediti / eccedenze</h3><span>${meta.bundle.credits.length} voci</span></div>
       <div class="scad-credit-list">${meta.bundle.credits.map(credit => `<div class="scad-credit-item">
@@ -4780,7 +4890,7 @@ function renderScadenziarioYearCard(meta) {
     </div>`;
   }
   h += `<div class="scad-section"><div class="scad-section-head"><h3>Note e warning</h3><span>${meta.classification}</span></div>${renderScadenziarioNotes(meta)}</div>`;
-  h += `</section>`;
+  h += `</details></section>`;
   return h;
 }
 
@@ -5192,28 +5302,27 @@ function renderScadenziario() {
               onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
           </div>
           <div class="settings-group">
-            <label>Bollo FE 4o trimestre anno precedente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioBolloPrecedenteQ4}" placeholder="0,00"
+            <label>Override bollo FE 4o trimestre anno precedente (EUR)</label>
+            <input type="number" step="0.01" value="${S().scadenziarioBolloPrecedenteQ4}" placeholder="auto dalle fatture"
               onchange="saveOptionalNumberSetting('scadenziarioBolloPrecedenteQ4', this.value); recalcAll()">
+            <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
+              Il bollo viene calcolato automaticamente dalle fatture (2€ per fattura > 77,47€). Inserisci solo per sovrascrivere.
+            </div>
           </div>
           <div class="settings-group">
-            <label>Bollo FE 1o-3o trimestre anno corrente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioBolloCorrente123}" placeholder="0,00"
-              onchange="saveOptionalNumberSetting('scadenziarioBolloCorrente123', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Bollo FE 4o trimestre anno corrente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioBolloCorrenteQ4}" placeholder="0,00"
+            <label>Override bollo FE 4o trimestre anno corrente (EUR)</label>
+            <input type="number" step="0.01" value="${S().scadenziarioBolloCorrenteQ4}" placeholder="auto dalle fatture"
               onchange="saveOptionalNumberSetting('scadenziarioBolloCorrenteQ4', this.value); recalcAll()">
           </div>
           <div class="settings-group">
             <label>Autoliquidazione INAIL febbraio ${currentYear} (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioInailCorrente}" placeholder="0,00"
+            <input type="number" step="0.01" value="${S().scadenziarioInailCorrente}" placeholder="es. 93,00"
               onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
+            <div style="margin-top:4px;color:var(--text2);font-size:.72rem">Importo dall'autoliquidazione INAIL (tipicamente ~93 EUR per artigiani). Inserisci per vederlo nello scadenziario.</div>
           </div>
           <div class="settings-group">
             <label>Autoliquidazione INAIL febbraio ${currentYear + 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioInailSuccessivo}" placeholder="0,00"
+            <input type="number" step="0.01" value="${S().scadenziarioInailSuccessivo}" placeholder="es. 93,00"
               onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
           </div>
         </div>

@@ -9,6 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+  (function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})();
+</script>
 </head>
 <body>
 
@@ -32,6 +35,7 @@
   </div>
   <div class="header-right">
     <div id="syncStatus" class="sync-indicator"></div>
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Cambia tema">&#9790;</button>
     <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
     <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni">&#9881;</button>
     <div class="year-selector">
@@ -113,8 +117,39 @@
         </div>
       </div>
       <div class="settings-group">
+        <label>Riduzione contributi 35% per l'anno selezionato</label>
+        <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
+          <option value="0">No</option>
+          <option value="1">Si</option>
+        </select>
+        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
+          Vale solo per questo anno e solo per INPS Artigiani / Commercianti. Non e un parametro globale del profilo fiscale.
+        </div>
+      </div>
+      <div class="settings-group">
         <label>Giorni medi per incasso fattura</label>
         <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="saveSetting('giorniIncasso', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Override INAIL anno corrente (EUR)</label>
+        <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
+          onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
+        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
+          Se il tasso INAIL e configurato nel profilo fiscale, il premio viene calcolato automaticamente. Inserisci qui solo per sovrascrivere.
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>Override INAIL anno successivo (EUR)</label>
+        <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
+          onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
+      </div>
+      <div class="settings-group">
+        <label>Diritto annuale Camera di Commercio (EUR)</label>
+        <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
+          onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
+        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
+          Lascia vuoto per usare il valore standard (53 EUR artigiani/commercianti).
+        </div>
       </div>
       <div class="settings-group" style="margin-top:30px">
         <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
