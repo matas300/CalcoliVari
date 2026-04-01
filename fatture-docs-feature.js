@@ -1296,37 +1296,38 @@
     const totals = computeDraftTotals(invoice);
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 42;
+    const margin = 46;
     const contentWidth = pageWidth - margin * 2;
-    const accent = [79, 163, 165];
-    const accentSoft = [232, 244, 244];
-    const textColor = [19, 28, 36];
-    const muted = [96, 113, 128];
-    const border = [219, 228, 232];
-    const stripe = [248, 250, 251];
+    const dark = [26, 32, 44];
+    const muted = [100, 116, 139];
+    const border = [214, 220, 229];
+    const soft = [245, 247, 250];
     let y = margin;
 
     const safe = value => toPdfSafeText(value);
     const money = value => formatPdfMoney(value);
+    const lineItems = Array.isArray(invoice.righe) && invoice.righe.length
+      ? invoice.righe
+      : [{ descrizione: 'Prestazione professionale', quantita: 1, prezzoUnitario: totals.subtotal }];
 
-    const issuerLines = [
-      profile.nome || currentProfile || '',
-      profile.indirizzo || '',
-      `${profile.cap || ''} ${profile.citta || ''} ${profile.provincia || ''}`.trim(),
-      profile.partitaIva ? `P.IVA ${profile.partitaIva}` : '',
-      profile.codiceFiscale ? `C.F. ${profile.codiceFiscale}` : '',
-      profile.ateco ? `ATECO ${profile.ateco}` : ''
-    ].filter(Boolean).map(safe);
+    function composeLocation(cap, citta, provincia) {
+      return [cap, citta, provincia].filter(Boolean).join(' ').trim();
+    }
 
-    const clientLines = [
-      cliente.nome || 'Cliente non selezionato',
-      cliente.indirizzo || '',
-      `${cliente.cap || ''} ${cliente.citta || ''} ${cliente.provincia || ''}`.trim(),
-      cliente.partitaIva ? `P.IVA ${cliente.partitaIva}` : '',
-      cliente.codiceFiscale ? `C.F. ${cliente.codiceFiscale}` : '',
-      cliente.codiceSDI ? `Codice SDI ${cliente.codiceSDI}` : '',
-      cliente.pec ? `PEC ${cliente.pec}` : ''
-    ].filter(Boolean).map(safe);
+    function composePartyLines(entity, options = {}) {
+      const lines = [];
+      const primary = options.primary || entity.nome || options.fallback || '';
+      if (primary) lines.push(primary);
+      if (entity.indirizzo) lines.push(entity.indirizzo);
+      const location = composeLocation(entity.cap, entity.citta, entity.provincia);
+      if (location) lines.push(location);
+      if (entity.partitaIva) lines.push(`P.IVA ${entity.partitaIva}`);
+      if (entity.codiceFiscale) lines.push(`C.F. ${entity.codiceFiscale}`);
+      return lines.map(safe);
+    }
+
+    const issuerLines = composePartyLines(profile, { primary: profile.nome || currentProfile || 'Emittente' });
+    const clientLines = composePartyLines(cliente, { primary: cliente.nome || 'Cliente non selezionato' });
 
     function ensureSpace(heightNeeded) {
       if (y + heightNeeded <= pageHeight - margin) return;
@@ -1344,16 +1345,25 @@
       return cursor;
     }
 
+    function drawSectionTitle(label, top) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(...muted);
+      pdf.text(safe(label).toUpperCase(), margin, top);
+    }
+
     function drawTableHeader(top) {
-      pdf.setFillColor(...accentSoft);
-      pdf.roundedRect(margin, top, contentWidth, 24, 8, 8, 'F');
+      pdf.setFillColor(...soft);
+      pdf.rect(margin, top, contentWidth, 24, 'F');
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8.5);
       pdf.setTextColor(...muted);
       pdf.text('Descrizione', margin + 12, top + 15);
-      pdf.text('Qta', margin + contentWidth - 220, top + 15, { align: 'right' });
-      pdf.text('Prezzo', margin + contentWidth - 124, top + 15, { align: 'right' });
+      pdf.text('Qta', margin + contentWidth - 208, top + 15, { align: 'right' });
+      pdf.text('Prezzo unitario', margin + contentWidth - 110, top + 15, { align: 'right' });
       pdf.text('Importo', margin + contentWidth - 12, top + 15, { align: 'right' });
+      pdf.setDrawColor(...border);
+      pdf.line(margin, top + 24, margin + contentWidth, top + 24);
     }
 
     pdf.setProperties({
@@ -1362,50 +1372,47 @@
       author: safe(profile.nome || currentProfile || 'Calcoli P.IVA')
     });
 
-    pdf.setFillColor(...accent);
-    pdf.roundedRect(margin, y, contentWidth, 78, 18, 18, 'F');
-    pdf.setTextColor(255, 255, 255);
+    pdf.setTextColor(...dark);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(23);
-    pdf.text('FATTURA', margin + 20, y + 30);
+    pdf.setFontSize(20);
+    pdf.text('Fattura', margin, y + 12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.text(safe(invoice.numero || '#'), pageWidth - margin, y + 10, { align: 'right' });
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(10);
-    pdf.text(safe(profile.nome || currentProfile || ''), margin + 20, y + 50);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(12);
-    pdf.text(safe(invoice.numero || '#'), pageWidth - margin - 18, y + 28, { align: 'right' });
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(10);
-    pdf.text(safe(formatDisplayDate(invoice.data) || invoice.data || ''), pageWidth - margin - 18, y + 48, { align: 'right' });
-    y += 96;
+    pdf.setTextColor(...muted);
+    pdf.text(safe(formatDisplayDate(invoice.data) || invoice.data || ''), pageWidth - margin, y + 28, { align: 'right' });
+    pdf.setDrawColor(...dark);
+    pdf.setLineWidth(0.8);
+    pdf.line(margin, y + 42, pageWidth - margin, y + 42);
+    y += 64;
 
     const cardGap = 16;
     const cardWidth = (contentWidth - cardGap) / 2;
-    const cardHeight = 126;
+    const cardHeight = 118;
     pdf.setDrawColor(...border);
     pdf.setFillColor(255, 255, 255);
-    pdf.roundedRect(margin, y, cardWidth, cardHeight, 12, 12, 'FD');
-    pdf.roundedRect(margin + cardWidth + cardGap, y, cardWidth, cardHeight, 12, 12, 'FD');
-
+    pdf.rect(margin, y, cardWidth, cardHeight, 'S');
+    pdf.rect(margin + cardWidth + cardGap, y, cardWidth, cardHeight, 'S');
+    drawSectionTitle('Cedente / prestatore', y + 16);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(...textColor);
-    pdf.text('Emittente', margin + 14, y + 20);
-    pdf.text('Destinatario', margin + cardWidth + cardGap + 14, y + 20);
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(...muted);
+    pdf.text('CESSIONARIO / COMMITTENTE', margin + cardWidth + cardGap, y + 16);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
-    pdf.setTextColor(...muted);
+    pdf.setTextColor(...dark);
     drawLines(issuerLines, margin + 14, y + 38, cardWidth - 28);
     drawLines(clientLines, margin + cardWidth + cardGap + 14, y + 38, cardWidth - 28);
     y += cardHeight + 18;
 
-    const metaHeight = 76;
-    pdf.setDrawColor(...border);
-    pdf.setFillColor(...stripe);
-    pdf.roundedRect(margin, y, contentWidth, metaHeight, 12, 12, 'FD');
+    const metaHeight = 58;
+    pdf.setFillColor(...soft);
+    pdf.rect(margin, y, contentWidth, metaHeight, 'F');
     const metaCols = [
-      ['Numero fattura', invoice.numero || '-'],
-      ['Data emissione', formatDisplayDate(invoice.data) || invoice.data || '-'],
+      ['Documento', invoice.numero || '-'],
+      ['Data', formatDisplayDate(invoice.data) || invoice.data || '-'],
       ['Scadenza', formatDisplayDate(invoice.scadenzaPagamento) || invoice.scadenzaPagamento || '-'],
       ['Pagamento', invoice.modalitaPagamento || DEFAULT_BONIFICO]
     ];
@@ -1415,62 +1422,67 @@
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8);
       pdf.setTextColor(...muted);
-      pdf.text(safe(label).toUpperCase(), x, y + 18);
+      pdf.text(safe(label).toUpperCase(), x, y + 15);
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(...textColor);
+      pdf.setFontSize(9.5);
+      pdf.setTextColor(...dark);
       const wrapped = pdf.splitTextToSize(safe(value), metaColWidth - 22);
-      pdf.text(wrapped, x, y + 38);
+      pdf.text(wrapped, x, y + 34);
     });
+    pdf.setDrawColor(...border);
+    pdf.line(margin, y + metaHeight, margin + contentWidth, y + metaHeight);
     y += metaHeight + 18;
 
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(...muted);
-    pdf.text('PRESTAZIONI', margin, y);
-    y += 12;
+    drawSectionTitle('Prestazioni', y);
+    y += 10;
     drawTableHeader(y);
     y += 30;
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
-    pdf.setTextColor(...textColor);
-    invoice.righe.forEach((line, index) => {
+    pdf.setTextColor(...dark);
+    lineItems.forEach((line, index) => {
       const descriptionLines = pdf.splitTextToSize(safe(line.descrizione || `Prestazione ${index + 1}`), contentWidth - 242);
       const rowHeight = Math.max(28, descriptionLines.length * 11 + 10);
-      ensureSpace(rowHeight + 14);
+      ensureSpace(rowHeight + 22);
+      if (y > pageHeight - 220) {
+        pdf.addPage();
+        y = margin;
+        drawSectionTitle('Prestazioni', y);
+        y += 10;
+        drawTableHeader(y);
+        y += 30;
+      }
       if (index % 2 === 0) {
-        pdf.setFillColor(...stripe);
-        pdf.roundedRect(margin, y - 6, contentWidth, rowHeight, 6, 6, 'F');
+        pdf.setFillColor(...soft);
+        pdf.rect(margin, y - 7, contentWidth, rowHeight, 'F');
       }
       const qty = String(parseMaybeNumber(line.quantita) || 1);
       pdf.text(descriptionLines, margin + 12, y + 7);
-      pdf.text(qty, margin + contentWidth - 220, y + 7, { align: 'right' });
-      pdf.text(money(parseMaybeNumber(line.prezzoUnitario)), margin + contentWidth - 124, y + 7, { align: 'right' });
+      pdf.text(qty, margin + contentWidth - 208, y + 7, { align: 'right' });
+      pdf.text(money(parseMaybeNumber(line.prezzoUnitario)), margin + contentWidth - 110, y + 7, { align: 'right' });
       pdf.text(money(parseMaybeNumber(line.quantita) * parseMaybeNumber(line.prezzoUnitario)), margin + contentWidth - 12, y + 7, { align: 'right' });
       pdf.setDrawColor(...border);
       pdf.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
       y += rowHeight + 10;
     });
 
-    const summaryWidth = 228;
-    const summaryHeight = 104;
+    const summaryRows = [['Imponibile', totals.subtotal]];
+    if (round2(totals.contributoIntegrativo) > 0) summaryRows.push(['Contributo integrativo', totals.contributoIntegrativo]);
+    if (round2(totals.bollo) > 0) summaryRows.push(['Marca da bollo', totals.bollo]);
+    summaryRows.push(['Totale documento', totals.total]);
+    const summaryWidth = 220;
+    const summaryHeight = 34 + summaryRows.length * 16;
     ensureSpace(summaryHeight + 24);
     const summaryX = pageWidth - margin - summaryWidth;
     pdf.setDrawColor(...border);
-    pdf.setFillColor(...accentSoft);
-    pdf.roundedRect(summaryX, y, summaryWidth, summaryHeight, 14, 14, 'FD');
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(summaryX, y, summaryWidth, summaryHeight, 'S');
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(...textColor);
-    pdf.text('Riepilogo importi', summaryX + 16, y + 22);
-    const summaryRows = [
-      ['Imponibile', totals.subtotal],
-      ['Contributo integrativo', totals.contributoIntegrativo],
-      ['Marca da bollo', totals.bollo],
-      ['Totale documento', totals.total]
-    ];
-    let sumY = y + 44;
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(...dark);
+    pdf.text('Riepilogo importi', summaryX + 16, y + 18);
+    let sumY = y + 40;
     summaryRows.forEach(([label, amount], index) => {
       const strong = index === summaryRows.length - 1;
       pdf.setFont('helvetica', strong ? 'bold' : 'normal');
@@ -1481,44 +1493,35 @@
     });
     y += summaryHeight + 24;
 
-    const bottomHeight = 120;
+    const noteText = safe(invoice.note || DEFAULT_FORFETTARIO_NOTE);
+    const paymentLines = [
+      invoice.modalitaPagamento || DEFAULT_BONIFICO,
+      invoice.iban ? `IBAN ${invoice.iban}` : '',
+      `Scadenza ${formatDisplayDate(invoice.scadenzaPagamento) || invoice.scadenzaPagamento || '-'}`
+    ].filter(Boolean).map(safe);
+    const noteWidth = contentWidth - (contentWidth * 0.46) - 16;
+    const paymentHeight = Math.max(92, paymentLines.length * 12 + 50);
+    const noteHeight = Math.max(92, pdf.splitTextToSize(noteText, noteWidth - 30).length * 12 + 50);
+    const bottomHeight = Math.max(paymentHeight, noteHeight);
     ensureSpace(bottomHeight + 20);
-    const paymentWidth = contentWidth * 0.47;
-    const noteWidth = contentWidth - paymentWidth - 16;
+    const paymentWidth = contentWidth * 0.46;
     pdf.setDrawColor(...border);
     pdf.setFillColor(255, 255, 255);
-    pdf.roundedRect(margin, y, paymentWidth, bottomHeight, 12, 12, 'FD');
-    pdf.roundedRect(margin + paymentWidth + 16, y, noteWidth, bottomHeight, 12, 12, 'FD');
+    pdf.rect(margin, y, paymentWidth, bottomHeight, 'S');
+    pdf.rect(margin + paymentWidth + 16, y, noteWidth, bottomHeight, 'S');
 
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.setTextColor(...textColor);
-    pdf.text('Pagamento', margin + 14, y + 20);
-    pdf.text('Note e regime fiscale', margin + paymentWidth + 30, y + 20);
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(...dark);
+    pdf.text('Dati pagamento', margin + 14, y + 18);
+    pdf.text('Riferimento normativo', margin + paymentWidth + 30, y + 18);
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
-    pdf.setTextColor(...muted);
-    const paymentLines = [
-      `Metodo: ${invoice.modalitaPagamento || DEFAULT_BONIFICO}`,
-      invoice.iban ? `IBAN: ${invoice.iban}` : '',
-      `Scadenza: ${formatDisplayDate(invoice.scadenzaPagamento) || invoice.scadenzaPagamento || '-'}`,
-      invoice.marcaDaBollo ? 'Marca da bollo: SI' : 'Marca da bollo: NO'
-    ].filter(Boolean).map(safe);
+    pdf.setTextColor(...dark);
     drawLines(paymentLines, margin + 14, y + 38, paymentWidth - 28);
-
-    const noteLines = [
-      invoice.note || DEFAULT_FORFETTARIO_NOTE,
-      'Documento generato da Calcoli P.IVA.',
-      'Per l invio allo SdI usa il file XML oppure un intermediario abilitato.'
-    ].map(safe);
-    drawLines(noteLines, margin + paymentWidth + 30, y + 38, noteWidth - 30);
-
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(...muted);
-    pdf.text(safe(`Fattura ${invoice.numero || ''} · emessa il ${formatDisplayDate(invoice.data) || invoice.data || ''}`), margin, pageHeight - 20);
-    pdf.text(safe('Operazione in regime forfettario senza applicazione IVA'), pageWidth - margin, pageHeight - 20, { align: 'right' });
+    const noteLines = pdf.splitTextToSize(noteText, noteWidth - 30);
+    pdf.text(noteLines, margin + paymentWidth + 30, y + 38);
 
     return pdf;
   }
