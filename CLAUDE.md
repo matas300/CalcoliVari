@@ -134,7 +134,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 ### Firebase Sync
 - Debounced (800ms) write on every save
 - On login: pull all years from cloud, merge with local, then push local-only data
-- Merge strategy: objects merged key-by-key (local wins for primitives; cloud fills undefined/null/empty), arrays keep longer version
+- Merge strategy: objects merged key-by-key (local wins for primitives; cloud fills undefined/null/empty), arrays keep longer version; **exception: `pagamenti` deduplicated by `data|importo|tipo|descrizione` signature** (not "keep longer")
 - `syncAllToCloud` collects keys before iterating to avoid race conditions
 - Export scoped to current profile; import filters keys by current profile prefix
 - Profile-scoped meta storage is supported too: `calcoliPIVA_{profile}_clienti` syncs separately from yearly docs and is merged with the same profile namespace.
@@ -145,6 +145,29 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - Stores manual edits per year in `yearData.lmQuadro.overrides`
 - `saveQuadroLMDraft()` persists the current year snapshot, `exportQuadroLMPrint()` opens a print-friendly HTML view
 - No telematic XML or PDF generation: the feature is a compilation aid only
+
+### Color System
+- Canonical color CSS variables defined in `:root` (dark theme) and `html[data-theme="light"]`:
+  - **Charts**: `--color-chart-netto` (#2EAADC), `--color-chart-tasse` (#E94560), `--color-chart-contributi` (#F5A623)
+  - **Calendar day types**: `--color-cal-lavoro` (#4ECCA3), `--color-cal-ferie` (#F5A623), `--color-cal-festivo` (#E94560), `--color-cal-mezzagiornata` (#4A9EFF), `--color-cal-malattia` (#E67E22), `--color-cal-donazione` (#7C5CBF)
+- `getCSSVar(name)` helper in `app.js`: reads a CSS variable at runtime via `getComputedStyle` — use this in JS wherever a resolved color value is needed (e.g. SVG fills, canvas)
+- `DAY_TYPES` constant uses `var(--color-cal-*)` references; `drawDonut()` and `drawMiniBars()` call `getCSSVar()` at render time so colors update on theme switch
+
+### FatturaPA / SdI
+- **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
+- **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-matches a free-text payment method string to the correct FatturaPA `ModalitaPagamento` code (MP01–MP15); defaults to MP05 (bonifico)
+- **`showSdiUploadGuide(fileName)`**: after XML download, replaces the modal with a 4-step guide for manual upload to the AdE "Fatture e Corrispettivi" portal (`ivaservizi.agenziaentrate.gov.it/portale/...`); includes a direct portal button
+- No automated SdI submission — upload is always manual via the AdE portal
+
+### Invoice PDF (`buildInvoicePdfModern`)
+- Professional layout via jsPDF:
+  - Full-width teal header band with "FATTURA" label + invoice number badge
+  - Two-column issuer / client section (client in a rounded rect card)
+  - Meta bar: date, due date, payment method, IBAN
+  - Line-item table with teal header row and alternating soft rows
+  - Right-aligned summary box with highlighted total row
+  - Footer: payment info box + legal note box
+- Key palette constants (inside the function): `ACCENT=[60,143,145]`, `ACCENT_LIGHT=[232,244,244]`, `INK=[18,26,36]`, `MUTED=[96,112,128]`, `BORDER=[210,218,226]`, `SOFT=[245,248,251]`
 
 ## Conventions
 - Italian UI language throughout

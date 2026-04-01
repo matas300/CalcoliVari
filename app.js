@@ -242,13 +242,13 @@ const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio'
 const MONTHS_SHORT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 const ACTIVITY_INFO = {
   '':  { label: '—',            color: 'rgba(255,255,255,.04)', dark: true },
-  '8': { label: 'Lavoro',       color: '#4ecca3', dark: false },
+  '8': { label: 'Lavoro',       color: 'var(--color-cal-lavoro)', dark: false },
   'WE':{ label: 'Weekend',      color: 'rgba(255,255,255,.12)', dark: true },
-  'F': { label: 'Ferie',        color: '#f5a623', dark: false },
-  'FS':{ label: 'Festivo',      color: '#e94560', dark: false },
-  'M': { label: '1/2 giornata', color: '#4a9eff', dark: false },
-  'Malattia':  { label: 'Malattia',  color: '#e67e22', dark: false },
-  'Donazione': { label: 'Donazione', color: '#533483', dark: false },
+  'F': { label: 'Ferie',        color: 'var(--color-cal-ferie)', dark: false },
+  'FS':{ label: 'Festivo',      color: 'var(--color-cal-festivo)', dark: false },
+  'M': { label: '1/2 giornata', color: 'var(--color-cal-mezzagiornata)', dark: false },
+  'Malattia':  { label: 'Malattia',  color: 'var(--color-cal-malattia)', dark: false },
+  'Donazione': { label: 'Donazione', color: 'var(--color-cal-donazione)', dark: false },
 };
 const HOLIDAYS = [[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
 const PAYMENT_TYPES = {
@@ -1862,6 +1862,10 @@ function ceil2(n) {
   return Number(n) < 0 ? -rounded : rounded;
 }
 
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function fmt(n) {
   if (n === undefined || n === null || isNaN(n)) return '\u2014';
   return ceil2(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
@@ -1875,20 +1879,23 @@ function row(label, val, cls, valCls) {
 function drawDonut(netto, tasse, contributi, totalLabel = 'Totale lordo') {
   const total = netto + tasse + contributi;
   if (total <= 0) return '<div style="text-align:center;color:var(--text2);padding:30px">Nessun dato</div>';
+  const cN = getCSSVar('--color-chart-netto');
+  const cT = getCSSVar('--color-chart-tasse');
+  const cC = getCSSVar('--color-chart-contributi');
   const size = 180, cx = 90, cy = 90, r = 70, sw = 28, C = 2*Math.PI*r;
   const pN = netto/total, pT = tasse/total, pC = contributi/total;
   const arc = (off, len, col) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}"
     stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"/>`;
   let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
-  svg += arc(0, pN*C, '#2eaadc') + arc(pN*C, pT*C, '#e94560') + arc((pN+pT)*C, pC*C, '#f5a623');
+  svg += arc(0, pN*C, cN) + arc(pN*C, pT*C, cT) + arc((pN+pT)*C, pC*C, cC);
   svg += `<text x="${cx}" y="${cy-6}" text-anchor="middle" fill="var(--color-text)" font-size="14" font-weight="700">${fmtPct(pN)}</text>`;
   svg += `<text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--color-text-muted)" font-size="9">netto</text></svg>`;
   const tasseLabel = S().regime === 'ordinario' ? 'IRPEF' : 'Imposta sost.';
   const contribLabel = getContribLabel(getInpsMode(S()));
   return `<div class="chart-container">${svg}<div class="chart-legend">
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#2eaadc"></div><span>Netto</span><span class="chart-legend-val" style="color:#2eaadc">${fmt(netto)}</span></div>
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#e94560"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:#e94560">${fmt(tasse)}</span></div>
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f5a623"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:#f5a623">${fmt(contributi)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cN}"></div><span>Netto</span><span class="chart-legend-val" style="color:${cN}">${fmt(netto)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cT}"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:${cT}">${fmt(tasse)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cC}"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:${cC}">${fmt(contributi)}</span></div>
     <div class="chart-legend-item" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--color-border)">
       <div class="chart-legend-dot" style="background:transparent"></div><span style="font-weight:600">${totalLabel}</span><span class="chart-legend-val">${fmt(total)}</span></div>
   </div></div>`;
@@ -1909,16 +1916,16 @@ function drawMiniBars(perc) {
     const hT = hPx - hN;
     h += `<div class="mini-bar-col">
       <div style="display:flex;flex-direction:column;width:100%;height:${hPx}px">
-        <div class="mini-bar" style="height:${hT}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.6"></div>
-        <div class="mini-bar" style="height:${hN}px;background:#2eaadc;border-radius:0"></div>
+        <div class="mini-bar" style="height:${hT}px;background:var(--color-chart-tasse);border-radius:3px 3px 0 0;opacity:.6"></div>
+        <div class="mini-bar" style="height:${hN}px;background:var(--color-chart-netto);border-radius:0"></div>
       </div>
       <div class="mini-bar-label">${MONTHS_SHORT[m]}</div>
     </div>`;
   }
   h += '</div>';
   h += `<div style="display:flex;gap:12px;margin-top:8px;font-size:.7rem;color:var(--text2);justify-content:center">
-    <span><span style="display:inline-block;width:10px;height:10px;background:#2eaadc;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);opacity:.6;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Tasse+C.</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-chart-netto);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-chart-tasse);opacity:.6;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Tasse+C.</span>
   </div>`;
   return h;
 }
@@ -3929,16 +3936,16 @@ function renderAccantonamento() {
       const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
       h += `<text x="${x}" y="${H-8}" fill="#aaa" font-size="8" text-anchor="middle">${MONTHS_SHORT[md[i].mese-1]}${md[i].isCrossYear?'*':''}</text>`;
     }
-    h += `<path d="${dP}" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-    h += `<path d="${mP}" fill="none" stroke="#4ecca3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    h += `<path d="${dP}" fill="none" stroke="var(--color-chart-tasse)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    h += `<path d="${mP}" fill="none" stroke="var(--color-cal-lavoro)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
     for (let i = 0; i < n; i++) {
       const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
-      h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="#e94560"/>`;
-      if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="#4ecca3"/>`;
+      h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="var(--color-chart-tasse)"/>`;
+      if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="var(--color-cal-lavoro)"/>`;
     }
     h += `</svg><div style="display:flex;gap:16px;margin-top:8px;font-size:.75rem;color:var(--text2)">
-      <span><span style="display:inline-block;width:16px;height:3px;background:#e94560;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
-      <span><span style="display:inline-block;width:16px;height:3px;background:#4ecca3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
+      <span><span style="display:inline-block;width:16px;height:3px;background:var(--color-chart-tasse);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
+      <span><span style="display:inline-block;width:16px;height:3px;background:var(--color-cal-lavoro);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
     </div></div>`;
   }
 
@@ -6504,7 +6511,13 @@ function renderBudget() {
       const isAuto = b.auto && !(parseFloat(b.importo) > 0);
       return { nome: b.nome, val: isAuto ? autoAmount : (parseFloat(b.importo) || 0), isAuto };
     });
-    const colors = ['#4ecca3','#4a9eff','#f5a623','#e94560','#533483','#e67e22','#2ecc71','#9b59b6','#1abc9c','#e74c3c'];
+    const colors = [
+      getCSSVar('--color-cal-lavoro'), getCSSVar('--color-cal-mezzagiornata'),
+      getCSSVar('--color-cal-ferie'), getCSSVar('--color-chart-tasse'),
+      getCSSVar('--color-cal-donazione'), getCSSVar('--color-cal-malattia'),
+      getCSSVar('--color-success'), getCSSVar('--color-info'),
+      getCSSVar('--color-primary'), getCSSVar('--color-error')
+    ];
     h += `<div style="margin-top:20px"><div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">Distribuzione sul netto mensile</div>`;
     h += `<div style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:12px">`;
     for (let i = 0; i < budgetVals.length; i++) {
