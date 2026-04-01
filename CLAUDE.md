@@ -76,7 +76,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 2. **Tasse Accantonate** — Monthly tax accrual tracking per invoice, cumulative chart
 3. **Scadenziario** — Tax deadline calendar with embedded payments section. Supports storico/previsionale methods, manual overrides, projection ranges, bollo/INAIL/camera di commercio, "segna pagato" quick-pay
 4. **Calendario** — Day-by-day work calendar with activity picker (Lavoro, Ferie, Festivo, etc.)
-5. **Fatture** — Monthly invoices with payment date tracking (cross-year support)
+5. **Fatture** — Monthly invoices with payment date tracking (cross-year support) plus invoice history, PDF export, and FatturaPA XML download for manual SdI upload
 6. **Budget** — Monthly budget breakdown based on net income
 7. **Spese** — Deductible expenses (ordinario only, tab hidden in forfettario)
 8. **Impostazioni** — All settings, INPS official/manual toggle, export/import JSON
@@ -137,6 +137,14 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - Merge strategy: objects merged key-by-key (local wins for primitives; cloud fills undefined/null/empty), arrays keep longer version
 - `syncAllToCloud` collects keys before iterating to avoid race conditions
 - Export scoped to current profile; import filters keys by current profile prefix
+- Profile-scoped meta storage is supported too: `calcoliPIVA_{profile}_clienti` syncs separately from yearly docs and is merged with the same profile namespace.
+
+### Quadro LM
+- Accessed from the `Regime Forfettario` view with `openQuadroLMModal()`
+- Prefills LM1, LM2, LM22, LM27, LM34, LM35, LM40 and related fields from the yearly source of truth
+- Stores manual edits per year in `yearData.lmQuadro.overrides`
+- `saveQuadroLMDraft()` persists the current year snapshot, `exportQuadroLMPrint()` opens a print-friendly HTML view
+- No telematic XML or PDF generation: the feature is a compilation aid only
 
 ## Conventions
 - Italian UI language throughout

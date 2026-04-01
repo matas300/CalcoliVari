@@ -182,6 +182,44 @@ html[data-theme="light"] .scad-view-switch {
   background: rgba(0,0,0,.04);
   border-color: rgba(0,0,0,.08);
 }
+html[data-theme="light"] .clienti-toolbar {
+  background: linear-gradient(180deg, #ffffff, #f4f6f8);
+}
+html[data-theme="light"] .cliente-card {
+  background: linear-gradient(180deg, #ffffff, #f6f8fa);
+}
+html[data-theme="light"] .cliente-card-summary:hover {
+  background: rgba(58,143,145,.06);
+}
+html[data-theme="light"] .cliente-chip {
+  background: rgba(0,0,0,.03);
+  border-color: rgba(0,0,0,.06);
+}
+html[data-theme="light"] .cliente-empty {
+  background: rgba(0,0,0,.02);
+}
+html[data-theme="light"] .fatture-docs-toolbar,
+html[data-theme="light"] .fatture-docs-card,
+html[data-theme="light"] .fatture-docs-item,
+html[data-theme="light"] .fattura-sheet,
+html[data-theme="light"] .fattura-line,
+html[data-theme="light"] .fattura-summary-card,
+html[data-theme="light"] .fattura-sdi-note,
+html[data-theme="light"] .fattura-note,
+html[data-theme="light"] .fattura-modal-toast {
+  background: rgba(255,255,255,.92);
+  border-color: rgba(0,0,0,.08);
+}
+html[data-theme="light"] .fatture-docs-item:hover,
+html[data-theme="light"] .fattura-line:hover {
+  background: rgba(58,143,145,.05);
+}
+html[data-theme="light"] .fatture-docs-kicker,
+html[data-theme="light"] .fattura-sheet-kicker,
+html[data-theme="light"] .fattura-summary-note,
+html[data-theme="light"] .fattura-note {
+  color: var(--color-text-muted);
+}
 html[data-theme="light"] .scad-view-switch button.active,
 html[data-theme="light"] .scad-filter-btn.active {
   background: rgba(58,143,145,.14);
@@ -437,6 +475,21 @@ nav button.active {
   padding: 20px; box-shadow: var(--shadow-md);
   border: 1px solid var(--color-border);
 }
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.panel-head .btn-add,
+.lm-open-btn,
+.lm-copy-btn {
+  margin-top: 0;
+}
+.lm-sheet-actions .btn-add {
+  margin-top: 0;
+}
 .panel h3 {
   font-size: 1.02rem; margin-bottom: 16px; color: var(--text);
   border-bottom: 1px solid var(--color-border); padding-bottom: 10px;
@@ -476,6 +529,26 @@ input:disabled, select:disabled { opacity: .4; cursor: not-allowed; }
   box-shadow: var(--shadow-sm);
 }
 .btn-add:hover { background: var(--color-primary-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-ghost {
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--surface3);
+  color: var(--text);
+  cursor: pointer;
+  font: 600 .85rem/1.2 var(--font-body);
+  box-shadow: var(--shadow-sm);
+}
+.btn-ghost:hover {
+  background: var(--surface2);
+  border-color: rgba(79,163,165,.32);
+  box-shadow: var(--shadow-md);
+}
+.btn-ghost:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79,163,165,.18);
+}
 .btn-del {
   background: rgba(200,107,116,.14); color: var(--red); border: 1px solid rgba(200,107,116,.24);
   width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
@@ -842,6 +915,240 @@ body.profile-modal-open {
   transform: translateY(0);
   padding: 2px 2px 0;
 }
+
+.lm-sheet {
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+}
+.lm-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.lm-sheet-kicker {
+  font-size: .72rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.lm-sheet-copy h2 {
+  font-size: 1.8rem;
+  margin: 6px 0 10px;
+}
+.lm-sheet-copy p {
+  max-width: 720px;
+  color: var(--text2);
+  line-height: 1.6;
+  font-size: .9rem;
+}
+.lm-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lm-copy-btn {
+  background: var(--accent);
+  color: #081217;
+}
+.lm-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.lm-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.lm-stat {
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--surface3);
+  box-shadow: var(--shadow-sm);
+}
+.lm-stat span {
+  display: block;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.lm-stat strong {
+  display: block;
+  font-size: 1.08rem;
+  color: var(--text);
+}
+.lm-stat.accent {
+  border-color: rgba(79,163,165,.28);
+  background: rgba(79,163,165,.08);
+}
+.lm-stat.ok {
+  border-color: rgba(111,174,106,.24);
+  background: rgba(111,174,106,.08);
+}
+.lm-stat.warn {
+  border-color: rgba(216,166,87,.24);
+  background: rgba(216,166,87,.08);
+}
+.lm-warning-list,
+.lm-note-list {
+  display: grid;
+  gap: 8px;
+}
+.lm-warning,
+.lm-note {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  line-height: 1.55;
+  background: var(--surface3);
+}
+.lm-warning {
+  border-color: rgba(216,166,87,.22);
+  background: rgba(216,166,87,.08);
+  color: var(--yellow);
+}
+.lm-note {
+  border-color: rgba(111,167,216,.22);
+  background: rgba(111,167,216,.08);
+  color: var(--text);
+}
+.lm-sections {
+  display: grid;
+  gap: 14px;
+}
+.lm-section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--surface2);
+  padding: 16px;
+}
+.lm-section-head h4 {
+  margin: 0 0 4px;
+  font-size: 1.02rem;
+  font-family: var(--font-display);
+  color: var(--text);
+}
+.lm-section-head p {
+  margin: 0;
+  color: var(--text2);
+  line-height: 1.55;
+  font-size: .88rem;
+}
+.lm-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.lm-field {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface3);
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+}
+.lm-field.is-manual {
+  border-color: rgba(79,163,165,.45);
+  box-shadow: 0 0 0 1px rgba(79,163,165,.16) inset;
+}
+.lm-field.is-estimated {
+  border-color: rgba(216,166,87,.28);
+}
+.lm-field-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lm-field-name {
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--text);
+}
+.lm-source-pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  background: rgba(255,255,255,.06);
+  color: var(--text2);
+  white-space: nowrap;
+}
+.lm-source-pill.ok {
+  background: rgba(111,174,106,.14);
+  color: var(--green);
+}
+.lm-source-pill.warn {
+  background: rgba(216,166,87,.14);
+  color: var(--yellow);
+}
+.lm-source-pill.info {
+  background: rgba(111,167,216,.14);
+  color: var(--blue);
+}
+.lm-field-help {
+  font-size: .78rem;
+  color: var(--text2);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+.lm-field-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.lm-field input {
+  width: 100%;
+  min-height: 38px;
+  font-size: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+.lm-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.16);
+}
+.lm-toast {
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: all .18s ease;
+}
+.lm-toast.show {
+  max-height: 60px;
+  opacity: 1;
+  transform: translateY(0);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(111,174,106,.12);
+  border: 1px solid rgba(111,174,106,.24);
+  color: var(--green);
+}
+.lm-footer-note {
+  color: var(--text2);
+  font-size: .84rem;
+  line-height: 1.55;
+}
 .profile-copy-toast[data-tone="error"] {
   color: #ff8f93;
 }
@@ -1158,6 +1465,528 @@ body.profile-modal-open {
   height: 100%; border-radius: var(--radius-sm); transition: width .3s;
 }
 
+/* ── Clienti ── */
+.clienti-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, var(--surface3), var(--surface2));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.clienti-search {
+  flex: 1 1 320px;
+  display: grid;
+  gap: 8px;
+}
+.clienti-search label {
+  font-size: .78rem;
+  color: var(--text2);
+  font-weight: 600;
+}
+.clienti-search input[type="search"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .95rem;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.clienti-search input[type="search"]::placeholder {
+  color: var(--text3);
+}
+.clienti-search input[type="search"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.16);
+  background: var(--surface2);
+}
+.clienti-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.clienti-toolbar .btn-add {
+  margin-top: 0;
+}
+.clienti-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(79,163,165,.12);
+  color: var(--color-text);
+  border: 1px solid rgba(79,163,165,.22);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.clienti-grid {
+  display: grid;
+  gap: 14px;
+}
+.cliente-card {
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: clip;
+}
+.cliente-card[open] {
+  box-shadow: var(--shadow-md);
+  border-color: rgba(79,163,165,.22);
+}
+.cliente-card-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  outline: none;
+}
+.cliente-card-summary::-webkit-details-marker {
+  display: none;
+}
+.cliente-card-summary:hover {
+  background: rgba(79,163,165,.05);
+}
+.cliente-card-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cliente-card-title strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--color-text);
+  letter-spacing: -.01em;
+}
+.cliente-card-title span {
+  color: var(--color-text-muted);
+  font-size: .84rem;
+  line-height: 1.3;
+}
+.cliente-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.cliente-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: .74rem;
+  color: var(--color-text-muted);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+}
+.cliente-card-body {
+  border-top: 1px solid var(--color-border);
+  padding: 16px 18px 18px;
+}
+.cliente-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cliente-field {
+  display: grid;
+  gap: 7px;
+}
+.cliente-field-full {
+  grid-column: 1 / -1;
+}
+.cliente-field label {
+  font-size: .76rem;
+  color: var(--text2);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.cliente-field input,
+.cliente-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface3);
+  color: var(--color-text);
+  font: 500 .92rem/1.45 var(--font-body);
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.cliente-field textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.cliente-field input:focus,
+.cliente-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.16);
+  background: var(--surface2);
+}
+.cliente-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--color-border);
+}
+.cliente-card-hint {
+  color: var(--text2);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.cliente-delete-btn {
+  min-width: 92px;
+}
+.cliente-empty {
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border);
+  background: rgba(255,255,255,.03);
+  color: var(--text2);
+  text-align: center;
+  font-size: .92rem;
+}
+
+/* ── Fatture PDF docs ── */
+.fatture-docs-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--surface3), var(--surface2));
+  box-shadow: var(--shadow-sm);
+}
+.fatture-docs-copy {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+.fatture-docs-kicker,
+.fattura-sheet-kicker {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: var(--text3);
+}
+.fatture-docs-copy h4,
+.fattura-sheet-copy h2 {
+  font-family: var(--font-display);
+  letter-spacing: -.02em;
+}
+.fatture-docs-copy h4 {
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+.fatture-docs-copy p,
+.fattura-sheet-copy p {
+  color: var(--text2);
+  font-size: .85rem;
+  line-height: 1.55;
+  max-width: 72ch;
+}
+.fatture-docs-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.fatture-docs-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.fatture-docs-card,
+.fattura-summary-card {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface2);
+  box-shadow: var(--shadow-sm);
+}
+.fatture-docs-card span,
+.fattura-summary-card span {
+  display: block;
+  color: var(--text2);
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.fatture-docs-card b,
+.fattura-summary-card b {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  color: var(--color-text);
+}
+.fatture-docs-history {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fatture-docs-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.fatture-docs-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(79,163,165,.24);
+  background: var(--surface3);
+  box-shadow: var(--shadow-md);
+}
+.fatture-docs-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.fatture-docs-item-main strong {
+  font-family: var(--font-display);
+  font-size: .98rem;
+}
+.fatture-docs-item-main span {
+  color: var(--text2);
+  font-size: .82rem;
+}
+.fatture-docs-item-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--text2);
+  font-size: .78rem;
+  flex-shrink: 0;
+}
+.fatture-docs-empty {
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  color: var(--text2);
+  background: rgba(255,255,255,.03);
+  font-size: .9rem;
+}
+
+.fattura-sheet {
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+}
+.fattura-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.fattura-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.fattura-builder {
+  display: grid;
+  gap: 18px;
+}
+.fattura-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.fattura-field {
+  display: grid;
+  gap: 8px;
+}
+.fattura-field span {
+  color: var(--text2);
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.fattura-field input,
+.fattura-field select,
+.fattura-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface3);
+  color: var(--color-text);
+  font: 500 .92rem/1.45 var(--font-body);
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.fattura-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+.fattura-field input:focus,
+.fattura-field select:focus,
+.fattura-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.16);
+  background: var(--surface2);
+}
+.fattura-field-wide {
+  grid-column: 1 / -1;
+}
+.fattura-bollo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(255,255,255,.03);
+  color: var(--text2);
+  font-size: .84rem;
+}
+.fattura-bollo-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.fattura-lines-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fattura-lines-head h3 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+.fattura-lines-head p {
+  color: var(--text2);
+  font-size: .82rem;
+  line-height: 1.5;
+}
+.fattura-lines {
+  display: grid;
+  gap: 12px;
+}
+.fattura-line {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface2);
+}
+.fattura-line-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) 110px 150px 100px 42px;
+  gap: 10px;
+  align-items: end;
+}
+.fattura-line-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.fattura-remove-line {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+.fattura-summary {
+  display: grid;
+  gap: 12px;
+}
+.fattura-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.fattura-summary-total {
+  background: linear-gradient(180deg, rgba(79,163,165,.16), var(--surface2));
+  border-color: rgba(79,163,165,.28);
+}
+.fattura-summary-note,
+.fattura-note {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(255,255,255,.03);
+  color: var(--text2);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.fattura-sdi-note {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(79,163,165,.2);
+  background: rgba(79,163,165,.08);
+  color: var(--text2);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.fattura-sdi-note strong {
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: .9rem;
+}
+.fattura-note code {
+  color: var(--accent);
+}
+.fattura-modal-toast {
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  padding: 0 2px;
+  color: var(--green);
+  font-size: .82rem;
+  transition: all .18s ease;
+}
+.fattura-modal-toast.show {
+  min-height: 22px;
+  max-height: 120px;
+  opacity: 1;
+  transform: translateY(0);
+}
+.fattura-modal-toast[data-tone="warn"] { color: var(--yellow); }
+.fattura-modal-toast[data-tone="error"] { color: var(--red); }
+
+
 /* ── Spese ── */
 .spese-row {
   display: grid; grid-template-columns: 2fr 1fr 0.8fr 0.5fr 1fr 36px;
@@ -1172,6 +2001,17 @@ body.profile-modal-open {
 }
 
 /* ── Pagamenti ── */
+.pagamenti-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.pagamenti-actions .btn-add,
+.pagamenti-actions .btn-ghost {
+  margin-top: 0;
+}
 .pagamenti-row {
   display: grid; grid-template-columns: 150px 140px 1fr 120px 36px;
   gap: 8px; align-items: center; padding: 6px 0;
@@ -1335,6 +2175,300 @@ body.profile-modal-open {
 }
 
 /* ── Scadenziario ── */
+.ocr-modal-shell {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+.ocr-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.ocr-modal-copy h2 {
+  margin: 6px 0 8px;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  letter-spacing: -.02em;
+}
+.ocr-modal-copy p,
+.ocr-help,
+.ocr-footer-note {
+  color: var(--text2);
+  font-size: .9rem;
+  line-height: 1.55;
+}
+.ocr-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ocr-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: rgba(255,255,255,.04);
+  color: var(--text2);
+  font-size: .74rem;
+  font-weight: 700;
+}
+.ocr-status-chip.positive { color: var(--green); border-color: rgba(111,174,106,.28); background: rgba(111,174,106,.1); }
+.ocr-status-chip.info { color: var(--blue); border-color: rgba(111,167,216,.28); background: rgba(111,167,216,.1); }
+.ocr-status-chip.warn { color: var(--yellow); border-color: rgba(216,166,87,.28); background: rgba(216,166,87,.1); }
+.ocr-status-chip.muted { color: var(--text2); }
+.ocr-modal-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, .9fr) minmax(340px, 1.1fr);
+  gap: 16px;
+}
+.ocr-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
+  box-shadow: var(--shadow-sm);
+}
+.ocr-card h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  letter-spacing: -.01em;
+}
+.ocr-dropzone {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  align-items: center;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(79,163,165,.35);
+  background: rgba(79,163,165,.06);
+  text-align: center;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.ocr-dropzone.is-dragover {
+  border-color: var(--color-primary);
+  background: rgba(79,163,165,.1);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.14);
+}
+.ocr-file-input { display: none; }
+.ocr-dropzone-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--surface3);
+  border: 1px solid rgba(79,163,165,.2);
+  color: var(--accent);
+  font-size: 1.55rem;
+  font-weight: 800;
+}
+.ocr-dropzone-copy {
+  display: grid;
+  gap: 4px;
+}
+.ocr-dropzone-copy strong {
+  font-family: var(--font-display);
+  font-size: .98rem;
+  color: var(--text);
+}
+.ocr-dropzone-copy span {
+  color: var(--text2);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+.ocr-dropzone-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ocr-meta {
+  display: grid;
+  gap: 10px;
+}
+.ocr-meta > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.05);
+}
+.ocr-meta span {
+  color: var(--text2);
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ocr-meta b {
+  color: var(--text);
+  font-size: .86rem;
+  font-weight: 700;
+  text-align: right;
+}
+.ocr-spinner {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  font-size: .84rem;
+  color: var(--text2);
+}
+.ocr-spinner.is-visible {
+  display: inline-flex;
+}
+.ocr-spinner-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(79,163,165,.45);
+  animation: ocrPulse 1.2s ease-in-out infinite;
+}
+@keyframes ocrPulse {
+  0% { transform: scale(.9); box-shadow: 0 0 0 0 rgba(79,163,165,.35); }
+  70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(79,163,165,0); }
+  100% { transform: scale(.9); box-shadow: 0 0 0 0 rgba(79,163,165,0); }
+}
+.ocr-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.05);
+}
+.ocr-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  transition: width .18s ease;
+}
+.ocr-alert {
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  font-size: .85rem;
+  line-height: 1.45;
+}
+.ocr-alert.error {
+  color: #f2c3c8;
+  background: rgba(200,107,116,.12);
+  border-color: rgba(200,107,116,.24);
+}
+.ocr-alert.info {
+  color: var(--text);
+  background: rgba(111,167,216,.12);
+  border-color: rgba(111,167,216,.24);
+}
+.ocr-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ocr-field {
+  display: grid;
+  gap: 7px;
+}
+.ocr-field-wide {
+  grid-column: 1 / -1;
+}
+.ocr-field span {
+  color: var(--text2);
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ocr-field input,
+.ocr-field select,
+.ocr-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--surface3);
+  color: var(--text);
+  font: 500 .94rem/1.45 var(--font-body);
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.ocr-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+.ocr-field input:focus,
+.ocr-field select:focus,
+.ocr-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,163,165,.18);
+  background: var(--surface2);
+}
+.ocr-preview-block {
+  display: grid;
+  gap: 10px;
+}
+.ocr-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ocr-preview-head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: .94rem;
+}
+.ocr-preview-head span {
+  color: var(--text2);
+  font-size: .78rem;
+}
+.ocr-preview-text {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  font: 500 .88rem/1.5 var(--font-body);
+  white-space: pre-wrap;
+}
+.ocr-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 2px;
+}
+.ocr-footer-note {
+  max-width: 720px;
+}
+.ocr-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ocr-footer-actions .btn-add,
+.ocr-footer-actions .btn-ghost {
+  margin-top: 0;
+}
+.ocr-import-btn {
+  min-height: 40px;
+}
 .scad-table {
   width: 100%;
   border-collapse: collapse;
@@ -2021,6 +3155,70 @@ body.profile-modal-open {
   .calc-grid { grid-template-columns: 1fr; gap: 12px; }
   .calendar-grid { grid-template-columns: 1fr; gap: 10px; }
   .panel { padding: 14px 12px; border-radius: 10px; }
+  .panel-head,
+  .lm-sheet-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .lm-sheet {
+    padding: 18px 14px;
+  }
+  .lm-sheet-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .lm-summary-grid,
+  .lm-section-grid {
+    grid-template-columns: 1fr;
+  }
+  .fatture-docs-toolbar,
+  .fattura-sheet-header,
+  .fattura-lines-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .fatture-docs-summary-grid,
+  .fattura-summary-grid,
+  .fattura-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .fatture-docs-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .fatture-docs-item-meta {
+    justify-items: start;
+  }
+  .fattura-line-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fattura-field-wide,
+  .fattura-line-actions {
+    grid-column: 1 / -1;
+  }
+  .fattura-line-actions {
+    justify-content: flex-start;
+  }
+  .fattura-sheet {
+    padding: 18px 14px;
+  }
+  .fattura-sheet-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .fattura-sheet-copy h2 {
+    font-size: 1.35rem;
+  }
+  .fattura-bollo-wrap {
+    min-height: 46px;
+  }
+  .fattura-summary-card b,
+  .fatture-docs-card b {
+    font-size: 1rem;
+  }
+  .fatture-docs-item-main strong {
+    font-size: .92rem;
+  }
 
   /* ── Accantonamento table → card layout ── */
   .accant-table { display: block; overflow-x: visible; }
@@ -2183,6 +3381,49 @@ body.profile-modal-open {
     width: min(320px, calc(100vw - 20px));
   }
   /* ── F24 guide mobile ── */
+  .pagamenti-actions {
+    gap: 8px;
+  }
+  .pagamenti-actions .btn-add,
+  .pagamenti-actions .btn-ghost {
+    width: 100%;
+    justify-content: center;
+  }
+  .ocr-modal-shell {
+    padding: 18px 16px 20px;
+  }
+  .ocr-modal-header,
+  .ocr-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ocr-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .ocr-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .ocr-field,
+  .ocr-field-wide {
+    grid-column: 1 / -1;
+  }
+  .ocr-dropzone-actions,
+  .ocr-footer-actions {
+    width: 100%;
+  }
+  .ocr-dropzone-actions .btn-ghost,
+  .ocr-footer-actions .btn-add,
+  .ocr-footer-actions .btn-ghost {
+    width: 100%;
+  }
+  .ocr-preview-text {
+    min-height: 180px;
+  }
+  .ocr-field input,
+  .ocr-field select,
+  .ocr-field textarea {
+    font-size: 16px;
+  }
   .f24-guide-row { background: transparent !important; border: none !important; padding: 0 !important; }
   .f24-guide-row td { display: block !important; padding: 0 !important; }
   .f24-guide-row td::before { display: none !important; }
@@ -2337,6 +3578,41 @@ body.profile-modal-open {
   }
   .profile-field-full {
     grid-column: auto;
+  }
+  .clienti-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .clienti-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .clienti-count,
+  .clienti-toolbar-actions .btn-add {
+    flex: 1;
+  }
+  .clienti-grid {
+    gap: 12px;
+  }
+  .cliente-card-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .cliente-card-badges {
+    justify-content: flex-start;
+  }
+  .cliente-grid {
+    grid-template-columns: 1fr;
+  }
+  .cliente-field-full {
+    grid-column: auto;
+  }
+  .cliente-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cliente-delete-btn {
+    width: 100%;
   }
   .regime-selector { flex-wrap: wrap; gap: 6px; }
   .daily-rate-inline { flex-wrap: wrap; }

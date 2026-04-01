@@ -9,6 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
   (function(){var t=localStorage.getItem('theme')||'dark';document.documentElement.setAttribute('data-theme',t)})();
 </script>
@@ -53,6 +56,7 @@
   <button data-tab="calendar">Calendario</button>
   <button data-tab="fatture">Fatture</button>
   <button data-tab="budget">Budget</button>
+  <button data-tab="clienti">Clienti</button>
   <button data-tab="spese" style="display:none">Spese</button>
   <button data-tab="settings">Impostazioni</button>
 </nav>
@@ -77,6 +81,7 @@
   <div id="tab-fatture" class="tab-content">
     <div class="panel" style="max-width:900px">
       <h3>Fatture</h3>
+      <div id="fattureDocsContent"></div>
       <table class="fatture-table" id="fattureTable"></table>
       <div class="incasso-section" id="incassoSection"></div>
     </div>
@@ -86,6 +91,13 @@
     <div class="panel" style="max-width:700px">
       <h3>Budget Mensile</h3>
       <div id="budgetContent"></div>
+    </div>
+  </div>
+
+  <div id="tab-clienti" class="tab-content">
+    <div class="panel clienti-panel">
+      <h3>Anagrafica Clienti</h3>
+      <div id="clientiContent"></div>
     </div>
   </div>
 
@@ -170,10 +182,28 @@
     <div id="profileFiscalContent"></div>
   </div>
 </div>
+<div id="fatturaModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeFatturaModal==='function') closeFatturaModal()">
+  <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="fatturaModalTitle">
+    <div id="fatturaModalContent"></div>
+  </div>
+</div>
+<div id="ocrPagamentoModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeOcrPagamentoModal==='function') closeOcrPagamentoModal()">
+  <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ocrPagamentoModalTitle">
+    <div id="ocrPagamentoModalContent"></div>
+  </div>
+</div>
+<div id="quadroLMModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this) closeQuadroLMModal()">
+  <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="quadroLMTitle">
+    <div id="quadroLMContent"></div>
+  </div>
+</div>
 
 <script src="firebase-sync.js"></script>
 <script src="tax-engine.js"></script>
 <script src="scadenziario-engine.js"></script>
 <script src="app.js"></script>
+<script src="clienti-feature.js"></script>
+<script src="fatture-docs-feature.js"></script>
+<script src="ocr-pagamenti-feature.js"></script>
 </body>
 </html>

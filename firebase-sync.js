@@ -14,6 +14,7 @@ let db = null;
 let firebaseReady = false;
 let _fs = null; // cached firestore module
 let _syncTimer = null;
+const PROFILE_META_KEYS = ['clienti', 'fattureEmesse'];
 
 // ── Sync Status Indicator ──
 function setSyncStatus(status) {
@@ -56,18 +57,144 @@ function cleanForFirestore(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function isNumericYearSuffix(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+  const year = parseInt(normalized, 10);
+  return Number.isFinite(year) && String(year) === normalized;
+}
+
+function getProfileMetaSnapshot(profile) {
+  const prefix = 'calcoliPIVA_' + profile + '_';
+  const snapshot = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const suffix = key.slice(prefix.length);
+    if (isNumericYearSuffix(suffix)) continue;
+    if (!PROFILE_META_KEYS.includes(suffix)) continue;
+    try {
+      snapshot[suffix] = JSON.parse(localStorage.getItem(key));
+    } catch {
+      snapshot[suffix] = null;
+    }
+  }
+  return snapshot;
+}
+
+function applyProfileMetaSnapshot(profile, meta) {
+  if (!profile || !meta) return;
+  const prefix = 'calcoliPIVA_' + profile + '_';
+  for (const key of PROFILE_META_KEYS) {
+    if (meta[key] === undefined) continue;
+    localStorage.setItem(prefix + key, JSON.stringify(meta[key]));
+  }
+}
+
+function mergeRecordsById(localList, cloudList) {
+  const local = Array.isArray(localList) ? localList : [];
+  const cloud = Array.isArray(cloudList) ? cloudList : [];
+  if (local.length === 0) return cloud;
+  if (cloud.length === 0) return local;
+  const byId = new Map();
+  const out = [];
+  const push = (item, preferExisting = false) => {
+    if (!item || !item.id) return;
+    const current = byId.get(item.id);
+    if (!current) {
+      const clone = { ...item };
+      byId.set(item.id, clone);
+      out.push(clone);
+      return;
+    }
+    if (preferExisting) return;
+    byId.set(item.id, { ...current, ...item });
+  };
+  for (const item of cloud) push(item);
+  for (const item of local) push(item, true);
+  for (const item of local) {
+    if (!item || !item.id) continue;
+    const existing = byId.get(item.id);
+    if (existing) byId.set(item.id, { ...existing, ...item });
+  }
+  // Preserve local order first, then append missing cloud rows
+  const ordered = [];
+  const seen = new Set();
+  for (const item of local) {
+    if (!item || !item.id) continue;
+    const merged = byId.get(item.id);
+    if (merged && !seen.has(item.id)) {
+      ordered.push(merged);
+      seen.add(item.id);
+    }
+  }
+  for (const item of cloud) {
+    if (!item || !item.id || seen.has(item.id)) continue;
+    const merged = byId.get(item.id);
+    if (merged) {
+      ordered.push(merged);
+      seen.add(item.id);
+    }
+  }
+  return ordered;
+}
+
+function mergeClientLists(localList, cloudList) {
+  return mergeRecordsById(localList, cloudList);
+}
+
+function mergeFattureEmesse(localList, cloudList) {
+  return mergeRecordsById(localList, cloudList);
+}
+
+async function syncProfileMetaToCloud(profile) {
+  if (!firebaseReady || !db || !_fs) return;
+  try {
+    const meta = getProfileMetaSnapshot(profile);
+    const docRef = _fs.doc(db, 'profiles', profile, 'meta', 'main');
+    await _fs.setDoc(docRef, cleanForFirestore(meta), { merge: true });
+  } catch (err) {
+    console.error('syncProfileMetaToCloud error:', err);
+  }
+}
+
+async function syncProfileMetaFromCloud(profile) {
+  if (!firebaseReady || !db || !_fs) return null;
+  try {
+    const docRef = _fs.doc(db, 'profiles', profile, 'meta', 'main');
+    const snap = await _fs.getDoc(docRef);
+    if (!snap.exists()) return null;
+    const cloudMeta = snap.data() || {};
+    const localMeta = getProfileMetaSnapshot(profile);
+    const merged = { ...cloudMeta };
+    if (PROFILE_META_KEYS.includes('clienti')) {
+      merged.clienti = mergeClientLists(localMeta.clienti, cloudMeta.clienti);
+    }
+    if (PROFILE_META_KEYS.includes('fattureEmesse')) {
+      merged.fattureEmesse = mergeFattureEmesse(localMeta.fattureEmesse, cloudMeta.fattureEmesse);
+    }
+    applyProfileMetaSnapshot(profile, merged);
+    return merged;
+  } catch (err) {
+    console.error('syncProfileMetaFromCloud error:', err);
+    return null;
+  }
+}
+
 // ── Write to Firestore (debounced 800ms) ──
 function syncToCloud(profile, year, yearData) {
   if (!firebaseReady || !db || !_fs) return;
+  const yearNum = parseInt(year, 10);
+  if (!Number.isFinite(yearNum)) return;
 
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(async () => {
     try {
       setSyncStatus('syncing');
-      const docRef = _fs.doc(db, 'profiles', profile, 'years', String(year));
+      const docRef = _fs.doc(db, 'profiles', profile, 'years', String(yearNum));
       await _fs.setDoc(docRef, cleanForFirestore(yearData));
       setSyncStatus('online');
-      console.log('Sync OK:', profile, year);
+      console.log('Sync OK:', profile, yearNum);
     } catch (err) {
       console.error('syncToCloud error:', err);
       setSyncStatus('error');
@@ -78,9 +205,11 @@ function syncToCloud(profile, year, yearData) {
 // ── Force immediate sync (for login/year change) ──
 async function syncToCloudNow(profile, year, yearData) {
   if (!firebaseReady || !db || !_fs) return;
+  const yearNum = parseInt(year, 10);
+  if (!Number.isFinite(yearNum)) return;
   try {
     setSyncStatus('syncing');
-    const docRef = _fs.doc(db, 'profiles', profile, 'years', String(year));
+    const docRef = _fs.doc(db, 'profiles', profile, 'years', String(yearNum));
     await _fs.setDoc(docRef, cleanForFirestore(yearData));
     setSyncStatus('online');
   } catch (err) {
@@ -140,6 +269,7 @@ async function syncAllFromCloud(profile) {
     let count = 0;
     snapshot.forEach(docSnap => {
       const year = docSnap.id;
+      if (!isNumericYearSuffix(year)) return;
       const cloudData = docSnap.data();
       const key = 'calcoliPIVA_' + profile + '_' + year;
       const localRaw = localStorage.getItem(key);
@@ -148,6 +278,11 @@ async function syncAllFromCloud(profile) {
       localStorage.setItem(key, JSON.stringify(merged));
       count++;
     });
+
+    const meta = await syncProfileMetaFromCloud(profile);
+    if (!meta) {
+      await syncProfileMetaToCloud(profile);
+    }
 
     setSyncStatus('online');
     console.log('Download cloud:', count, 'anni per', profile);
@@ -173,12 +308,14 @@ async function syncAllToCloud(profile) {
     let count = 0;
     for (const key of keys) {
       const year = key.substring(prefix.length);
+      if (!isNumericYearSuffix(year)) continue;
       const yearData = JSON.parse(localStorage.getItem(key));
       if (!yearData) continue;
-      const docRef = _fs.doc(db, 'profiles', profile, 'years', year);
+      const docRef = _fs.doc(db, 'profiles', profile, 'years', String(parseInt(year, 10)));
       await _fs.setDoc(docRef, cleanForFirestore(yearData));
       count++;
     }
+    await syncProfileMetaToCloud(profile);
     setSyncStatus('online');
     console.log('Upload cloud:', count, 'anni per', profile);
   } catch (err) {
