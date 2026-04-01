@@ -1850,6 +1850,12 @@ body.profile-modal-open {
   outline: none;
   transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
+.fattura-field select {
+  color-scheme: dark;
+}
+.fattura-field select option {
+  background: var(--surface2); color: var(--color-text);
+}
 .fattura-field textarea {
   min-height: 92px;
   resize: vertical;
@@ -2402,6 +2408,12 @@ body.profile-modal-open {
   font: 500 .94rem/1.45 var(--font-body);
   outline: none;
   transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.ocr-field select {
+  color-scheme: dark;
+}
+.ocr-field select option {
+  background: var(--surface2); color: var(--text);
 }
 .ocr-field textarea {
   min-height: 92px;

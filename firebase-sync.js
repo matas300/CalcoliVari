@@ -250,8 +250,21 @@ function mergeYearData(local, cloud) {
         }
       }
     } else if (Array.isArray(lv) && Array.isArray(cv)) {
-      // Arrays (budget, spese): keep the longer one
-      merged[key] = lv.length >= cv.length ? lv : cv;
+      if (key === 'pagamenti') {
+        // Pagamenti: merge by combining unique entries (deduplicate by data+importo+tipo+descrizione)
+        const seen = new Set();
+        const combined = [];
+        for (const arr of [lv, cv]) {
+          for (const p of arr) {
+            const sig = [p.data, p.importo, p.tipo, p.descrizione].join('|');
+            if (!seen.has(sig)) { seen.add(sig); combined.push(p); }
+          }
+        }
+        merged[key] = combined;
+      } else {
+        // Arrays (budget, spese): keep the longer one
+        merged[key] = lv.length >= cv.length ? lv : cv;
+      }
     }
     // For primitives: local wins (already in merged)
   }
