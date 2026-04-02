@@ -850,21 +850,16 @@ function saveYearData(year, yearData) {
   }
 }
 
-function getStoredYears(maxYear = currentYear) {
-  const years = new Set([maxYear]);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i) || '';
-    if (!key.startsWith(prefix)) continue;
-    const year = parseInt(key.slice(prefix.length), 10);
-    if (!Number.isFinite(year) || year > maxYear) continue;
-    years.add(year);
-  }
-  return Array.from(years).sort((a, b) => a - b);
-}
+let _cachedStoredYears = null;
+let _cachedStoredYearsProfile = null;
+let _cachedStorageLength = -1;
 
-function getAllStoredYears() {
-  const years = new Set([currentYear]);
+function _getStoredYearsBase() {
+  if (_cachedStoredYears && _cachedStoredYearsProfile === currentProfile && _cachedStorageLength === localStorage.length) {
+    return _cachedStoredYears;
+  }
+
+  const years = new Set();
   const prefix = 'calcoliPIVA_' + currentProfile + '_';
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
@@ -873,6 +868,24 @@ function getAllStoredYears() {
     if (!Number.isFinite(year)) continue;
     years.add(year);
   }
+
+  _cachedStoredYearsProfile = currentProfile;
+  _cachedStorageLength = localStorage.length;
+  _cachedStoredYears = years;
+  return years;
+}
+
+function getStoredYears(maxYear = currentYear) {
+  const base = _getStoredYearsBase();
+  const years = new Set(base);
+  years.add(maxYear);
+  return Array.from(years).filter(y => y <= maxYear).sort((a, b) => a - b);
+}
+
+function getAllStoredYears() {
+  const base = _getStoredYearsBase();
+  const years = new Set(base);
+  years.add(currentYear);
   return Array.from(years).sort((a, b) => a - b);
 }
 
