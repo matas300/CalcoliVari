@@ -117,6 +117,7 @@ async function hashPassword(pwd) {
 }
 
 async function doLogin() {
+  clearYearDataCache();
   const pwd = document.getElementById('loginPassword').value;
   const hash = await hashPassword(pwd);
   const profile = PROFILE_HASHES[hash];
@@ -167,6 +168,7 @@ function toggleTheme() {
 })();
 
 function doLogout() {
+  clearYearDataCache();
   closeProfileFiscalModal();
   currentProfile = null;
   sessionStorage.removeItem('currentProfile');
@@ -804,16 +806,28 @@ function ensureDataShape(target, year = currentYear) {
   return out;
 }
 
+let _yearDataCache = new Map();
+
+function clearYearDataCache() {
+  if (typeof _yearDataCache !== 'undefined') {
+    _yearDataCache.clear();
+  }
+}
+
 function loadYearData(y) {
   if (y === currentYear) {
     const shaped = ensureDataShape(data, y);
     syncProfileFieldsToSettings(shaped.settings, y);
     return shaped;
   }
+  if (_yearDataCache.has(y)) {
+    return _yearDataCache.get(y);
+  }
   const raw = localStorage.getItem(storageKey(y));
   if (!raw) return null;
   const shaped = ensureDataShape(JSON.parse(raw), y);
   syncProfileFieldsToSettings(shaped.settings, y);
+  _yearDataCache.set(y, shaped);
   return shaped;
 }
 
@@ -829,6 +843,7 @@ function migrateFatture() {
 }
 
 function saveData() {
+  clearYearDataCache();
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
   localStorage.setItem(storageKey(), JSON.stringify(data));
   if (typeof syncToCloud === 'function' && currentProfile) {
@@ -837,6 +852,7 @@ function saveData() {
 }
 
 function saveYearData(year, yearData) {
+  clearYearDataCache();
   const normalized = ensureDataShape(yearData, year);
   syncProfileFieldsToSettings(normalized.settings, year);
   if (year === currentYear) {
@@ -5923,6 +5939,7 @@ function exportData() {
 }
 
 function importData(e) {
+  clearYearDataCache();
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
