@@ -2499,12 +2499,13 @@ body.profile-modal-open {
   to   { transform: scale(1);   opacity: 1; }
 }
 .qpay-header {
-  padding: 18px 20px 14px;
+  padding: 20px 20px 14px;
   border-bottom: 1px solid var(--color-border);
+  text-align: center;
 }
 .qpay-title {
   font-weight: 600;
-  font-size: .92rem;
+  font-size: .95rem;
   color: var(--text1);
 }
 .qpay-sub {
@@ -2513,35 +2514,43 @@ body.profile-modal-open {
   margin-top: 3px;
 }
 .qpay-body {
-  padding: 16px 20px 8px;
+  padding: 20px 24px 12px;
+  text-align: center;
 }
 .qpay-label {
   display: block;
   font-size: .76rem;
   color: var(--text2);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: .03em;
+  letter-spacing: .05em;
 }
 .qpay-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: rgba(255,255,255,.04);
   color: var(--text1);
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
   outline: none;
   transition: border-color .12s;
 }
-.qpay-input:focus { border-color: var(--accent); }
+.qpay-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,163,165,.18); }
 .qpay-actions {
   display: flex;
-  gap: 8px;
-  padding: 12px 20px 18px;
-  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px 22px;
+  justify-content: center;
+}
+.qpay-actions .btn-ghost,
+.qpay-actions .btn-primary {
+  flex: 1;
+  min-height: 42px;
+  font-size: .9rem;
 }
 html[data-theme="light"] .qpay-panel {
   background: #fff;
