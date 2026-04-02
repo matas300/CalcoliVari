@@ -732,6 +732,218 @@
     } catch (err) { console.error(err); showFatturaToast('Errore Anteprima', 'error'); }
   }
 
+  // ── XML helpers ─────────────────────────────────────────────
+  function fmtXmlNum(n) { return round2(n).toFixed(2); }
+
+  function downloadTextFile(fileName, content) {
+    const blob = new Blob([content], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+
+  function getXmlInvoiceProgressivo(draft) {
+    const raw = String(draft.numero || '');
+    const match = raw.match(/^(\d+)/);
+    const n = match ? parseInt(match[1], 10) : 1;
+    return String(n).padStart(5, '0');
+  }
+
+  function validateFatturaForXml(draft) {
+    const errors = [];
+    const profile = getProfileFiscalData();
+    if (!String(profile.partitaIva || '').replace(/\D/g, '')) errors.push('Partita IVA del profilo mancante — configurala nel profilo fiscale.');
+    if (!draft.numero) errors.push('Numero fattura mancante.');
+    if (!draft.data) errors.push('Data fattura mancante.');
+    const totals = computeDraftTotals(draft);
+    if (totals.subtotal <= 0) errors.push('Importo totale della fattura pari a zero.');
+    const cliente = draft.clienteSnapshot;
+    if (!cliente || !cliente.nome) errors.push('Cliente non selezionato o senza ragione sociale.');
+    return { errors };
+  }
+
+  function buildFatturaElettronicaXml(draft) {
+    const profile = getProfileFiscalData();
+    const cliente = draft.clienteSnapshot || {};
+    const totals = computeDraftTotals(draft);
+
+    const piva = String(profile.partitaIva || '').replace(/\D/g, '');
+    const progressivo = getXmlInvoiceProgressivo(draft);
+    const codiceSDI = String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7);
+
+    // Split profile name into Nome/Cognome (natural person)
+    const nameParts = String(profile.nome || currentProfile).trim().split(/\s+/);
+    const profileCognome = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+    const profileNome = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
+
+    // Client identification
+    const clientePiva = String(cliente.partitaIva || '').replace(/\D/g, '');
+    const clienteCF = String(cliente.codiceFiscale || '').trim();
+
+    // Imponibile = sum of all lines + contributo integrativo (bollo excluded)
+    const imponibile = round2(totals.subtotal + totals.contributoIntegrativo);
+
+    // Lines
+    let lineNum = 0;
+    const dettaglioLinee = (draft.righe || []).map(line => {
+      lineNum++;
+      const qta = parseMaybeNumber(line.quantita) || 1;
+      const pu = round2(parseMaybeNumber(line.prezzoUnitario));
+      const tot = round2(qta * pu);
+      return `    <DettaglioLinee>
+      <NumeroLinea>${lineNum}</NumeroLinea>
+      <Descrizione>${xmlEscape(line.descrizione || 'Prestazione professionale')}</Descrizione>
+      <Quantita>${fmtXmlNum(qta)}</Quantita>
+      <PrezzoUnitario>${fmtXmlNum(pu)}</PrezzoUnitario>
+      <PrezzoTotale>${fmtXmlNum(tot)}</PrezzoTotale>
+      <AliquotaIVA>0.00</AliquotaIVA>
+      <Natura>N2.2</Natura>
+    </DettaglioLinee>`;
+    });
+
+    if (totals.contributoIntegrativo > 0) {
+      lineNum++;
+      dettaglioLinee.push(`    <DettaglioLinee>
+      <NumeroLinea>${lineNum}</NumeroLinea>
+      <Descrizione>Contributo integrativo</Descrizione>
+      <Quantita>1.00</Quantita>
+      <PrezzoUnitario>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoUnitario>
+      <PrezzoTotale>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoTotale>
+      <AliquotaIVA>0.00</AliquotaIVA>
+      <Natura>N2.2</Natura>
+    </DettaglioLinee>`);
+    }
+
+    const datiBollo = draft.marcaDaBollo ? `
+      <DatiBollo>
+        <BolloVirtuale>SI</BolloVirtuale>
+        <ImportoBollo>2.00</ImportoBollo>
+      </DatiBollo>` : '';
+
+    const causale = String(draft.note || '').trim();
+    const causaleXml = causale ? `
+      <Causale>${xmlEscape(causale.slice(0, 200))}</Causale>` : '';
+
+    const ibanXml = String(profile.iban || '').trim()
+      ? `\n        <IBAN>${xmlEscape(profile.iban.replace(/\s/g, ''))}</IBAN>` : '';
+
+    const scadenzaXml = draft.scadenzaPagamento
+      ? `\n        <DataScadenzaPagamento>${xmlEscape(draft.scadenzaPagamento)}</DataScadenzaPagamento>` : '';
+
+    // Client sede (can be empty — AdE requires Indirizzo+CAP+Comune+Nazione)
+    const cliInd = xmlEscape(String(cliente.indirizzo || 'N/D').slice(0, 60));
+    const cliCap = String(cliente.cap || '00000').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
+    const cliCom = xmlEscape(String(cliente.citta || 'N/D').slice(0, 60));
+    const cliProv = String(cliente.provincia || '').slice(0, 2).trim();
+    const cliNaz = String(cliente.nazione || 'IT').slice(0, 2).toUpperCase();
+    const cliProvXml = cliProv ? `\n        <Provincia>${xmlEscape(cliProv)}</Provincia>` : '';
+
+    const cedInd = xmlEscape(String(profile.indirizzo || 'N/D').slice(0, 60));
+    const cedCap = String(profile.cap || '00000').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
+    const cedCom = xmlEscape(String(profile.citta || 'N/D').slice(0, 60));
+    const cedProv = String(profile.provincia || '').slice(0, 2).trim();
+    const cedNaz = String(profile.nazione || 'IT').slice(0, 2).toUpperCase();
+    const cedProvXml = cedProv ? `\n        <Provincia>${xmlEscape(cedProv)}</Provincia>` : '';
+
+    const cfCedenteXml = profile.codiceFiscale
+      ? `\n        <CodiceFiscale>${xmlEscape(profile.codiceFiscale)}</CodiceFiscale>` : '';
+
+    // Client fiscal ID
+    let cessionarioFiscaleXml = '';
+    if (clientePiva) {
+      cessionarioFiscaleXml = `
+      <IdFiscaleIVA>
+        <IdPaese>IT</IdPaese>
+        <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
+      </IdFiscaleIVA>`;
+      if (clienteCF) cessionarioFiscaleXml += `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
+    } else if (clienteCF) {
+      cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
+    }
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12"
+  xmlns:p="${XML_NAMESPACE}"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="${XML_NAMESPACE} http://www.fatturapa.gov.it/export/fatturazione/sdi/fatturapa/v1.2/Schema_del_file_xml_FatturaPA_versione_1.2.xsd">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente>
+        <IdPaese>IT</IdPaese>
+        <IdCodice>${xmlEscape(piva)}</IdCodice>
+      </IdTrasmittente>
+      <ProgressivoInvio>${progressivo}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>${codiceSDI}</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>IT</IdPaese>
+          <IdCodice>${xmlEscape(piva)}</IdCodice>
+        </IdFiscaleIVA>${cfCedenteXml}
+        <Anagrafica>
+          <Nome>${xmlEscape(profileNome)}</Nome>
+          <Cognome>${xmlEscape(profileCognome)}</Cognome>
+        </Anagrafica>
+        <RegimeFiscale>${XML_FORFETTARIO_REGIME}</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${cedInd}</Indirizzo>
+        <CAP>${cedCap}</CAP>
+        <Comune>${cedCom}</Comune>${cedProvXml}
+        <Nazione>${cedNaz}</Nazione>
+      </Sede>
+    </CedentePrestatore>
+    <CessionarioCommittente>
+      <DatiAnagrafici>${cessionarioFiscaleXml}
+        <Anagrafica>
+          <Denominazione>${xmlEscape(String(cliente.nome || '').slice(0, 80))}</Denominazione>
+        </Anagrafica>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${cliInd}</Indirizzo>
+        <CAP>${cliCap}</CAP>
+        <Comune>${cliCom}</Comune>${cliProvXml}
+        <Nazione>${cliNaz}</Nazione>
+      </Sede>
+    </CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD01</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>${xmlEscape(draft.data)}</Data>
+        <Numero>${xmlEscape(draft.numero)}</Numero>${datiBollo}${causaleXml}
+        <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>
+      </DatiGeneraliDocumento>
+    </DatiGenerali>
+    <DatiBeniServizi>
+${dettaglioLinee.join('\n')}
+      <DatiRiepilogo>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N2.2</Natura>
+        <ImponibileImporto>${fmtXmlNum(imponibile)}</ImponibileImporto>
+        <Imposta>0.00</Imposta>
+        <RiferimentoNormativo>Art. 1, commi 54-89, L. 190/2014</RiferimentoNormativo>
+      </DatiRiepilogo>
+    </DatiBeniServizi>
+    <DatiPagamento>
+      <CondizioniPagamento>TP02</CondizioniPagamento>
+      <DettaglioPagamento>
+        <ModalitaPagamento>${modalitaToCodiceMP(draft.modalitaPagamento)}</ModalitaPagamento>${scadenzaXml}
+        <ImportoPagamento>${fmtXmlNum(totals.total)}</ImportoPagamento>${ibanXml}
+      </DettaglioPagamento>
+    </DatiPagamento>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>`;
+  }
+
   function downloadFatturaXml() {
     const draft = collectDraftFromState();
     const val = validateFatturaForXml(draft);
