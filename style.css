@@ -2705,29 +2705,19 @@ html[data-theme="light"] .qpay-input {
   letter-spacing: .04em;
   margin-bottom: 8px;
 }
-ol.sdi-guide-steps,
-ul.sdi-guide-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.sdi-steps-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  counter-reset: sdi-step;
 }
-ol.sdi-guide-steps li {
-  display: grid;
-  grid-template-columns: 24px 1fr;
-  gap: 10px;
-  font-size: .88rem;
-  color: var(--text1);
-  line-height: 1.5;
-  counter-increment: sdi-step;
+.sdi-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
-ol.sdi-guide-steps li::before {
-  content: counter(sdi-step);
-  width: 24px;
-  height: 24px;
+.sdi-step-badge {
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
@@ -2739,22 +2729,27 @@ ol.sdi-guide-steps li::before {
   flex-shrink: 0;
   margin-top: 1px;
 }
-ul.sdi-guide-steps li {
-  display: grid;
-  grid-template-columns: 6px 1fr;
-  gap: 10px;
-  font-size: .85rem;
+.sdi-step-body {
+  flex: 1;
+  font-size: .88rem;
+  color: var(--text1);
+  line-height: 1.6;
+}
+.sdi-problem-row {
+  display: flex;
+  gap: 8px;
+  font-size: .84rem;
   color: var(--text1);
   line-height: 1.5;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-border);
 }
-ul.sdi-guide-steps li::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text2);
+.sdi-problem-row:first-of-type { border-top: none; margin-top: 6px; }
+.sdi-problem-label {
+  font-weight: 700;
   flex-shrink: 0;
-  margin-top: 8px;
+  min-width: 130px;
+  color: var(--text2);
 }
 .sdi-guide-btn { font-size: .82rem; padding: 7px 14px; }
 

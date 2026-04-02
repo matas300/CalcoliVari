@@ -955,45 +955,122 @@ ${dettaglioLinee.join('\n')}
     showSdiUploadGuide(fileName);
   }
 
+  function makeSdiStep(num, text) {
+    const div = document.createElement('div');
+    div.className = 'sdi-step';
+    const badge = document.createElement('div');
+    badge.className = 'sdi-step-badge';
+    badge.textContent = String(num);
+    const body = document.createElement('div');
+    body.className = 'sdi-step-body';
+    body.innerHTML = text; // eslint-disable-line -- caller passes trusted constant strings
+    div.appendChild(badge);
+    div.appendChild(body);
+    return div;
+  }
+
+  function makeSdiProblem(label, desc) {
+    const div = document.createElement('div');
+    div.className = 'sdi-problem-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'sdi-problem-label';
+    lbl.textContent = label;
+    const txt = document.createElement('span');
+    txt.innerHTML = desc; // eslint-disable-line -- trusted constant strings
+    div.appendChild(lbl);
+    div.appendChild(txt);
+    return div;
+  }
+
   function renderSdiGuideInto(modalContent, fileName) {
-    const fileRow = fileName
-      ? '<div class="sdi-guide-file-row"><span class="sdi-guide-file-icon">&#10003;</span>'
-        + '<div><div class="sdi-guide-title">File XML scaricato</div>'
-        + '<div class="sdi-guide-subtitle">' + esc(fileName) + '</div></div></div>'
-      : '<div class="sdi-guide-title" style="margin-bottom:12px">Come inviare la fattura al SdI</div>';
     const fileCode = fileName ? esc(fileName) : 'IT{PIVA}_{numero}.xml';
-    const closeBtn = '<button type="button" class="btn-ghost" onclick="closeFatturaModal(); renderFattureDocsSection();">Chiudi</button>';
-    const html = '<div class="sdi-upload-guide">'
-      + fileRow
-      + '<div class="sdi-guide-body">'
-      + '<div class="sdi-guide-label">Passi per l\'invio sul portale Fatture e Corrispettivi</div>'
-      + '<ol class="sdi-guide-steps">'
-      + '<li><strong>Accedi al portale AdE</strong> con SPID o CIE:<br>'
-      + '<a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener" class="sdi-guide-link">ivaservizi.agenziaentrate.gov.it/portale</a></li>'
-      + '<li>Clicca in alto su <strong>"Fatture e Corrispettivi"</strong> e accedi con le tue credenziali.</li>'
-      + '<li>Nel menu a sinistra vai su <strong>"Fatture elettroniche" &rarr; "Trasmissione / ricezione"</strong>.<br>'
-      + '<span class="sdi-guide-note">Se non lo vedi: cerca il riquadro "Fatturazione elettronica" nella home del portale.</span></li>'
-      + '<li>Clicca <strong>"Trasmetti un file"</strong>, carica il file <code>' + fileCode + '</code> e conferma.</li>'
-      + '<li>Attendi la <strong>ricevuta di presa in carico</strong>. Lo stato diventer&agrave; <em>Consegnata</em> quando il cliente riceve la fattura.</li>'
-      + '</ol>'
-      + '<div class="sdi-guide-problems">'
-      + '<div class="sdi-guide-problems-title">Problemi frequenti</div>'
-      + '<ul class="sdi-guide-steps">'
-      + '<li><strong>Fattura scartata</strong>: controlla P.IVA emittente e dati cliente, poi rigenera e ricarica l\'XML.</li>'
-      + '<li><strong>Codice SDI mancante</strong>: inseriscilo nell\'Anagrafica Clienti (7 cifre). Senza di esso usa <code>0000000</code> e manda il PDF via email.</li>'
-      + '<li><strong>Non trovi "Trasmissione"</strong>: il portale AdE cambia layout — cerca "Trasmetti file XML" o "Invia fattura" nella sezione Fatturazione elettronica.</li>'
-      + '</ul>'
-      + '</div>'
-      + '<div class="sdi-guide-actions">'
-      + '<a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener" class="btn-add sdi-portal-btn">Apri portale AdE</a>'
-      + closeBtn
-      + '</div>'
-      + '</div>'
-      + '</div>';
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = html; // eslint-disable-line -- template built from escaped strings only
+    const guide = document.createElement('div');
+    guide.className = 'sdi-upload-guide';
+
+    // Header
+    if (fileName) {
+      const hdr = document.createElement('div');
+      hdr.className = 'sdi-guide-file-row';
+      const icon = document.createElement('span');
+      icon.className = 'sdi-guide-file-icon';
+      icon.textContent = '\u2713';
+      const info = document.createElement('div');
+      const t = document.createElement('div');
+      t.className = 'sdi-guide-title';
+      t.textContent = 'File XML scaricato';
+      const s = document.createElement('div');
+      s.className = 'sdi-guide-subtitle';
+      s.textContent = fileName;
+      info.appendChild(t);
+      info.appendChild(s);
+      hdr.appendChild(icon);
+      hdr.appendChild(info);
+      guide.appendChild(hdr);
+    } else {
+      const h = document.createElement('div');
+      h.className = 'sdi-guide-title';
+      h.textContent = 'Come inviare la fattura al SdI';
+      guide.appendChild(h);
+    }
+
+    // Label
+    const lbl = document.createElement('div');
+    lbl.className = 'sdi-guide-label';
+    lbl.textContent = 'Passi per l\'invio sul portale Fatture e Corrispettivi';
+    guide.appendChild(lbl);
+
+    // Steps
+    const stepsWrap = document.createElement('div');
+    stepsWrap.className = 'sdi-steps-list';
+    stepsWrap.appendChild(makeSdiStep(1,
+      'Accedi al portale AdE con SPID o CIE: '
+      + '<a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener" class="sdi-guide-link">ivaservizi.agenziaentrate.gov.it/portale</a>'));
+    stepsWrap.appendChild(makeSdiStep(2,
+      'Clicca in alto su <strong>\u201cFatture e Corrispettivi\u201d</strong> e accedi con le tue credenziali.'));
+    stepsWrap.appendChild(makeSdiStep(3,
+      'Nel menu a sinistra vai su <strong>\u201cFatture elettroniche\u201d &rarr; \u201cTrasmissione / ricezione\u201d</strong>.'
+      + '<div class="sdi-guide-note">Se non lo vedi: cerca il riquadro \u201cFatturazione elettronica\u201d nella home del portale.</div>'));
+    stepsWrap.appendChild(makeSdiStep(4,
+      'Clicca <strong>\u201cTrasmetti un file\u201d</strong>, carica il file <code>' + fileCode + '</code> e conferma.'));
+    stepsWrap.appendChild(makeSdiStep(5,
+      'Attendi la <strong>ricevuta di presa in carico</strong>. Lo stato diventer\u00e0 <em>Consegnata</em> quando il cliente riceve la fattura.'));
+    guide.appendChild(stepsWrap);
+
+    // Problems
+    const prob = document.createElement('div');
+    prob.className = 'sdi-guide-problems';
+    const pt = document.createElement('div');
+    pt.className = 'sdi-guide-problems-title';
+    pt.textContent = 'Problemi frequenti';
+    prob.appendChild(pt);
+    prob.appendChild(makeSdiProblem('Fattura scartata',
+      'Controlla P.IVA emittente e dati cliente, poi rigenera e ricarica l\'XML.'));
+    prob.appendChild(makeSdiProblem('Codice SDI mancante',
+      'Inseriscilo nell\'Anagrafica Clienti (7 cifre). Senza di esso usa <code>0000000</code> e manda il PDF via email.'));
+    prob.appendChild(makeSdiProblem('Non trovi "Trasmissione"',
+      'Il portale AdE cambia layout &mdash; cerca \u201cTrasmetti file XML\u201d o \u201cInvia fattura\u201d nella sezione Fatturazione elettronica.'));
+    guide.appendChild(prob);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'sdi-guide-actions';
+    const link = document.createElement('a');
+    link.href = 'https://ivaservizi.agenziaentrate.gov.it/portale/';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'btn-add sdi-portal-btn';
+    link.textContent = 'Apri portale AdE';
+    const closeB = document.createElement('button');
+    closeB.type = 'button';
+    closeB.className = 'btn-ghost';
+    closeB.textContent = 'Chiudi';
+    closeB.onclick = function () { closeFatturaModal(); renderFattureDocsSection(); };
+    actions.appendChild(link);
+    actions.appendChild(closeB);
+    guide.appendChild(actions);
+
     modalContent.innerHTML = '';
-    modalContent.appendChild(wrapper);
+    modalContent.appendChild(guide);
   }
 
   function showSdiUploadGuide(fileName) {
