@@ -326,6 +326,18 @@
     const dueYear = extractDueYear(item.due_date);
     const competenceYear = meta.referenceYear || dueYear;
     const normalized = buildNormalizedMeta(meta, { dueYear, competenceYear });
+    const rangeStr = String(item.amount_range || '');
+    let amountLow = null;
+    let amountHigh = null;
+    const rangeMatch = rangeStr.match(/([\d,\.]+)\s*-\s*([\d,\.]+)/);
+    if (rangeMatch) {
+      amountLow = ceil2(parseFloat(rangeMatch[1].replace(/\./g, '').replace(',', '.')));
+      amountHigh = ceil2(parseFloat(rangeMatch[2].replace(/\./g, '').replace(',', '.')));
+    } else if (item.amount) {
+      amountLow = ceil2(item.amount);
+      amountHigh = ceil2(item.amount);
+    }
+
     return {
       id: item.id || `future_${index + 1}`,
       sourceId: item.id || `future_${index + 1}`,
@@ -334,7 +346,9 @@
       dueDate: item.due_date || null,
       dueYear,
       amount: ceil2(item.amount),
-      amountRange: item.amount_range || '',
+      amountRange: rangeStr,
+      amountLow,
+      amountHigh,
       description: meta.rawDescription,
       label: meta.label,
       family: meta.family,
