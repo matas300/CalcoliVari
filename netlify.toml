@@ -1,0 +1,3 @@
+[build]
+  command = "npm run cf:build"
+  publish = ".cloudflare-dist"
