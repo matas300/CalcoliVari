@@ -311,7 +311,7 @@
         </div>
         <div class="fatture-docs-actions">
           <button class="btn-add" type="button" onclick="openFatturaModal()">+ Crea fattura</button>
-          <button class="btn-ghost sdi-guide-btn" type="button" onclick="openSdiGuideModal()">Guida invio SdI</button>
+          <button class="btn-ghost" type="button" onclick="openSdiGuideModal()">Guida invio SdI</button>
         </div>
       </div>
       <div class="fatture-docs-summary-grid">

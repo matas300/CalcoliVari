@@ -1753,6 +1753,11 @@ body.profile-modal-open {
   gap: 10px;
   flex-shrink: 0;
 }
+.fatture-docs-actions .btn-add,
+.fatture-docs-actions .btn-ghost {
+  margin-top: 0;
+  min-height: 40px;
+}
 .fatture-docs-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
