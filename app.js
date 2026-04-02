@@ -579,6 +579,7 @@ const FORFETTARIO_RULES = {
 
 let currentYear = new Date().getFullYear();
 let data = {};
+const yearlyDataCache = {};
 
 function getActualCalendarYear() {
   return new Date().getFullYear();
@@ -787,7 +788,15 @@ function syncProfileFiscalToStoredYears() {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
     const year = parseInt(key.slice(prefix.length), 10);
-    const parsed = ensureDataShape(JSON.parse(localStorage.getItem(key)), year);
+
+    let parsed;
+    if (yearlyDataCache[key]) {
+      parsed = yearlyDataCache[key];
+    } else {
+      parsed = ensureDataShape(JSON.parse(localStorage.getItem(key)), year);
+      yearlyDataCache[key] = parsed;
+    }
+
     syncProfileFieldsToSettings(parsed.settings, year);
     localStorage.setItem(key, JSON.stringify(parsed));
   }
@@ -975,9 +984,17 @@ function loadYearData(y) {
     syncProfileFieldsToSettings(shaped.settings, y);
     return shaped;
   }
-  const raw = localStorage.getItem(storageKey(y));
+  const key = storageKey(y);
+  if (yearlyDataCache[key]) {
+    const shaped = ensureDataShape(yearlyDataCache[key], y);
+    syncProfileFieldsToSettings(shaped.settings, y);
+    return shaped;
+  }
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
-  const shaped = ensureDataShape(JSON.parse(raw), y);
+  const parsed = JSON.parse(raw);
+  yearlyDataCache[key] = parsed;
+  const shaped = ensureDataShape(parsed, y);
   syncProfileFieldsToSettings(shaped.settings, y);
   return shaped;
 }
@@ -995,7 +1012,9 @@ function migrateFatture() {
 
 function saveData() {
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
-  localStorage.setItem(storageKey(), JSON.stringify(data));
+  const key = storageKey();
+  yearlyDataCache[key] = data;
+  localStorage.setItem(key, JSON.stringify(data));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, currentYear, data);
   }
@@ -1009,7 +1028,9 @@ function saveYearData(year, yearData) {
     saveData();
     return;
   }
-  localStorage.setItem(storageKey(year), JSON.stringify(normalized));
+  const key = storageKey(year);
+  yearlyDataCache[key] = normalized;
+  localStorage.setItem(key, JSON.stringify(normalized));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, year, normalized);
   }
