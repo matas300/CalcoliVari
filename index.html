@@ -38,13 +38,13 @@
   </div>
   <div class="header-right">
     <div id="syncStatus" class="sync-indicator"></div>
-    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Cambia tema">&#9790;</button>
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Cambia tema" aria-label="Cambia tema">&#9790;</button>
     <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
-    <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni">&#9881;</button>
+    <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni" aria-label="Impostazioni">&#9881;</button>
     <div class="year-selector">
-    <button onclick="changeYear(-1)">&lt;</button>
+    <button onclick="changeYear(-1)" title="Anno precedente" aria-label="Anno precedente">&lt;</button>
     <span id="yearDisplay">2026</span>
-    <button onclick="changeYear(1)">&gt;</button>
+    <button onclick="changeYear(1)" title="Anno successivo" aria-label="Anno successivo">&gt;</button>
     </div>
   </div>
 </header>
