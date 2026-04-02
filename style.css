@@ -2751,7 +2751,6 @@ html[data-theme="light"] .qpay-input {
   min-width: 130px;
   color: var(--text2);
 }
-.sdi-guide-btn { font-size: .82rem; padding: 7px 14px; }
 
 .ocr-preview-block {
   display: grid;
