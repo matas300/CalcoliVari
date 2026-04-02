@@ -13,9 +13,9 @@
   --color-primary-hover: #5CB6B8;
   --color-primary-active: #3E8E91;
 
-  --color-success: #6FAE6A;
-  --color-warning: #D8A657;
-  --color-error: #C86B74;
+  --color-success: #2ECC71;
+  --color-warning: #F39C12;
+  --color-error: #E74C3C;
   --color-info: #6FA7D8;
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
@@ -31,10 +31,10 @@
   --font-body: 'Inter', sans-serif;
 
   /* chart / calendar semantic colors */
-  --color-chart-netto:       #2EAADC;
-  --color-chart-tasse:       #E94560;
+  --color-chart-netto:       #3498DB;
+  --color-chart-tasse:       #E74C3C;
   --color-chart-contributi:  #F5A623;
-  --color-cal-lavoro:        #4ECCA3;
+  --color-cal-lavoro:        var(--color-success);
   --color-cal-ferie:         #F5A623;
   --color-cal-festivo:       #E94560;
   --color-cal-mezzagiornata: #4A9EFF;
@@ -70,14 +70,14 @@ html[data-theme="light"] {
   --color-primary: #3A8F91;
   --color-primary-hover: #2E7B7D;
   --color-primary-active: #257072;
-  --color-success: #2F8A2A;
-  --color-warning: #B8860B;
+  --color-success: #27AE60;
+  --color-warning: #D35400;
   --color-error: #C0392B;
   --color-info: #2874A6;
   --color-chart-netto:       #1A8FBF;
   --color-chart-tasse:       #C0392B;
   --color-chart-contributi:  #D4840A;
-  --color-cal-lavoro:        #27A882;
+  --color-cal-lavoro:        var(--color-success);
   --color-cal-ferie:         #D4840A;
   --color-cal-festivo:       #C0392B;
   --color-cal-mezzagiornata: #2A7FD4;
@@ -3819,5 +3819,44 @@ body.profile-modal-open {
   html[data-theme="light"] nav {
     background: #fff;
     box-shadow: 0 -4px 12px rgba(0,0,0,.08);
+  }
+}
+
+
+/* --- RESTYLING MOBILE (Fase D) --- */
+@media (max-width: 768px) {
+  .ocr-modal-grid,
+  .fattura-form-grid,
+  .profile-grid,
+  .cliente-grid,
+  .fattura-line-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .scad-table, .fatture-table, .accant-table {
+    table-layout: fixed;
+    width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .btn-add, .profile-secondary-btn, select, input[type="number"], input[type="text"], input[type="date"] {
+    min-height: 44px !important;
+    font-size: 16px !important;
+    margin-bottom: 4px;
+  }
+  
+  .app-modal-panel {
+    padding: 16px 12px;
+  }
+
+  .fattura-sheet-actions, .ocr-sheet-actions {
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .fattura-sheet-actions button, .ocr-sheet-actions button {
+    width: 100%;
+    margin: 0;
   }
 }
