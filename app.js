@@ -3667,18 +3667,41 @@ function getPaymentEventsForScheduleKey(scheduleKey) {
     }));
 }
 
-function promptSchedulePaymentAmount(title, competence, fallbackAmount) {
-  const defaultValue = ceil2(fallbackAmount || 0).toFixed(2);
-  const input = prompt(`Importo pagato per "${title} - ${competence}":`, defaultValue);
-  if (input === null) return null;
-  const parsed = parseFloat(String(input).replace(',', '.'));
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return ceil2(parsed);
+let _qpayPending = null;
+
+function openQuickPayModal(scheduleKey, dueDate, kind, title, competence, amount) {
+  _qpayPending = { scheduleKey, dueDate, kind, title, competence };
+  const modal = document.getElementById('quickPayModal');
+  const titleEl = document.getElementById('qpayTitle');
+  const subEl = document.getElementById('qpaySub');
+  const input = document.getElementById('qpayAmount');
+  if (!modal || !input) return;
+  titleEl.textContent = title;
+  subEl.textContent = competence;
+  input.value = ceil2(amount || 0).toFixed(2);
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  requestAnimationFrame(() => input.select());
 }
 
-function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount) {
-  const parsed = promptSchedulePaymentAmount(title, competence, amount);
-  if (!parsed) return;
+function closeQuickPayModal() {
+  const modal = document.getElementById('quickPayModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  _qpayPending = null;
+}
+
+function confirmQuickPay() {
+  if (!_qpayPending) return;
+  const input = document.getElementById('qpayAmount');
+  const parsed = parseFloat(String(input ? input.value : '').replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    if (input) input.focus();
+    return;
+  }
+  const { scheduleKey, dueDate, kind, title, competence } = _qpayPending;
+  closeQuickPayModal();
   const targetYear = (parseIsoDate(dueDate) || {}).year || currentYear;
   const yearData = getYearDataFor(targetYear) || ensureDataShape({}, targetYear);
   if (!Array.isArray(yearData.pagamenti)) yearData.pagamenti = [];
@@ -3691,6 +3714,10 @@ function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence,
   });
   saveYearData(targetYear, yearData);
   recalcAll();
+}
+
+function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount) {
+  openQuickPayModal(scheduleKey, dueDate, kind, title, competence, amount);
 }
 
 function removePagamentoByScheduleKey(scheduleKey) {

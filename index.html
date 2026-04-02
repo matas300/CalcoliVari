@@ -197,6 +197,22 @@
     <div id="quadroLMContent"></div>
   </div>
 </div>
+<div id="quickPayModal" class="qpay-overlay" aria-hidden="true" onclick="if(event.target===this) closeQuickPayModal()">
+  <div class="qpay-panel" role="dialog" aria-modal="true">
+    <div class="qpay-header">
+      <div class="qpay-title" id="qpayTitle"></div>
+      <div class="qpay-sub" id="qpaySub"></div>
+    </div>
+    <div class="qpay-body">
+      <label class="qpay-label">Importo versato (€)</label>
+      <input id="qpayAmount" type="number" class="qpay-input" min="0.01" step="0.01" placeholder="0,00" onkeydown="if(event.key==='Enter') confirmQuickPay()">
+    </div>
+    <div class="qpay-actions">
+      <button class="btn-ghost" onclick="closeQuickPayModal()">Annulla</button>
+      <button class="btn-primary" onclick="confirmQuickPay()">Conferma</button>
+    </div>
+  </div>
+</div>
 
 <script src="firebase-sync.js"></script>
 <script src="tax-engine.js"></script>

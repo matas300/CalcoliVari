@@ -2447,6 +2447,89 @@ body.profile-modal-open {
   background: var(--surface2);
 }
 
+/* ── Quick Pay Modal ───────────────────────────────────────────────────────── */
+.qpay-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7,11,15,.72);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+.qpay-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.qpay-panel {
+  width: min(360px, calc(100vw - 32px));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: qpay-in .15s ease;
+}
+@keyframes qpay-in {
+  from { transform: scale(.94); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.qpay-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.qpay-title {
+  font-weight: 600;
+  font-size: .92rem;
+  color: var(--text1);
+}
+.qpay-sub {
+  font-size: .76rem;
+  color: var(--text2);
+  margin-top: 3px;
+}
+.qpay-body {
+  padding: 16px 20px 8px;
+}
+.qpay-label {
+  display: block;
+  font-size: .76rem;
+  color: var(--text2);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.qpay-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(255,255,255,.04);
+  color: var(--text1);
+  font-size: 1.15rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color .12s;
+}
+.qpay-input:focus { border-color: var(--accent); }
+.qpay-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 18px;
+  justify-content: flex-end;
+}
+html[data-theme="light"] .qpay-panel {
+  background: #fff;
+}
+html[data-theme="light"] .qpay-input {
+  background: #f5f7fa;
+}
+
 /* ── SdI Upload Guide ──────────────────────────────────────────────────────── */
 .sdi-upload-guide {
   padding: 28px 32px 24px;
