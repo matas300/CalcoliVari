@@ -9,8 +9,15 @@ const PROFILE_FISCAL_LIBRARY = {
     nome: 'Mattia Rossi',
     codiceFiscale: 'RSSMTT96P21A944T',
     partitaIva: '04239481205',
+    indirizzo: '',
+    cap: '',
+    citta: '',
+    provincia: '',
+    nazione: 'IT',
     ateco: '62.10.00',
     atecoDescrizione: 'Attivita di programmazione informatica',
+    iban: '',
+    modalitaPagamento: 'Bonifico bancario',
     coefficiente: 67,
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
@@ -27,8 +34,15 @@ const PROFILE_FISCAL_LIBRARY = {
     nome: 'Peru',
     codiceFiscale: '',
     partitaIva: '',
+    indirizzo: '',
+    cap: '',
+    citta: '',
+    provincia: '',
+    nazione: 'IT',
     ateco: '62.10.00',
     atecoDescrizione: 'Attivita di programmazione informatica',
+    iban: '',
+    modalitaPagamento: 'Bonifico bancario',
     coefficiente: 67,
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
@@ -45,8 +59,15 @@ const PROFILE_FISCAL_LIBRARY = {
     nome: 'Demo',
     codiceFiscale: '',
     partitaIva: '',
+    indirizzo: '',
+    cap: '',
+    citta: '',
+    provincia: '',
+    nazione: 'IT',
     ateco: '62.10.00',
     atecoDescrizione: 'Attivita di programmazione informatica',
+    iban: '',
+    modalitaPagamento: 'Bonifico bancario',
     coefficiente: 67,
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
@@ -72,6 +93,9 @@ const PROFILE_SYNC_FIELDS = [
 let currentProfile = sessionStorage.getItem('currentProfile') || null;
 let profileFiscalState = { editing: false, draft: null, data: null };
 let profileCopyToastTimer = null;
+let quadroLMToastTimer = null;
+let quadroLMState = { open: false, year: null, base: null, draft: null };
+let clientiUiState = { search: '' };
 let externalFiscalState = {
   profile: null,
   loaded: false,
@@ -125,6 +149,7 @@ async function doLogin() {
     return;
   }
   currentProfile = profile;
+  clientiUiState.search = '';
   sessionStorage.setItem('currentProfile', profile);
   document.getElementById('loginScreen').classList.add('hidden');
 
@@ -168,7 +193,9 @@ function toggleTheme() {
 
 function doLogout() {
   closeProfileFiscalModal();
+  if (typeof closeOcrPagamentoModal === 'function') closeOcrPagamentoModal();
   currentProfile = null;
+  clientiUiState.search = '';
   sessionStorage.removeItem('currentProfile');
   profileFiscalState = { editing: false, draft: null, data: null };
   externalFiscalState = {
@@ -215,13 +242,13 @@ const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio'
 const MONTHS_SHORT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 const ACTIVITY_INFO = {
   '':  { label: '—',            color: 'rgba(255,255,255,.04)', dark: true },
-  '8': { label: 'Lavoro',       color: '#4ecca3', dark: false },
+  '8': { label: 'Lavoro',       color: 'var(--color-cal-lavoro)', dark: false },
   'WE':{ label: 'Weekend',      color: 'rgba(255,255,255,.12)', dark: true },
-  'F': { label: 'Ferie',        color: '#f5a623', dark: false },
-  'FS':{ label: 'Festivo',      color: '#e94560', dark: false },
-  'M': { label: '1/2 giornata', color: '#4a9eff', dark: false },
-  'Malattia':  { label: 'Malattia',  color: '#e67e22', dark: false },
-  'Donazione': { label: 'Donazione', color: '#533483', dark: false },
+  'F': { label: 'Ferie',        color: 'var(--color-cal-ferie)', dark: false },
+  'FS':{ label: 'Festivo',      color: 'var(--color-cal-festivo)', dark: false },
+  'M': { label: '1/2 giornata', color: 'var(--color-cal-mezzagiornata)', dark: false },
+  'Malattia':  { label: 'Malattia',  color: 'var(--color-cal-malattia)', dark: false },
+  'Donazione': { label: 'Donazione', color: 'var(--color-cal-donazione)', dark: false },
 };
 const HOLIDAYS = [[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
 const PAYMENT_TYPES = {
@@ -230,7 +257,29 @@ const PAYMENT_TYPES = {
   misto:      { label: 'Misto', color: 'var(--blue)' },
   altro:      { label: 'Altro', color: 'var(--text2)' }
 };
+// Fonte: circolari INPS annuali (Gestione Artigiani e Commercianti)
+// contribFissi = minimaleInps × aliquota + 7.44 (contributo aggiuntivo fisso)
 const OFFICIAL_ARTCOM_INPS = {
+  2020: {
+    minimaleInps: 15953,
+    artigiano: { contribFissi: 3836.16, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3912.73, aliqContributi: 24.48 }
+  },
+  2021: {
+    minimaleInps: 15953,
+    artigiano: { contribFissi: 3836.16, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3912.73, aliqContributi: 24.48 }
+  },
+  2022: {
+    minimaleInps: 16243,
+    artigiano: { contribFissi: 3905.76, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3983.73, aliqContributi: 24.48 }
+  },
+  2023: {
+    minimaleInps: 17504,
+    artigiano: { contribFissi: 4208.40, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 4292.42, aliqContributi: 24.48 }
+  },
   2024: {
     minimaleInps: 18415,
     artigiano: { contribFissi: 4427.04, aliqContributi: 24.0 },
@@ -545,8 +594,114 @@ function profileStorageKey(profile = currentProfile) {
   return 'calcoliPIVA_profile_' + (profile || 'default');
 }
 
+function clientiStorageKey(profile = currentProfile) {
+  return 'calcoliPIVA_' + (profile || 'default') + '_clienti';
+}
+
 function getProfileFiscalDefaults(profile = currentProfile) {
   return { ...(PROFILE_FISCAL_LIBRARY[profile] || PROFILE_FISCAL_LIBRARY.Demo) };
+}
+
+function generateClientId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+  return 'cli_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+}
+
+function normalizeClienteField(value, fallback = '') {
+  return String(value ?? fallback).trim();
+}
+
+function normalizeCliente(input, fallbackId) {
+  const item = input || {};
+  const id = normalizeClienteField(item.id, fallbackId || generateClientId()) || (fallbackId || generateClientId());
+  return {
+    id,
+    nome: normalizeClienteField(item.nome),
+    partitaIva: normalizeClienteField(item.partitaIva),
+    codiceFiscale: normalizeClienteField(item.codiceFiscale),
+    codiceSDI: normalizeClienteField(item.codiceSDI, '0000000') || '0000000',
+    pec: normalizeClienteField(item.pec),
+    indirizzo: normalizeClienteField(item.indirizzo),
+    cap: normalizeClienteField(item.cap),
+    citta: normalizeClienteField(item.citta),
+    provincia: normalizeClienteField(item.provincia).toUpperCase(),
+    nazione: normalizeClienteField(item.nazione, 'IT').toUpperCase() || 'IT',
+    note: normalizeClienteField(item.note)
+  };
+}
+
+function getClienti(profile = currentProfile) {
+  const key = clientiStorageKey(profile);
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item, idx) => normalizeCliente(item, item && item.id ? item.id : `client_${idx}`));
+  } catch {
+    return [];
+  }
+}
+
+function saveClienti(list, profile = currentProfile) {
+  const normalized = (Array.isArray(list) ? list : []).map(item => normalizeCliente(item, item && item.id));
+  localStorage.setItem(clientiStorageKey(profile), JSON.stringify(normalized));
+  if (profile === currentProfile && typeof syncProfileMetaToCloud === 'function') {
+    syncProfileMetaToCloud(profile);
+  }
+  return normalized;
+}
+
+function setClientiSearch(value) {
+  clientiUiState.search = String(value || '');
+  renderClienti();
+}
+
+function addCliente() {
+  const list = getClienti();
+  const next = normalizeCliente({
+    id: generateClientId(),
+    nazione: 'IT',
+    codiceSDI: '0000000'
+  });
+  saveClienti([next, ...list]);
+  renderClienti();
+}
+
+function updateClienteField(id, key, value) {
+  const list = getClienti().map(cliente => {
+    if (cliente.id !== id) return cliente;
+    return normalizeCliente({ ...cliente, [key]: value }, cliente.id);
+  });
+  saveClienti(list);
+  renderClienti();
+}
+
+function deleteCliente(id) {
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) return;
+  if (!confirm(`Eliminare ${cliente.nome || 'questo cliente'}?`)) return;
+  const list = getClienti().filter(c => c.id !== id);
+  saveClienti(list);
+  renderClienti();
+}
+
+function matchesClienteSearch(cliente, query) {
+  if (!query) return true;
+  const haystack = [
+    cliente.nome,
+    cliente.partitaIva,
+    cliente.codiceFiscale,
+    cliente.codiceSDI,
+    cliente.pec,
+    cliente.indirizzo,
+    cliente.citta,
+    cliente.provincia,
+    cliente.note
+  ].join(' ').toLowerCase();
+  return haystack.includes(query);
 }
 
 function validatePercentValue(value, fallback) {
@@ -568,8 +723,15 @@ function normalizeProfileFiscalData(input, profile = currentProfile) {
     nome: String(merged.nome || base.nome || profile || ''),
     codiceFiscale: String(merged.codiceFiscale || ''),
     partitaIva: String(merged.partitaIva || ''),
+    indirizzo: String(merged.indirizzo || ''),
+    cap: String(merged.cap || ''),
+    citta: String(merged.citta || ''),
+    provincia: String(merged.provincia || '').toUpperCase(),
+    nazione: String(merged.nazione || base.nazione || 'IT').toUpperCase(),
     ateco: String(merged.ateco || base.ateco || ''),
     atecoDescrizione: String(merged.atecoDescrizione || base.atecoDescrizione || ''),
+    iban: String(merged.iban || ''),
+    modalitaPagamento: String(merged.modalitaPagamento || base.modalitaPagamento || 'Bonifico bancario'),
     coefficiente: validatePercentValue(merged.coefficiente, base.coefficiente || 67),
     impostaSostitutiva: validatePercentValue(merged.impostaSostitutiva, base.impostaSostitutiva || 15),
     inpsMode: normalizeInpsMode(merged.inpsMode || base.inpsMode),
@@ -665,7 +827,8 @@ function getOfficialArtComInpsParams(year, category) {
   const targetYear = parseInt(year, 10) || currentYear;
   const categoryKey = normalizeInpsCategory(category);
   const knownYears = Object.keys(OFFICIAL_ARTCOM_INPS).map(Number).sort((a, b) => a - b);
-  const fallbackYear = knownYears.filter(y => y <= targetYear).pop() || knownYears[knownYears.length - 1];
+  const below = knownYears.filter(y => y <= targetYear);
+  const fallbackYear = below.length > 0 ? below[below.length - 1] : knownYears[0];
   const yearUsed = OFFICIAL_ARTCOM_INPS[targetYear] ? targetYear : fallbackYear;
   const base = OFFICIAL_ARTCOM_INPS[yearUsed];
   if (!base) return null;
@@ -794,6 +957,8 @@ function ensureDataShape(target, year = currentYear) {
   if (!out.pagamenti) out.pagamenti = [];
   if (!out.budget) out.budget = [];
   if (!out.spese) out.spese = [];
+  if (!out.lmQuadro || typeof out.lmQuadro !== 'object') out.lmQuadro = { overrides: {} };
+  if (!out.lmQuadro.overrides || typeof out.lmQuadro.overrides !== 'object') out.lmQuadro.overrides = {};
   for (const [key, value] of Object.entries(defaultSettings)) {
     if (out.settings[key] === undefined) out.settings[key] = value;
   }
@@ -1107,8 +1272,20 @@ function addFattura(month) {
 }
 
 function removeFattura(month, idx) {
-  if (!data.fatture[month] || data.fatture[month].length <= 1) return;
+  if (!data.fatture[month] || !data.fatture[month][idx]) return;
+  const row = data.fatture[month][idx];
+  const linkedInvoiceId = String(row.invoiceId || row.fatturaId || '').trim();
+  const canDeleteLast = !!linkedInvoiceId;
+  if (data.fatture[month].length <= 1 && !canDeleteLast) return;
+  if (linkedInvoiceId && typeof deleteFatturaEmessa === 'function') {
+    deleteFatturaEmessa(linkedInvoiceId, {
+      skipMonthCleanup: true,
+      skipConfirm: true,
+      silent: true
+    });
+  }
   data.fatture[month].splice(idx, 1);
+  if (data.fatture[month].length === 0) delete data.fatture[month];
   saveData();
   recalcAll();
 }
@@ -1721,6 +1898,10 @@ function ceil2(n) {
   return Number(n) < 0 ? -rounded : rounded;
 }
 
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function fmt(n) {
   if (n === undefined || n === null || isNaN(n)) return '\u2014';
   return ceil2(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
@@ -1734,20 +1915,23 @@ function row(label, val, cls, valCls) {
 function drawDonut(netto, tasse, contributi, totalLabel = 'Totale lordo') {
   const total = netto + tasse + contributi;
   if (total <= 0) return '<div style="text-align:center;color:var(--text2);padding:30px">Nessun dato</div>';
+  const cN = getCSSVar('--color-chart-netto');
+  const cT = getCSSVar('--color-chart-tasse');
+  const cC = getCSSVar('--color-chart-contributi');
   const size = 180, cx = 90, cy = 90, r = 70, sw = 28, C = 2*Math.PI*r;
   const pN = netto/total, pT = tasse/total, pC = contributi/total;
   const arc = (off, len, col) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}"
     stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"/>`;
   let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
-  svg += arc(0, pN*C, '#2eaadc') + arc(pN*C, pT*C, '#e94560') + arc((pN+pT)*C, pC*C, '#f5a623');
+  svg += arc(0, pN*C, cN) + arc(pN*C, pT*C, cT) + arc((pN+pT)*C, pC*C, cC);
   svg += `<text x="${cx}" y="${cy-6}" text-anchor="middle" fill="var(--color-text)" font-size="14" font-weight="700">${fmtPct(pN)}</text>`;
   svg += `<text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--color-text-muted)" font-size="9">netto</text></svg>`;
   const tasseLabel = S().regime === 'ordinario' ? 'IRPEF' : 'Imposta sost.';
   const contribLabel = getContribLabel(getInpsMode(S()));
   return `<div class="chart-container">${svg}<div class="chart-legend">
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#2eaadc"></div><span>Netto</span><span class="chart-legend-val" style="color:#2eaadc">${fmt(netto)}</span></div>
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#e94560"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:#e94560">${fmt(tasse)}</span></div>
-    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f5a623"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:#f5a623">${fmt(contributi)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cN}"></div><span>Netto</span><span class="chart-legend-val" style="color:${cN}">${fmt(netto)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cT}"></div><span>${tasseLabel}</span><span class="chart-legend-val" style="color:${cT}">${fmt(tasse)}</span></div>
+    <div class="chart-legend-item"><div class="chart-legend-dot" style="background:${cC}"></div><span>${contribLabel}</span><span class="chart-legend-val" style="color:${cC}">${fmt(contributi)}</span></div>
     <div class="chart-legend-item" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--color-border)">
       <div class="chart-legend-dot" style="background:transparent"></div><span style="font-weight:600">${totalLabel}</span><span class="chart-legend-val">${fmt(total)}</span></div>
   </div></div>`;
@@ -1768,16 +1952,16 @@ function drawMiniBars(perc) {
     const hT = hPx - hN;
     h += `<div class="mini-bar-col">
       <div style="display:flex;flex-direction:column;width:100%;height:${hPx}px">
-        <div class="mini-bar" style="height:${hT}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.6"></div>
-        <div class="mini-bar" style="height:${hN}px;background:#2eaadc;border-radius:0"></div>
+        <div class="mini-bar" style="height:${hT}px;background:var(--color-chart-tasse);border-radius:3px 3px 0 0;opacity:.6"></div>
+        <div class="mini-bar" style="height:${hN}px;background:var(--color-chart-netto);border-radius:0"></div>
       </div>
       <div class="mini-bar-label">${MONTHS_SHORT[m]}</div>
     </div>`;
   }
   h += '</div>';
   h += `<div style="display:flex;gap:12px;margin-top:8px;font-size:.7rem;color:var(--text2);justify-content:center">
-    <span><span style="display:inline-block;width:10px;height:10px;background:#2eaadc;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);opacity:.6;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Tasse+C.</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-chart-netto);border-radius:2px;vertical-align:middle;margin-right:3px"></span>Netto</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-chart-tasse);opacity:.6;border-radius:2px;vertical-align:middle;margin-right:3px"></span>Tasse+C.</span>
   </div>`;
   return h;
 }
@@ -1914,7 +2098,10 @@ function buildProfileFiscalClipboardText() {
   const lines = [
     `Nome e cognome: ${profile.nome || currentProfile}`,
     `Codice fiscale: ${profile.codiceFiscale || '-'}`,
-    `Partita IVA: ${profile.partitaIva || '-'}`
+    `Partita IVA: ${profile.partitaIva || '-'}`,
+    `Indirizzo: ${[profile.indirizzo, profile.cap, profile.citta, profile.provincia, profile.nazione].filter(Boolean).join(', ') || '-'}`,
+    `IBAN: ${profile.iban || '-'}`,
+    `Modalita pagamento: ${profile.modalitaPagamento || '-'}`
   ];
   return lines.join('\n');
 }
@@ -2201,6 +2388,549 @@ function renderProfileSection(title, description, body, extraClass) {
   </section>`;
 }
 
+const QUADRO_LM_FIELD_META = {
+  LM1:  { title: 'Codice attività', type: 'text',   help: 'Codice ATECO del profilo fiscale.' },
+  LM2:  { title: 'Reddito lordo', type: 'money',    help: 'Totale incassato nel periodo d imposta.' },
+  LM3:  { title: 'Rimanenze finali', type: 'money',  help: 'Per attività di servizi di norma e 0.' },
+  LM4:  { title: 'Rimanenze iniziali', type: 'money', help: 'Per attività di servizi di norma e 0.' },
+  LM5:  { title: 'Differenza', type: 'money',        help: 'LM2 + LM3 - LM4.' },
+  LM6:  { title: 'Componenti positivi', type: 'money', help: 'Per il forfettario coincide con la differenza calcolata.' },
+  LM22: { title: 'Reddito lordo forfettario', type: 'money', help: 'Base ricavi/compensi su cui si applica il coefficiente.' },
+  LM23: { title: 'Coefficiente di redditività', type: 'percent', help: 'Percentuale del coefficiente applicata al lordo.' },
+  LM24: { title: 'Reddito forfettario', type: 'money', help: 'LM22 x LM23 / 100.' },
+  LM25: { title: 'Perdite pregresse', type: 'money', help: 'Di norma 0 salvo casi particolari.' },
+  LM26: { title: 'Reddito netto', type: 'money', help: 'LM24 - LM25.' },
+  LM27: { title: 'Contributi previdenziali versati', type: 'money', help: 'Contributi INPS deducibili effettivamente pagati nell anno.' },
+  LM28: { title: 'Reddito al netto contributi', type: 'money', help: 'LM26 - LM27.' },
+  LM29: { title: 'Imposta sostitutiva dovuta', type: 'money', help: 'LM28 x aliquota applicata.' },
+  LM30: { title: 'Aliquota sostitutiva', type: 'percent', help: 'Aliquota del 5% o 15%.' },
+  LM34: { title: 'Imposta sostitutiva a debito', type: 'money', help: 'Debito fiscale dell anno di riferimento.' },
+  LM35: { title: 'Acconti versati', type: 'money', help: 'Acconti imposta già versati.' },
+  LM38: { title: 'Imposta a debito', type: 'money', help: 'LM34 - LM35.' },
+  LM39: { title: 'Imposta a credito', type: 'money', help: 'Credito se gli acconti superano il debito.' },
+  LM40: { title: 'Primo acconto anno successivo', type: 'money', help: 'Acconto del ciclo successivo stimato sul debito attuale.' },
+  LM41: { title: 'Secondo acconto anno successivo', type: 'money', help: 'Seconda rata del ciclo successivo.' }
+};
+
+const QUADRO_LM_SECTIONS = [
+  {
+    title: '1. Identificazione e parametri',
+    description: 'Dati che identificano il profilo e i coefficienti applicati al quadro.',
+    fields: ['LM1', 'LM23', 'LM30']
+  },
+  {
+    title: '2. Base contabile',
+    description: 'Ricavi, rimanenze e differenza di base.',
+    fields: ['LM2', 'LM3', 'LM4', 'LM5', 'LM6']
+  },
+  {
+    title: '3. Reddito forfettario e contributi',
+    description: 'Calcolo dell imponibile forfettario e dei contributi deducibili.',
+    fields: ['LM22', 'LM24', 'LM25', 'LM26', 'LM27', 'LM28', 'LM29']
+  },
+  {
+    title: '4. Debito, acconti e saldo',
+    description: 'Imposta sostitutiva, acconti gia versati e rata del periodo successivo.',
+    fields: ['LM34', 'LM35', 'LM38', 'LM39', 'LM40', 'LM41']
+  }
+];
+
+function getQuadroLMYearData(year) {
+  return getYearDataFor(year) || ensureDataShape({}, year);
+}
+
+function getQuadroLMSavedState(year) {
+  const yearData = getQuadroLMYearData(year);
+  const stored = yearData && yearData.lmQuadro && typeof yearData.lmQuadro === 'object' ? yearData.lmQuadro : {};
+  const overrides = stored && stored.overrides && typeof stored.overrides === 'object' ? stored.overrides : {};
+  return {
+    overrides,
+    updatedAt: stored.updatedAt || ''
+  };
+}
+
+function normalizeQuadroLMInput(key, raw) {
+  const meta = QUADRO_LM_FIELD_META[key] || {};
+  if (meta.type === 'text') return String(raw ?? '').trim();
+  if (meta.type === 'percent' || meta.type === 'money') {
+    const normalized = String(raw ?? '').replace(',', '.').trim();
+    if (normalized === '') return 0;
+    const parsed = parseFloat(normalized);
+    return Number.isFinite(parsed) ? ceil2(parsed) : 0;
+  }
+  return String(raw ?? '').trim();
+}
+
+function formatQuadroLMInputValue(value, meta) {
+  if (meta && meta.type === 'text') return String(value ?? '');
+  if (value === undefined || value === null || value === '') return '';
+  return String(value);
+}
+
+function formatQuadroLMDisplayValue(value, meta) {
+  if (meta && meta.type === 'percent') return `${ceil2(value || 0).toFixed(2)}%`;
+  if (meta && meta.type === 'money') return fmt(value || 0);
+  return String(value ?? '');
+}
+
+function getQuadroLMBaseModel(year) {
+  const targetYear = parseInt(year, 10) || currentYear;
+  const yearData = getQuadroLMYearData(targetYear);
+  const settings = yearData && yearData.settings ? yearData.settings : S();
+  const profile = getProfileFiscalData();
+  const engine = getTaxEngine();
+  const comparison = getForfettarioMethodComparisonForYear(targetYear, { includeEstimates: true });
+  const sourceTruth = getForfettarioSourceOfTruthForYear(targetYear, { includeEstimates: true })
+    || getAppliedForfettarioForYear(targetYear, { includeEstimates: true });
+  const transition = engine && typeof engine.buildTransitionDiagnostics === 'function'
+    ? engine.buildTransitionDiagnostics({
+        year: targetYear,
+        currentSettings: settings,
+        previousSettings: getYearDataFor(targetYear - 1) ? getYearDataFor(targetYear - 1).settings : null
+      })
+    : null;
+  const isClosedYear = isClosedFiscalYear(targetYear);
+  const grossCollected = ceil2(getTotalAnnuoForYear(targetYear, { includeEstimates: true }));
+  const coeffPct = Math.max(parseFloat(profile.coefficiente ?? settings.coefficiente) || 0, 0);
+  const aliquotaPct = Math.max(parseFloat(profile.impostaSostitutiva ?? settings.impostaSostitutiva) || 0, 0);
+  const lm2 = grossCollected;
+  const lm22 = grossCollected;
+  const lm24 = ceil2((lm22 * coeffPct) / 100);
+  const lm27Source = sourceTruth ? (sourceTruth.deductibleContributionsPaid ?? sourceTruth.contribTotali ?? 0) : 0;
+  const lm27 = ceil2(lm27Source);
+  const lm28 = ceil2(Math.max(lm24 - lm27, 0));
+  const lm29 = ceil2(Math.max((lm28 * aliquotaPct) / 100, 0));
+  const lm34 = lm29;
+  const lm35 = ceil2(getLinkedPagamentiTotal([`imposta_acc1_${targetYear}`, `imposta_acc2_${targetYear}`]));
+  const lm38 = ceil2(Math.max(lm34 - lm35, 0));
+  const lm39 = ceil2(Math.max(lm35 - lm34, 0));
+  const enginePlan = engine && typeof engine.buildAccontoPlan === 'function'
+    ? engine.buildAccontoPlan(lm34)
+    : { first: 0, second: 0, total: lm34 };
+  const lm40 = ceil2(enginePlan.first || 0);
+  const lm41 = ceil2(enginePlan.second || 0);
+  const estimatedKeys = new Set(
+    isClosedYear
+      ? []
+      : ['LM2', 'LM22', 'LM24', 'LM26', 'LM27', 'LM28', 'LM29', 'LM34', 'LM38', 'LM39', 'LM40', 'LM41']
+  );
+  const sourceMap = {
+    LM1: 'profile',
+    LM2: isClosedYear ? 'app' : 'estimated',
+    LM3: 'default',
+    LM4: 'default',
+    LM5: 'app',
+    LM6: 'app',
+    LM22: isClosedYear ? 'app' : 'estimated',
+    LM23: 'profile',
+    LM24: isClosedYear ? 'app' : 'estimated',
+    LM25: 'default',
+    LM26: isClosedYear ? 'app' : 'estimated',
+    LM27: isClosedYear ? 'app' : 'estimated',
+    LM28: isClosedYear ? 'app' : 'estimated',
+    LM29: isClosedYear ? 'app' : 'estimated',
+    LM30: 'profile',
+    LM34: isClosedYear ? 'app' : 'estimated',
+    LM35: lm35 > 0 ? 'pagato' : 'zero',
+    LM38: isClosedYear ? 'app' : 'estimated',
+    LM39: isClosedYear ? 'app' : 'estimated',
+    LM40: isClosedYear ? 'app' : 'estimated',
+    LM41: isClosedYear ? 'app' : 'estimated'
+  };
+  const values = {
+    LM1: profile.ateco || settings.ateco || '',
+    LM2: lm2,
+    LM3: 0,
+    LM4: 0,
+    LM5: ceil2(lm2),
+    LM6: ceil2(lm2),
+    LM22: lm22,
+    LM23: coeffPct,
+    LM24: lm24,
+    LM25: 0,
+    LM26: lm24,
+    LM27: lm27,
+    LM28: lm28,
+    LM29: lm29,
+    LM30: aliquotaPct,
+    LM34: lm34,
+    LM35: lm35,
+    LM38: lm38,
+    LM39: lm39,
+    LM40: lm40,
+    LM41: lm41
+  };
+  const summary = {
+    grossCollected,
+    taxableBase: lm24,
+    contributions: lm27,
+    taxDue: lm34,
+    accontiPaid: lm35,
+    residualTax: lm38,
+    taxCredit: lm39,
+    nextYearAcconto1: lm40,
+    nextYearAcconto2: lm41,
+    methodLabel: isClosedYear ? 'Consuntivo' : (comparison && comparison.selectedMethod === 'previsionale' ? 'Previsionale' : 'Storico')
+  };
+  const warnings = [];
+  if (!profile.ateco) warnings.push('Codice ATECO non configurato nel profilo fiscale.');
+  if (!profile.partitaIva) warnings.push('Partita IVA non configurata nel profilo fiscale.');
+  if (!isClosedYear) warnings.push('L anno e ancora aperto: i campi segnati come stimati possono cambiare.');
+  if (transition && Array.isArray(transition.warnings)) warnings.push(...transition.warnings);
+  if (comparison && Array.isArray(comparison.warnings)) warnings.push(...comparison.warnings);
+  const notes = [
+    'Il Quadro LM e un riepilogo di supporto alla compilazione: non genera file telematici.',
+    'I valori modificati manualmente vengono salvati solo per l anno selezionato.'
+  ];
+  return {
+    year: targetYear,
+    isClosedYear,
+    profile,
+    settings,
+    comparison,
+    transition,
+    values,
+    sourceMap,
+    estimatedKeys,
+    summary,
+    warnings,
+    notes
+  };
+}
+
+function getQuadroLMModel(year, overrides) {
+  const base = getQuadroLMBaseModel(year);
+  const draftValues = { ...base.values, ...(overrides || {}) };
+  const manualKeys = new Set();
+  for (const key of Object.keys(base.values)) {
+    if (String(draftValues[key] ?? '') !== String(base.values[key] ?? '')) manualKeys.add(key);
+  }
+  return { ...base, values: draftValues, manualKeys };
+}
+
+function getQuadroLMCurrentModel() {
+  const year = quadroLMState.year || currentYear;
+  const base = quadroLMState.base || getQuadroLMBaseModel(year);
+  const draft = quadroLMState.draft || { ...base.values };
+  const manualKeys = new Set();
+  for (const key of Object.keys(base.values)) {
+    if (String(draft[key] ?? '') !== String(base.values[key] ?? '')) manualKeys.add(key);
+  }
+  return { ...base, values: draft, manualKeys };
+}
+
+function getQuadroLMFieldStatus(model, key) {
+  if (!model) return { label: 'Dato', tone: 'info' };
+  if (model.manualKeys && model.manualKeys.has(key)) return { label: 'Manuale', tone: 'warn' };
+  if (model.estimatedKeys && model.estimatedKeys.has(key)) return { label: 'Stimato', tone: 'warn' };
+  const source = model.sourceMap && model.sourceMap[key] ? model.sourceMap[key] : 'app';
+  if (source === 'profile') return { label: 'Profilo', tone: 'info' };
+  if (source === 'pagato') return { label: 'Pagato', tone: 'ok' };
+  if (source === 'zero') return { label: '0', tone: 'info' };
+  return { label: 'Dato app', tone: 'ok' };
+}
+
+function renderQuadroLMStat(label, value, tone) {
+  return `<div class="lm-stat ${tone || ''}">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value)}</strong>
+  </div>`;
+}
+
+function renderQuadroLMField(model, key, printable) {
+  const meta = QUADRO_LM_FIELD_META[key] || { title: key, type: 'money', help: '' };
+  const currentValue = model.values ? model.values[key] : '';
+  const baseValue = model.base && model.base.values ? model.base.values[key] : currentValue;
+  const status = getQuadroLMFieldStatus(model, key);
+  const manual = String(currentValue ?? '') !== String(baseValue ?? '');
+  const wrapperClass = ['lm-field'];
+  if (manual) wrapperClass.push('is-manual');
+  if (status.label === 'Stimato') wrapperClass.push('is-estimated');
+  const inputId = `lm_${key}`;
+  const sourceClass = status.tone === 'warn' ? 'warn' : status.tone === 'ok' ? 'ok' : 'info';
+  const valueLabel = formatQuadroLMDisplayValue(currentValue, meta);
+  if (printable) {
+    return `<div class="${wrapperClass.join(' ')}">
+      <div class="lm-field-head">
+        <div class="lm-field-name">${escapeHtml(key)} - ${escapeHtml(meta.title)}</div>
+        <span class="lm-source-pill ${sourceClass}">${escapeHtml(status.label)}</span>
+      </div>
+      <div class="lm-field-value">${escapeHtml(valueLabel)}</div>
+      ${meta.help ? `<div class="lm-field-help">${escapeHtml(meta.help)}</div>` : ''}
+    </div>`;
+  }
+  const inputType = meta.type === 'text' ? 'text' : 'number';
+  const step = meta.type === 'text' ? '' : ' step="0.01" inputmode="decimal"';
+  return `<label class="${wrapperClass.join(' ')}" for="${inputId}">
+    <div class="lm-field-head">
+      <div class="lm-field-name">${escapeHtml(key)} - ${escapeHtml(meta.title)}</div>
+      <span class="lm-source-pill ${sourceClass}">${escapeHtml(status.label)}</span>
+    </div>
+    ${meta.help ? `<div class="lm-field-help">${escapeHtml(meta.help)}</div>` : ''}
+    <input id="${inputId}" type="${inputType}" value="${escapeHtml(formatQuadroLMInputValue(currentValue, meta))}"${step} onchange="updateQuadroLMField('${key}', this.value)">
+  </label>`;
+}
+
+function renderQuadroLMSection(model, section, printable) {
+  return `<section class="lm-section">
+    <div class="lm-section-head">
+      <div>
+        <h4>${escapeHtml(section.title)}</h4>
+        ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ''}
+      </div>
+    </div>
+    <div class="lm-section-grid">
+      ${section.fields.map(key => renderQuadroLMField(model, key, printable)).join('')}
+    </div>
+  </section>`;
+}
+
+function buildQuadroLMPrintHtml(model) {
+  const summary = model.summary || {};
+  const warningHtml = (model.warnings && model.warnings.length)
+    ? `<div class="lm-print-notes">
+        <h3>Warning</h3>
+        ${model.warnings.map(note => `<div class="lm-print-note">${escapeHtml(note)}</div>`).join('')}
+      </div>`
+    : '';
+  const noteHtml = (model.notes && model.notes.length)
+    ? `<div class="lm-print-notes">
+        <h3>Note</h3>
+        ${model.notes.map(note => `<div class="lm-print-note">${escapeHtml(note)}</div>`).join('')}
+      </div>`
+    : '';
+  const sectionsHtml = QUADRO_LM_SECTIONS.map(section => renderQuadroLMSection(model, section, true)).join('');
+  return `<!doctype html>
+  <html lang="it">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quadro LM ${model.year}</title>
+    <style>
+      :root{color-scheme:light;}
+      body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f7fb;color:#101828;}
+      .page{max-width:1080px;margin:0 auto;padding:28px 20px 48px;}
+      .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #d7dde6;}
+      .topbar h1{font-family:Satoshi,Inter,sans-serif;margin:0;font-size:1.8rem;}
+      .topbar p{margin:4px 0 0;color:#475467;}
+      .actions{display:flex;gap:8px;flex-wrap:wrap;}
+      .actions button{border:0;border-radius:12px;padding:10px 14px;background:#0e5f61;color:#fff;font-weight:700;cursor:pointer;}
+      .actions button.secondary{background:#e4e7ec;color:#101828;}
+      .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0;}
+      .stat{border:1px solid #d7dde6;border-radius:14px;background:#fff;padding:14px;}
+      .stat span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:#667085;margin-bottom:6px;}
+      .stat strong{font-size:1.08rem;}
+      .summary-note,.lm-print-notes{border:1px solid #d7dde6;border-radius:14px;background:#fff;padding:14px;margin-bottom:14px;}
+      .lm-print-notes h3{margin:0 0 10px;font-size:1rem;font-family:Satoshi,Inter,sans-serif;}
+      .lm-print-note{padding:10px 12px;border-radius:10px;background:#f9fafb;border:1px solid #eaecf0;margin-top:8px;line-height:1.45;}
+      .sections{display:grid;gap:14px;}
+      .lm-section{border:1px solid #d7dde6;border-radius:18px;background:#fff;padding:16px;}
+      .lm-section-head h4{margin:0 0 4px;font-size:1.06rem;font-family:Satoshi,Inter,sans-serif;}
+      .lm-section-head p{margin:0;color:#667085;font-size:.92rem;line-height:1.5;}
+      .lm-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;}
+      .lm-field{display:block;border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fdfdfd;}
+      .lm-field-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px;}
+      .lm-field-name{font-weight:700;font-size:.92rem;}
+      .lm-source-pill{padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#eef2f6;color:#344054;white-space:nowrap;}
+      .lm-source-pill.ok{background:#ecfdf3;color:#027a48;}
+      .lm-source-pill.warn{background:#fffaeb;color:#b54708;}
+      .lm-source-pill.info{background:#eff8ff;color:#175cd3;}
+      .lm-field-help{font-size:.8rem;color:#667085;line-height:1.45;margin-bottom:10px;}
+      .lm-field-value{font-size:1rem;font-weight:600;color:#101828;}
+      .footer-note{margin-top:16px;color:#667085;font-size:.84rem;line-height:1.5;}
+      @media print{
+        body{background:#fff;}
+        .page{padding:0;max-width:none;}
+        .topbar .actions,.footer-note .no-print{display:none !important;}
+        .lm-section,.stat,.summary-note,.lm-print-notes{break-inside:avoid;}
+      }
+      @media (max-width: 860px){
+        .summary,.lm-section-grid{grid-template-columns:1fr;}
+        .topbar{flex-direction:column;align-items:flex-start;}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <div>
+          <h1>Quadro LM ${escapeHtml(String(model.year))}</h1>
+          <p>Riepilogo stampabile basato sui dati dell'app. Per salvare in PDF usa la funzione di stampa del browser.</p>
+        </div>
+        <div class="actions no-print">
+          <button type="button" onclick="window.print()">Stampa / Salva PDF</button>
+          <button type="button" class="secondary" onclick="window.close()">Chiudi</button>
+        </div>
+      </div>
+      <div class="summary">
+        ${renderQuadroLMStat('Lordo incassato', fmt(summary.grossCollected || 0))}
+        ${renderQuadroLMStat('Imponibile forfettario', fmt(summary.taxableBase || 0))}
+        ${renderQuadroLMStat('Imposta sostitutiva', fmt(summary.taxDue || 0))}
+        ${renderQuadroLMStat('Residuo / saldo', fmt(summary.residualTax || 0))}
+      </div>
+      <div class="summary-note">
+        <strong>Metodo:</strong> ${escapeHtml(summary.methodLabel || 'Consuntivo')}<br>
+        <strong>Acconti versati:</strong> ${fmt(summary.accontiPaid || 0)}<br>
+        <strong>Contributi deducibili:</strong> ${fmt(summary.contributions || 0)}
+      </div>
+      ${warningHtml}
+      ${noteHtml}
+      <div class="sections">
+        ${sectionsHtml}
+      </div>
+      <div class="footer-note">
+        Questo documento e un supporto operativo e non sostituisce la verifica del commercialista o del modello telematico ufficiale.
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
+function showQuadroLMToast(message, tone = 'success') {
+  const toast = document.getElementById('quadroLMToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.dataset.tone = tone;
+  toast.classList.add('show');
+  if (quadroLMToastTimer) clearTimeout(quadroLMToastTimer);
+  quadroLMToastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2200);
+}
+
+function openQuadroLMModal() {
+  if (!currentProfile) return;
+  const year = currentYear;
+  quadroLMState.year = year;
+  quadroLMState.base = getQuadroLMBaseModel(year);
+  const saved = getQuadroLMSavedState(year);
+  quadroLMState.draft = { ...quadroLMState.base.values, ...saved.overrides };
+  quadroLMState.open = true;
+  renderQuadroLMModal();
+  const modal = document.getElementById('quadroLMModal');
+  if (!modal) return;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('profile-modal-open');
+}
+
+function closeQuadroLMModal() {
+  const modal = document.getElementById('quadroLMModal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('profile-modal-open');
+  if (quadroLMToastTimer) clearTimeout(quadroLMToastTimer);
+  quadroLMState.open = false;
+  quadroLMState.year = null;
+  quadroLMState.base = null;
+  quadroLMState.draft = null;
+}
+
+function updateQuadroLMField(key, value) {
+  if (!quadroLMState.draft) return;
+  quadroLMState.draft[key] = normalizeQuadroLMInput(key, value);
+  renderQuadroLMModal();
+}
+
+function saveQuadroLMDraft() {
+  if (!quadroLMState.base || !quadroLMState.draft) return;
+  const year = quadroLMState.year || currentYear;
+  const overrides = {};
+  for (const key of Object.keys(quadroLMState.base.values || {})) {
+    if (String(quadroLMState.draft[key] ?? '') !== String(quadroLMState.base.values[key] ?? '')) {
+      overrides[key] = quadroLMState.draft[key];
+    }
+  }
+  const yearData = getYearDataFor(year) || ensureDataShape({}, year);
+  yearData.lmQuadro = {
+    overrides,
+    updatedAt: new Date().toISOString()
+  };
+  saveYearData(year, yearData);
+  quadroLMState.base = getQuadroLMBaseModel(year);
+  quadroLMState.draft = { ...quadroLMState.base.values, ...overrides };
+  renderQuadroLMModal();
+  showQuadroLMToast('Quadro LM salvato', 'success');
+}
+
+function exportQuadroLMPrint() {
+  const year = quadroLMState.year || currentYear;
+  const model = getQuadroLMModel(year, quadroLMState.draft || getQuadroLMSavedState(year).overrides);
+  const html = buildQuadroLMPrintHtml(model);
+  const win = window.open('', '_blank', 'noopener,noreferrer');
+  if (!win) {
+    showQuadroLMToast('Popup bloccato dal browser', 'warn');
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
+function renderQuadroLMModal() {
+  const el = document.getElementById('quadroLMContent');
+  if (!el) return;
+  const year = quadroLMState.year || currentYear;
+  const model = getQuadroLMModel(year, quadroLMState.draft || getQuadroLMSavedState(year).overrides);
+  quadroLMState.base = quadroLMState.base || getQuadroLMBaseModel(year);
+  quadroLMState.draft = model.values;
+  const summary = model.summary || {};
+  const warningHtml = (model.warnings && model.warnings.length)
+    ? `<div class="lm-warning-list">${model.warnings.map(note => `<div class="lm-warning">${escapeHtml(note)}</div>`).join('')}</div>`
+    : '';
+  const noteHtml = (model.notes && model.notes.length)
+    ? `<div class="lm-note-list">${model.notes.map(note => `<div class="lm-note">${escapeHtml(note)}</div>`).join('')}</div>`
+    : '';
+  const sectionsHtml = QUADRO_LM_SECTIONS.map(section => renderQuadroLMSection(model, section, false)).join('');
+  el.innerHTML = `
+    <div class="lm-sheet">
+      <div class="lm-sheet-header">
+        <div class="lm-sheet-copy">
+          <div class="lm-sheet-kicker">Quadro LM</div>
+          <h2 id="quadroLMTitle">Riepilogo ${escapeHtml(String(year))}</h2>
+          <p>Campi precompilati dai dati dell'app e modificabili manualmente. I valori segnati come stimati possono cambiare finché l'anno resta aperto.</p>
+        </div>
+        <div class="lm-sheet-actions">
+          <button class="btn-add lm-copy-btn" type="button" onclick="exportQuadroLMPrint()">Apri versione stampabile</button>
+          <button class="btn-add" type="button" onclick="saveQuadroLMDraft()">Salva</button>
+          <button class="btn-add profile-secondary-btn" type="button" onclick="closeQuadroLMModal()">Annulla</button>
+          <button class="profile-close-btn" type="button" onclick="closeQuadroLMModal()" aria-label="Chiudi quadro LM">&times;</button>
+        </div>
+      </div>
+      <div id="quadroLMToast" class="lm-toast" aria-live="polite"></div>
+      <div class="lm-meta-strip">
+        ${renderProfileMetaPill('Anno', year)}
+        ${renderProfileMetaPill('Metodo', summary.methodLabel || 'Consuntivo')}
+        ${renderProfileMetaPill('Regime', model.settings && model.settings.regime === 'forfettario' ? 'Forfettario' : 'Altro')}
+        ${renderProfileMetaPill('Ateco', model.profile && model.profile.ateco ? model.profile.ateco : '-')}
+      </div>
+      <div class="lm-summary-grid">
+        ${renderQuadroLMStat('Lordo incassato', fmt(summary.grossCollected || 0), 'accent')}
+        ${renderQuadroLMStat('Imponibile forfettario', fmt(summary.taxableBase || 0), '')}
+        ${renderQuadroLMStat('Imposta sostitutiva', fmt(summary.taxDue || 0), 'accent')}
+        ${renderQuadroLMStat('Residuo / saldo', fmt(summary.residualTax || 0), summary.residualTax > 0 ? 'warn' : 'ok')}
+      </div>
+      <div class="lm-summary-grid lm-summary-grid-secondary">
+        ${renderQuadroLMStat('Contributi deducibili', fmt(summary.contributions || 0), '')}
+        ${renderQuadroLMStat('Acconti versati', fmt(summary.accontiPaid || 0), '')}
+        ${renderQuadroLMStat('Credito', fmt(summary.taxCredit || 0), summary.taxCredit > 0 ? 'warn' : 'ok')}
+        ${renderQuadroLMStat('Prossimo acconto', fmt((summary.nextYearAcconto1 || 0) + (summary.nextYearAcconto2 || 0)), '')}
+      </div>
+      ${warningHtml}
+      ${noteHtml}
+      <div class="lm-sections">
+        ${sectionsHtml}
+      </div>
+      <div class="lm-footer-note">
+        Il Quadro LM e un riepilogo operativo: puoi usarlo per preparare la compilazione, ma il file telematico ufficiale va sempre verificato con il professionista o il software ministeriale.
+      </div>
+    </div>
+  `;
+}
+
 function openProfileFiscalModal() {
   if (!currentProfile) return;
   renderProfiloFiscale();
@@ -2222,6 +2952,16 @@ function closeProfileFiscalModal() {
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const modal = document.getElementById('profileFiscalModal');
+  const ocrModal = document.getElementById('ocrPagamentoModal');
+  const lmModal = document.getElementById('quadroLMModal');
+  if (ocrModal && ocrModal.classList.contains('open')) {
+    closeOcrPagamentoModal();
+    return;
+  }
+  if (lmModal && lmModal.classList.contains('open')) {
+    closeQuadroLMModal();
+    return;
+  }
   if (modal && modal.classList.contains('open')) closeProfileFiscalModal();
 });
 
@@ -2285,6 +3025,11 @@ function renderProfiloFiscale() {
       ${renderProfileField('Nome / denominazione', profile.nome, { key: 'nome', editable: true })}
       ${renderProfileField('Codice fiscale', profile.codiceFiscale, { key: 'codiceFiscale', editable: true })}
       ${renderProfileField('Partita IVA', profile.partitaIva, { key: 'partitaIva', editable: true })}
+      ${renderProfileField('Indirizzo', profile.indirizzo || '-', { key: 'indirizzo', editable: true, full: true })}
+      ${renderProfileField('CAP', profile.cap || '-', { key: 'cap', editable: true })}
+      ${renderProfileField('Citta', profile.citta || '-', { key: 'citta', editable: true })}
+      ${renderProfileField('Provincia', profile.provincia || '-', { key: 'provincia', editable: true })}
+      ${renderProfileField('Nazione', profile.nazione || 'IT', { key: 'nazione', editable: true })}
       ${renderProfileField('Codice ATECO', profile.ateco, { key: 'ateco', editable: true, calcParam: true, info: 'Determina il coefficiente di redditivita e aiuta a documentare il profilo.' })}
       ${renderProfileField('Descrizione ATECO', profile.atecoDescrizione, { key: 'atecoDescrizione', editable: true, full: true })}
       ${renderProfileField('Note profilo', profile.note || '-', { key: 'note', editable: true, mode: 'textarea', full: true })}
@@ -2374,6 +3119,18 @@ function renderProfiloFiscale() {
         step: '0.01',
         calcParam: true,
         info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL. Per artigiani IT tipicamente ~5,19 ‰.'
+      })}
+      ${renderProfileField('IBAN', profile.iban || '-', {
+        key: 'iban',
+        editable: true,
+        full: true,
+        info: 'Usato come default nella generazione PDF/XML della fattura.'
+      })}
+      ${renderProfileField('Modalita pagamento default', profile.modalitaPagamento || '-', {
+        key: 'modalitaPagamento',
+        editable: true,
+        full: true,
+        info: 'Usata come default nella fattura; resta modificabile prima di generare PDF o XML.'
       })}
       ${renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
         key: 'agevolazioneStartUp',
@@ -2476,7 +3233,7 @@ function renderCalcoloForfettario(h, el) {
   h += drawDonut(netto, tasse, contrib);
   h += `</div>`;
 
-  h += `<div class="panel"><h3>Riepilogo Annuale</h3>`;
+  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add lm-open-btn" type="button" onclick="openQuadroLMModal()">Genera Quadro LM</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
   h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
@@ -3215,16 +3972,16 @@ function renderAccantonamento() {
       const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
       h += `<text x="${x}" y="${H-8}" fill="#aaa" font-size="8" text-anchor="middle">${MONTHS_SHORT[md[i].mese-1]}${md[i].isCrossYear?'*':''}</text>`;
     }
-    h += `<path d="${dP}" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-    h += `<path d="${mP}" fill="none" stroke="#4ecca3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    h += `<path d="${dP}" fill="none" stroke="var(--color-chart-tasse)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    h += `<path d="${mP}" fill="none" stroke="var(--color-cal-lavoro)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
     for (let i = 0; i < n; i++) {
       const x = pL + (n > 1 ? (i/(n-1))*pW : pW/2);
-      h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="#e94560"/>`;
-      if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="#4ecca3"/>`;
+      h += `<circle cx="${x}" cy="${pT+(1-md[i].cD/mxC)*pH}" r="3" fill="var(--color-chart-tasse)"/>`;
+      if (md[i].cM > 0) h += `<circle cx="${x}" cy="${pT+(1-md[i].cM/mxC)*pH}" r="3" fill="var(--color-cal-lavoro)"/>`;
     }
     h += `</svg><div style="display:flex;gap:16px;margin-top:8px;font-size:.75rem;color:var(--text2)">
-      <span><span style="display:inline-block;width:16px;height:3px;background:#e94560;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
-      <span><span style="display:inline-block;width:16px;height:3px;background:#4ecca3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
+      <span><span style="display:inline-block;width:16px;height:3px;background:var(--color-chart-tasse);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
+      <span><span style="display:inline-block;width:16px;height:3px;background:var(--color-cal-lavoro);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Accantonato</span>
     </div></div>`;
   }
 
@@ -3352,7 +4109,10 @@ function buildPagamentiLedgerPanel(summary, options) {
     }
   }
 
-  body += `<button class="btn-add" onclick="addPagamento()">+ Aggiungi pagamento</button>`;
+  body += `<div class="pagamenti-actions">
+    <button class="btn-add" onclick="addPagamento()">+ Aggiungi pagamento</button>
+    <button type="button" class="btn-ghost ocr-import-btn" onclick="openOcrPagamentoModal()">Importa da foto/PDF</button>
+  </div>`;
   body += `<div style="font-size:.78rem;color:var(--text2);margin-top:8px">I nuovi pagamenti vengono aggiunti all'anno ${currentYear}.</div>`;
   body += `<div style="margin-top:16px">${row('Totale pagamenti registrati', fmt(summary.totPag), 'highlight', 'negative')}</div>`;
 
@@ -5477,6 +6237,7 @@ function renderCalendar() {
 // ═══════════════════ Render: Fatture ═══════════════════
 function renderFatture() {
   const table = document.getElementById('fattureTable');
+  if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
   let h = `<thead><tr><th>Mese</th><th>Importo</th><th>Desc</th><th>Stimato</th><th>Tassato nel</th><th></th></tr></thead><tbody>`;
   let tF = 0, tS = 0;
 
@@ -5786,7 +6547,13 @@ function renderBudget() {
       const isAuto = b.auto && !(parseFloat(b.importo) > 0);
       return { nome: b.nome, val: isAuto ? autoAmount : (parseFloat(b.importo) || 0), isAuto };
     });
-    const colors = ['#4ecca3','#4a9eff','#f5a623','#e94560','#533483','#e67e22','#2ecc71','#9b59b6','#1abc9c','#e74c3c'];
+    const colors = [
+      getCSSVar('--color-cal-lavoro'), getCSSVar('--color-cal-mezzagiornata'),
+      getCSSVar('--color-cal-ferie'), getCSSVar('--color-chart-tasse'),
+      getCSSVar('--color-cal-donazione'), getCSSVar('--color-cal-malattia'),
+      getCSSVar('--color-success'), getCSSVar('--color-info'),
+      getCSSVar('--color-primary'), getCSSVar('--color-error')
+    ];
     h += `<div style="margin-top:20px"><div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">Distribuzione sul netto mensile</div>`;
     h += `<div style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:12px">`;
     for (let i = 0; i < budgetVals.length; i++) {
@@ -5825,6 +6592,115 @@ function renderBudget() {
 }
 
 // ═══════════════════ Render: Spese ═══════════════════
+// ────────────────────────────────────────────────────────────────────────────────
+// Render: Clienti
+// ────────────────────────────────────────────────────────────────────────────────
+function renderClienteField(cliente, key, label, opts = {}) {
+  const full = opts.full ? ' cliente-field-full' : '';
+  const type = opts.type || 'text';
+  const value = cliente[key] ?? '';
+  const onChange = `updateClienteField(this.closest('.cliente-card').dataset.clientId, '${key}', this.value)`;
+  if (opts.type === 'textarea') {
+    return `<div class="cliente-field${full}">
+      <label>${label}</label>
+      <textarea onchange="${onChange}">${escapeHtml(value)}</textarea>
+    </div>`;
+  }
+  return `<div class="cliente-field${full}">
+    <label>${label}</label>
+    <input type="${type}" value="${escapeHtml(value)}" onchange="${onChange}">
+  </div>`;
+}
+
+function renderClienteCard(cliente) {
+  const summary = cliente.nome || 'Nuovo cliente';
+  const chips = [
+    cliente.partitaIva ? `P.IVA ${escapeHtml(cliente.partitaIva)}` : '',
+    cliente.codiceSDI ? `SDI ${escapeHtml(cliente.codiceSDI)}` : '',
+    cliente.pec ? 'PEC' : '',
+    cliente.nazione && cliente.nazione !== 'IT' ? escapeHtml(cliente.nazione) : 'IT'
+  ].filter(Boolean);
+  return `<details class="cliente-card" data-client-id="${escapeHtml(cliente.id)}">
+    <summary class="cliente-card-summary">
+      <div class="cliente-card-title">
+        <strong>${escapeHtml(summary)}</strong>
+        <span>${escapeHtml(cliente.codiceFiscale || cliente.indirizzo || 'Cliente salvato')}</span>
+      </div>
+      <div class="cliente-card-badges">
+        ${chips.map(chip => `<span class="cliente-chip">${chip}</span>`).join('')}
+      </div>
+    </summary>
+    <div class="cliente-card-body">
+      <div class="cliente-grid">
+        ${renderClienteField(cliente, 'nome', 'Nome / ragione sociale', { full: true })}
+        ${renderClienteField(cliente, 'partitaIva', 'Partita IVA')}
+        ${renderClienteField(cliente, 'codiceFiscale', 'Codice fiscale')}
+        ${renderClienteField(cliente, 'codiceSDI', 'Codice SDI')}
+        ${renderClienteField(cliente, 'pec', 'PEC', { full: true })}
+        ${renderClienteField(cliente, 'indirizzo', 'Indirizzo', { full: true })}
+        ${renderClienteField(cliente, 'cap', 'CAP')}
+        ${renderClienteField(cliente, 'citta', 'Città')}
+        ${renderClienteField(cliente, 'provincia', 'Provincia')}
+        ${renderClienteField(cliente, 'nazione', 'Nazione')}
+        ${renderClienteField(cliente, 'note', 'Note', { type: 'textarea', full: true })}
+      </div>
+      <div class="cliente-card-footer">
+        <div class="cliente-card-hint">Le modifiche vengono salvate automaticamente nel profilo corrente.</div>
+        <button class="btn-del cliente-delete-btn" type="button" onclick="deleteCliente(this.closest('.cliente-card').dataset.clientId)">Elimina</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderClienti() {
+  const el = document.getElementById('clientiContent');
+  if (!el) return;
+  if (!currentProfile) {
+    el.innerHTML = `<div class="cliente-empty">Accedi per gestire l'anagrafica clienti.</div>`;
+    return;
+  }
+  const activeEl = document.activeElement;
+  const preserveSearchFocus = activeEl && activeEl.id === 'clientiSearch';
+  const searchSelectionStart = preserveSearchFocus && typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null;
+  const searchSelectionEnd = preserveSearchFocus && typeof activeEl.selectionEnd === 'number' ? activeEl.selectionEnd : null;
+  const list = getClienti();
+  const query = (clientiUiState.search || '').trim().toLowerCase();
+  const filtered = list.filter(cliente => matchesClienteSearch(cliente, query));
+  let h = `<div class="clienti-toolbar">
+    <div class="clienti-search">
+      <label for="clientiSearch">Cerca cliente</label>
+      <input id="clientiSearch" type="search" value="${escapeHtml(clientiUiState.search || '')}" placeholder="Nome, P.IVA, PEC, citta..." oninput="setClientiSearch(this.value)">
+    </div>
+    <div class="clienti-toolbar-actions">
+      <div class="clienti-count">${filtered.length} / ${list.length} clienti</div>
+      <button class="btn-add" type="button" onclick="addCliente()">+ Nuovo cliente</button>
+    </div>
+  </div>`;
+  if (filtered.length === 0) {
+    h += `<div class="cliente-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
+  } else {
+    h += `<div class="clienti-grid">`;
+    for (const cliente of filtered) {
+      h += renderClienteCard(cliente);
+    }
+    h += `</div>`;
+  }
+  el.innerHTML = h;
+  if (preserveSearchFocus) {
+    const searchEl = document.getElementById('clientiSearch');
+    if (searchEl) {
+      searchEl.focus();
+      if (searchSelectionStart !== null && searchSelectionEnd !== null && typeof searchEl.setSelectionRange === 'function') {
+        try {
+          searchEl.setSelectionRange(searchSelectionStart, searchSelectionEnd);
+        } catch {
+          // ignore selection restore issues on some browsers
+        }
+      }
+    }
+  }
+}
+
 function renderSpese() {
   const el = document.getElementById('speseContent');
   const speseAttive = getSpeseAttiveForYear(currentYear);
@@ -5872,8 +6748,10 @@ function recalcAll() {
   renderAccantonamento();
   renderScadenziario();
   renderBudget();
+  renderClienti();
   if (S().regime === 'ordinario') renderSpese();
   renderProfiloFiscale();
+  if (quadroLMState.open) renderQuadroLMModal();
 }
 
 // ═══════════════════ Tab navigation ═══════════════════
@@ -5902,6 +6780,7 @@ const NAV_LABELS = {
   calendar:       { full: 'Calendario', short: 'Calend.' },
   fatture:        { full: 'Fatture', short: 'Fatture' },
   budget:         { full: 'Budget', short: 'Budget' },
+  clienti:        { full: 'Clienti', short: 'Clienti' },
   spese:          { full: 'Spese', short: 'Spese' },
   settings:       { full: 'Impostazioni', short: 'Impost.' }
 };
