@@ -125,6 +125,7 @@ async function doLogin() {
     return;
   }
   currentProfile = profile;
+  clearYearDataCache();
   sessionStorage.setItem('currentProfile', profile);
   document.getElementById('loginScreen').classList.add('hidden');
 
@@ -530,6 +531,11 @@ const FORFETTARIO_RULES = {
 
 let currentYear = new Date().getFullYear();
 let data = {};
+let yearDataCache = {};
+
+function clearYearDataCache() {
+  yearDataCache = {};
+}
 
 function getActualCalendarYear() {
   return new Date().getFullYear();
@@ -810,14 +816,18 @@ function loadYearData(y) {
     syncProfileFieldsToSettings(shaped.settings, y);
     return shaped;
   }
+  if (yearDataCache[y]) return yearDataCache[y];
+
   const raw = localStorage.getItem(storageKey(y));
   if (!raw) return null;
   const shaped = ensureDataShape(JSON.parse(raw), y);
   syncProfileFieldsToSettings(shaped.settings, y);
+  yearDataCache[y] = shaped;
   return shaped;
 }
 
 function loadData() {
+  clearYearDataCache();
   const raw = localStorage.getItem(storageKey());
   data = ensureDataShape(raw ? JSON.parse(raw) : {}, currentYear);
   syncProfileFieldsToSettings(data.settings, currentYear);
@@ -829,6 +839,7 @@ function migrateFatture() {
 }
 
 function saveData() {
+  clearYearDataCache();
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
   localStorage.setItem(storageKey(), JSON.stringify(data));
   if (typeof syncToCloud === 'function' && currentProfile) {
@@ -837,6 +848,7 @@ function saveData() {
 }
 
 function saveYearData(year, yearData) {
+  clearYearDataCache();
   const normalized = ensureDataShape(yearData, year);
   syncProfileFieldsToSettings(normalized.settings, year);
   if (year === currentYear) {
@@ -1714,7 +1726,18 @@ function fmt(n) {
 }
 function fmtPct(n) { return (n * 100).toFixed(1) + '%'; }
 function row(label, val, cls, valCls) {
-  return `<div class="row ${cls||''}"><label>${label}</label><span class="val ${valCls||''}">${val}</span></div>`;
+  // Check if negative based on explicit class, numeric value, or formatted string content
+  let isNeg = valCls === 'negative';
+  if (!isNeg && typeof val === 'number' && val < -0.001) isNeg = true;
+  if (!isNeg && typeof val === 'string' && (val.includes('-') || val.includes('−'))) isNeg = true;
+
+  const isPositive = valCls === 'positive';
+  const displayVal = val === undefined || val === null ? '—' : val;
+
+  return `<div class="row ${cls||''}">
+    <label>${label}</label>
+    <span class="val ${valCls||''} ${isNeg ? 'negative' : ''} ${isPositive ? 'positive' : ''}">${displayVal}</span>
+  </div>`;
 }
 
 // ═══════════════════ Donut ═══════════════════
@@ -3102,7 +3125,11 @@ function renderAccantonamento() {
     Basato solo su fatture reali pagate nel ${currentYear}. % effettiva: <b style="color:var(--accent)">${fmtPct(perc)}</b></div>`;
 
   if (fatture.length === 0) {
-    h += `<div style="font-size:.88rem;color:var(--text2);padding:20px;text-align:center">Nessuna fattura pagata nel ${currentYear}.</div>`;
+    h += `<div class="scad-empty" style="text-align:center;padding:40px 20px;border:none">
+        <div style="font-size:2rem;margin-bottom:12px;opacity:.5">💰</div>
+        <div style="font-weight:600;color:var(--text)">Nessuna fattura pagata nel ${currentYear}</div>
+        <div style="font-size:.82rem;color:var(--text2);margin-top:4px">Gli accantonamenti vengono calcolati man mano che registri l'incasso delle fatture.</div>
+      </div>`;
     h += `</div>`;
     el.innerHTML = h;
     return;
@@ -5464,8 +5491,22 @@ function renderCalendar() {
 // ═══════════════════ Render: Fatture ═══════════════════
 function renderFatture() {
   const table = document.getElementById('fattureTable');
+  const hasData = Array.from({length:12}, (_, i) => getFatture(i+1)).some(f => f.length > 0 && f[0].importo > 0);
+
   let h = `<thead><tr><th>Mese</th><th>Importo</th><th>Desc</th><th>Stimato</th><th>Tassato nel</th><th></th></tr></thead><tbody>`;
   let tF = 0, tS = 0;
+
+  if (!hasData) {
+    h = `<tr><td colspan="6">
+      <div class="scad-empty" style="text-align:center;padding:40px 20px;border:none">
+        <div style="font-size:2rem;margin-bottom:12px;opacity:.5">📝</div>
+        <div style="font-weight:600;color:var(--text)">Nessuna fattura registrata</div>
+        <div style="font-size:.82rem;color:var(--text2);margin-top:4px">Inizia ad aggiungere i tuoi compensi per vedere le proiezioni fiscali.</div>
+      </div>
+    </td></tr>`;
+    table.innerHTML = h;
+    return;
+  }
 
   for (let m = 1; m <= 12; m++) {
     const stim = getMonthStimato(m);
@@ -5731,6 +5772,14 @@ function renderBudget() {
 
   h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
 
+  if (data.budget.length === 0) {
+    h += `<div class="scad-empty" style="margin-top:12px;text-align:center;padding:40px 20px;border-radius:var(--radius-md);background:var(--surface3);border:1px dashed var(--color-border)">
+      <div style="font-size:2rem;margin-bottom:12px;opacity:.5">📊</div>
+      <div style="font-weight:600;color:var(--text)">Nessun dato di budget</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-top:4px">Aggiungi delle voci per pianificare le tue spese mensili basandoti sul tuo netto.</div>
+    </div>`;
+  }
+
   // Calculate auto-fill: items with auto=true and no manual importo get the remaining split equally
   let totManual = 0, autoCount = 0;
   for (const b of data.budget) {
@@ -5767,7 +5816,7 @@ function renderBudget() {
   h += row('Rimanente', fmt(rimanente), 'highlight', rimanente >= 0 ? 'positive' : 'negative');
   h += `</div>`;
 
-  if (data.budget.length > 0 && nettoMensile > 0) {
+  if (data.budget.length > 0 && nettoMensile > 0 && totBudget > 0) {
     // Build computed values array (including auto items)
     const budgetVals = data.budget.map(b => {
       const isAuto = b.auto && !(parseFloat(b.importo) > 0);
