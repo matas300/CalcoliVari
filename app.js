@@ -804,16 +804,21 @@ function ensureDataShape(target, year = currentYear) {
   return out;
 }
 
+const _yearDataCache = {};
+
 function loadYearData(y) {
   if (y === currentYear) {
     const shaped = ensureDataShape(data, y);
     syncProfileFieldsToSettings(shaped.settings, y);
     return shaped;
   }
-  const raw = localStorage.getItem(storageKey(y));
+  const key = storageKey(y);
+  if (_yearDataCache[key]) return _yearDataCache[key];
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   const shaped = ensureDataShape(JSON.parse(raw), y);
   syncProfileFieldsToSettings(shaped.settings, y);
+  _yearDataCache[key] = shaped;
   return shaped;
 }
 
@@ -830,7 +835,9 @@ function migrateFatture() {
 
 function saveData() {
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
-  localStorage.setItem(storageKey(), JSON.stringify(data));
+  const key = storageKey();
+  delete _yearDataCache[key];
+  localStorage.setItem(key, JSON.stringify(data));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, currentYear, data);
   }
@@ -844,7 +851,9 @@ function saveYearData(year, yearData) {
     saveData();
     return;
   }
-  localStorage.setItem(storageKey(year), JSON.stringify(normalized));
+  const key = storageKey(year);
+  delete _yearDataCache[key];
+  localStorage.setItem(key, JSON.stringify(normalized));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, year, normalized);
   }
