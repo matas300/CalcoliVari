@@ -171,14 +171,23 @@ async function syncAllToCloud(profile) {
       if (key && key.startsWith(prefix)) keys.push(key);
     }
     let count = 0;
+
+    // PREPARE PHASE
+    const payloads = [];
     for (const key of keys) {
       const year = key.substring(prefix.length);
       const yearData = JSON.parse(localStorage.getItem(key));
       if (!yearData) continue;
-      const docRef = _fs.doc(db, 'profiles', profile, 'years', year);
-      await _fs.setDoc(docRef, cleanForFirestore(yearData));
-      count++;
+      payloads.push({ year, data: cleanForFirestore(yearData) });
     }
+
+    // EXECUTE PHASE
+    const promises = payloads.map(p => {
+      const docRef = _fs.doc(db, 'profiles', profile, 'years', p.year);
+      return _fs.setDoc(docRef, p.data).then(() => { count++; });
+    });
+
+    await Promise.all(promises);
     setSyncStatus('online');
     console.log('Upload cloud:', count, 'anni per', profile);
   } catch (err) {
