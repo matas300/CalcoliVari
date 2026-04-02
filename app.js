@@ -257,7 +257,29 @@ const PAYMENT_TYPES = {
   misto:      { label: 'Misto', color: 'var(--blue)' },
   altro:      { label: 'Altro', color: 'var(--text2)' }
 };
+// Fonte: circolari INPS annuali (Gestione Artigiani e Commercianti)
+// contribFissi = minimaleInps × aliquota + 7.44 (contributo aggiuntivo fisso)
 const OFFICIAL_ARTCOM_INPS = {
+  2020: {
+    minimaleInps: 15953,
+    artigiano: { contribFissi: 3836.16, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3912.73, aliqContributi: 24.48 }
+  },
+  2021: {
+    minimaleInps: 15953,
+    artigiano: { contribFissi: 3836.16, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3912.73, aliqContributi: 24.48 }
+  },
+  2022: {
+    minimaleInps: 16243,
+    artigiano: { contribFissi: 3905.76, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 3983.73, aliqContributi: 24.48 }
+  },
+  2023: {
+    minimaleInps: 17504,
+    artigiano: { contribFissi: 4208.40, aliqContributi: 24.0 },
+    commerciante: { contribFissi: 4292.42, aliqContributi: 24.48 }
+  },
   2024: {
     minimaleInps: 18415,
     artigiano: { contribFissi: 4427.04, aliqContributi: 24.0 },
@@ -805,7 +827,8 @@ function getOfficialArtComInpsParams(year, category) {
   const targetYear = parseInt(year, 10) || currentYear;
   const categoryKey = normalizeInpsCategory(category);
   const knownYears = Object.keys(OFFICIAL_ARTCOM_INPS).map(Number).sort((a, b) => a - b);
-  const fallbackYear = knownYears.filter(y => y <= targetYear).pop() || knownYears[knownYears.length - 1];
+  const below = knownYears.filter(y => y <= targetYear);
+  const fallbackYear = below.length > 0 ? below[below.length - 1] : knownYears[0];
   const yearUsed = OFFICIAL_ARTCOM_INPS[targetYear] ? targetYear : fallbackYear;
   const base = OFFICIAL_ARTCOM_INPS[yearUsed];
   if (!base) return null;

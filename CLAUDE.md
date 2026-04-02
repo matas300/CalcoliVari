@@ -58,7 +58,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 ### INPS Modes
 - **Artigiani/Commercianti**: fixed quarterly contributions + variable on excess over minimale
   - Categories: artigiano vs commerciante (different rates/fixed amounts)
-  - Official params in `OFFICIAL_ARTCOM_INPS` (2024-2026), with year fallback
+  - Official params in `OFFICIAL_ARTCOM_INPS` (2020-2026), with year fallback (past years fall back to 2020, future to 2026)
   - Can use official values (`usaInpsUfficiale=1`) or manual override
 - **Gestione Separata**: percentage on full taxable income, no fixed contributions, no minimale
 - Riduzione 35%: applies to artigiani/commercianti contributions only (both fixed and variable)
