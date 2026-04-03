@@ -3868,9 +3868,9 @@ function renderPaymentDatePicker() {
   const dim = daysInMonth(state.viewYear, state.viewMonth);
   const today = new Date();
   let html = `<div class="payment-date-head">
-    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(-1)">&lsaquo;</button>
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(-1)" aria-label="Mese precedente">&lsaquo;</button>
     <div class="payment-date-title">${MONTHS[state.viewMonth - 1]} ${state.viewYear}</div>
-    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(1)">&rsaquo;</button>
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(1)" aria-label="Mese successivo">&rsaquo;</button>
   </div>`;
   html += `<div class="payment-date-weekdays">${['L','M','M','G','V','S','D'].map(d => `<span>${d}</span>`).join('')}</div>`;
   html += `<div class="payment-date-grid">`;
@@ -4134,7 +4134,7 @@ function buildPagamentiLedgerPanel(summary, options) {
         </select>
         <input type="text" value="${p.descrizione || ''}" placeholder="es. F24 giugno, saldo INPS..." onchange="setPagamentoField(${anno}, ${idx}, 'descrizione', this.value)">
         <input type="number" value="${p.importo || ''}" placeholder="0" step="0.01" onchange="setPagamentoImporto(${anno}, ${idx}, this.value)">
-        <button class="btn-del" title="Elimina pagamento${storicoLabel}" onclick="removePagamento(${anno}, ${idx})">&times;</button>
+        <button class="btn-del" title="Elimina pagamento${storicoLabel}" aria-label="Elimina pagamento${storicoLabel}" onclick="removePagamento(${anno}, ${idx})">&times;</button>
       </div>`;
     }
   }
@@ -5464,7 +5464,7 @@ function renderScadenziarioPaymentEvents(row) {
           <span class="payment-date-meta">Cassa ${event.cashYear}</span>
         </button>
         <input type="number" value="${event.amount || ''}" step="0.01" onchange="setPagamentoImporto(${event.anno}, ${event._idx}, this.value)">
-        <button class="btn-del" title="Elimina pagamento" onclick="removePagamento(${event.anno}, ${event._idx})">&times;</button>
+        <button class="btn-del" title="Elimina pagamento" aria-label="Elimina pagamento" onclick="removePagamento(${event.anno}, ${event._idx})">&times;</button>
       </div>`;
     }
     h += `</div>`;
@@ -6013,7 +6013,7 @@ function renderScadenziario() {
         const keyEsc = rowItem.key.replace(/'/g, "\\'");
         pagatoHtml = `<span style="color:var(--green)">${fmt(linkedPay.importo)}</span>`;
         if (delta !== 0) pagatoHtml += `<div class="scad-range">(${delta > 0 ? '+' : ''}${fmt(delta)})</div>`;
-        pagatoHtml += `<button class="scad-undo-btn" onclick="removePagamentoByScheduleKey('${keyEsc}')" title="Annulla pagamento">&times;</button>`;
+        pagatoHtml += `<button class="scad-undo-btn" onclick="removePagamentoByScheduleKey('${keyEsc}')" title="Annulla pagamento" aria-label="Annulla pagamento">&times;</button>`;
       } else if (rowItem.key) {
         const escaped = rowItem.key.replace(/'/g, "\\'");
         const dueIso = `${rowItem.due.year}-${pad2(rowItem.due.date.getMonth() + 1)}-${pad2(rowItem.due.date.getDate())}`;
@@ -6326,8 +6326,8 @@ function renderFatture() {
             ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
           </div></td>
           <td data-label="" class="fatt-actions">
-            ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi">+</button>` : ''}
-            <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi">&times;</button>
+            ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi" aria-label="Aggiungi fattura">+</button>` : ''}
+            <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi" aria-label="Rimuovi fattura">&times;</button>
           </td></tr>`;
       }
       h += `<tr class="fatt-total-row"><td data-label=""></td>
@@ -6559,7 +6559,7 @@ function renderBudget() {
         onchange="budgetSetPercent(${i},this.value)" style="text-align:center">
       <label class="budget-auto-check"><input type="checkbox" ${b.auto?'checked':''}
         onchange="data.budget[${i}].auto=this.checked;if(this.checked)data.budget[${i}].importo=0;saveData();renderBudget()"></label>
-      <button class="btn-del" onclick="data.budget.splice(${i},1);saveData();renderBudget()">&times;</button>
+      <button class="btn-del" onclick="data.budget.splice(${i},1);saveData();renderBudget()" aria-label="Rimuovi voce budget">&times;</button>
     </div>`;
   }
 
@@ -6749,7 +6749,7 @@ function renderSpese() {
       <input type="number" value="${sp.deducibilita||''}" step="0.01" min="0" max="1" placeholder="0-1" onchange="data.spese[${i}].deducibilita=this.value;saveData();recalcAll()">
       <input type="number" value="${sp.anni||1}" min="1" onchange="data.spese[${i}].anni=this.value;saveData();recalcAll()">
       <span style="font-size:.85rem;color:var(--green)">${fmt(annua)}</span>
-      <button class="btn-del" onclick="data.spese.splice(${i},1);saveData();recalcAll()">&times;</button>
+      <button class="btn-del" onclick="data.spese.splice(${i},1);saveData();recalcAll()" aria-label="Rimuovi spesa">&times;</button>
     </div>`;
   }
   h += `<button class="btn-add" onclick="data.spese.push({titolo:'',costo:0,deducibilita:1,anni:1});saveData();renderSpese()">+ Aggiungi spesa</button>`;
