@@ -42,9 +42,9 @@
     <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
     <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni">&#9881;</button>
     <div class="year-selector">
-    <button onclick="changeYear(-1)">&lt;</button>
-    <span id="yearDisplay">2026</span>
-    <button onclick="changeYear(1)">&gt;</button>
+    <button onclick="changeYear(-1)" aria-label="Anno precedente">&lt;</button>
+    <span id="yearDisplay" aria-live="polite">2026</span>
+    <button onclick="changeYear(1)" aria-label="Anno successivo">&gt;</button>
     </div>
   </div>
 </header>
