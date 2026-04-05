@@ -49,36 +49,36 @@
   </div>
 </header>
 
-<nav id="nav">
-  <button class="active" data-tab="calcolo">Regime Forfettario</button>
-  <button data-tab="accantonamento">Tasse Accantonate</button>
-  <button data-tab="scadenziario">Scadenziario</button>
-  <button data-tab="calendar">Calendario</button>
-  <button data-tab="fatture">Fatture</button>
-  <button data-tab="budget">Budget</button>
-  <button data-tab="clienti">Clienti</button>
-  <button data-tab="spese" style="display:none">Spese</button>
-  <button data-tab="settings">Impostazioni</button>
+<nav id="nav" role="tablist">
+  <button class="active" data-tab="calcolo" role="tab" id="nav-calcolo" aria-controls="tab-calcolo" aria-selected="true">Regime Forfettario</button>
+  <button data-tab="accantonamento" role="tab" id="nav-accantonamento" aria-controls="tab-accantonamento" aria-selected="false">Tasse Accantonate</button>
+  <button data-tab="scadenziario" role="tab" id="nav-scadenziario" aria-controls="tab-scadenziario" aria-selected="false">Scadenziario</button>
+  <button data-tab="calendar" role="tab" id="nav-calendar" aria-controls="tab-calendar" aria-selected="false">Calendario</button>
+  <button data-tab="fatture" role="tab" id="nav-fatture" aria-controls="tab-fatture" aria-selected="false">Fatture</button>
+  <button data-tab="budget" role="tab" id="nav-budget" aria-controls="tab-budget" aria-selected="false">Budget</button>
+  <button data-tab="clienti" role="tab" id="nav-clienti" aria-controls="tab-clienti" aria-selected="false">Clienti</button>
+  <button data-tab="spese" style="display:none" role="tab" id="nav-spese" aria-controls="tab-spese" aria-selected="false">Spese</button>
+  <button data-tab="settings" role="tab" id="nav-settings" aria-controls="tab-settings" aria-selected="false">Impostazioni</button>
 </nav>
 
 <div class="container">
-  <div id="tab-calcolo" class="tab-content active">
+  <div id="tab-calcolo" class="tab-content active" role="tabpanel" aria-labelledby="nav-calcolo">
     <div class="calc-grid" id="calcoloGrid"></div>
   </div>
 
-  <div id="tab-accantonamento" class="tab-content">
+  <div id="tab-accantonamento" class="tab-content" role="tabpanel" aria-labelledby="nav-accantonamento">
     <div class="calc-grid" id="accantonamentoGrid"></div>
   </div>
 
-  <div id="tab-scadenziario" class="tab-content">
+  <div id="tab-scadenziario" class="tab-content" role="tabpanel" aria-labelledby="nav-scadenziario">
     <div class="calc-grid" id="scadenziarioGrid"></div>
   </div>
 
-  <div id="tab-calendar" class="tab-content">
+  <div id="tab-calendar" class="tab-content" role="tabpanel" aria-labelledby="nav-calendar">
     <div class="calendar-grid" id="calendarGrid"></div>
   </div>
 
-  <div id="tab-fatture" class="tab-content">
+  <div id="tab-fatture" class="tab-content" role="tabpanel" aria-labelledby="nav-fatture">
     <div class="panel" style="max-width:900px">
       <h3>Fatture</h3>
       <div id="fattureDocsContent"></div>
@@ -87,28 +87,28 @@
     </div>
   </div>
 
-  <div id="tab-budget" class="tab-content">
+  <div id="tab-budget" class="tab-content" role="tabpanel" aria-labelledby="nav-budget">
     <div class="panel" style="max-width:700px">
       <h3>Budget Mensile</h3>
       <div id="budgetContent"></div>
     </div>
   </div>
 
-  <div id="tab-clienti" class="tab-content">
+  <div id="tab-clienti" class="tab-content" role="tabpanel" aria-labelledby="nav-clienti">
     <div class="panel clienti-panel">
       <h3>Anagrafica Clienti</h3>
       <div id="clientiContent"></div>
     </div>
   </div>
 
-  <div id="tab-spese" class="tab-content">
+  <div id="tab-spese" class="tab-content" role="tabpanel" aria-labelledby="nav-spese">
     <div class="panel" style="max-width:900px">
       <h3>Spese Deducibili</h3>
       <div id="speseContent"></div>
     </div>
   </div>
 
-  <div id="tab-settings" class="tab-content">
+  <div id="tab-settings" class="tab-content" role="tabpanel" aria-labelledby="nav-settings">
     <div class="panel" style="max-width:560px">
       <h3>Impostazioni Annuali</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">

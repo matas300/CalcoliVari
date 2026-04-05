@@ -6786,10 +6786,16 @@ function recalcAll() {
 
 // ═══════════════════ Tab navigation ═══════════════════
 function switchToTab(tab) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+  });
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   const navBtn = document.querySelector(`nav button[data-tab="${tab}"]`);
-  if (navBtn) navBtn.classList.add('active');
+  if (navBtn) {
+    navBtn.classList.add('active');
+    navBtn.setAttribute('aria-selected', 'true');
+  }
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.classList.add('active');
   // highlight header settings btn when on settings tab
