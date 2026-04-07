@@ -1,0 +1,3 @@
+## 2025-02-18 - Missing label association pattern
+**Learning:** Found a pattern where form `<label>` elements were missing the `for` attribute and login prompts used `<p>` instead of `<label>`, reducing screen reader accessibility and preventing the labels from acting as click targets to focus the inputs.
+**Action:** When adding or updating forms and inputs in this codebase, ensure all `<label>` elements are properly associated with their corresponding inputs using `for` and `id` attributes, and avoid using generic text tags like `<p>` for form control labels.
