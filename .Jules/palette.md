@@ -1,0 +1,3 @@
+## 2026-04-11 - Associate Labels and Inputs and Improve Focus Styles
+**Learning:** Native form control inputs without an associated label via the `for` attribute create a frustrating experience for users employing screen readers or attempting to tap/click small inputs. Additionally, without strong, global `:focus-visible` styles, keyboard users struggle to navigate the UI effectively.
+**Action:** Always link `<label>` elements to their corresponding inputs using the `for` attribute to increase the clickable area and improve screen reader context. Add `cursor: pointer` to these labels as an additional visual cue. Ensure global `:focus-visible` outlines are set for all interactive elements to support keyboard navigation.

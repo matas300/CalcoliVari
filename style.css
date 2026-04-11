@@ -291,6 +291,12 @@ html[data-theme="light"] .settings-header-btn.active {
   color: var(--color-text);
 }
 
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible, [role="tab"]:focus-visible, [role="button"]:focus-visible, label[for]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { color-scheme: dark; }
 html[data-theme="light"] { color-scheme: light; }
@@ -2529,6 +2535,7 @@ body.profile-modal-open {
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: .05em;
+  cursor: pointer;
 }
 .qpay-input {
   width: 100%;

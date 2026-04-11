@@ -115,11 +115,11 @@
         Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome accanto a <b>Calcoli Partita IVA</b>.
       </div>
       <div class="settings-group">
-        <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
+        <label for="settDailyRate">Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
         <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Anno con reddito da lavoro dipendente</label>
+        <label for="settDipendenteIncome">Anno con reddito da lavoro dipendente</label>
         <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
           <option value="0">No</option>
           <option value="1">Si</option>
@@ -129,7 +129,7 @@
         </div>
       </div>
       <div class="settings-group">
-        <label>Riduzione contributi 35% per l'anno selezionato</label>
+        <label for="settRiduzione35">Riduzione contributi 35% per l'anno selezionato</label>
         <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
           <option value="0">No</option>
           <option value="1">Si</option>
@@ -139,11 +139,11 @@
         </div>
       </div>
       <div class="settings-group">
-        <label>Giorni medi per incasso fattura</label>
+        <label for="settGiorniIncasso">Giorni medi per incasso fattura</label>
         <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="saveSetting('giorniIncasso', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Override INAIL anno corrente (EUR)</label>
+        <label for="settInailCorrente">Override INAIL anno corrente (EUR)</label>
         <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
           onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
         <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
@@ -151,12 +151,12 @@
         </div>
       </div>
       <div class="settings-group">
-        <label>Override INAIL anno successivo (EUR)</label>
+        <label for="settInailSuccessivo">Override INAIL anno successivo (EUR)</label>
         <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
           onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
       </div>
       <div class="settings-group">
-        <label>Diritto annuale Camera di Commercio (EUR)</label>
+        <label for="settDirittoCamerale">Diritto annuale Camera di Commercio (EUR)</label>
         <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
           onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
         <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
@@ -204,7 +204,7 @@
       <div class="qpay-sub" id="qpaySub"></div>
     </div>
     <div class="qpay-body">
-      <label class="qpay-label">Importo versato (€)</label>
+      <label class="qpay-label" for="qpayAmount">Importo versato (€)</label>
       <input id="qpayAmount" type="number" class="qpay-input" min="0.01" step="0.01" placeholder="0,00" onkeydown="if(event.key==='Enter') confirmQuickPay()">
     </div>
     <div class="qpay-actions">
