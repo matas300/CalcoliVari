@@ -1,0 +1,3 @@
+## 2024-05-14 - Tabbed Navigation Polish
+**Learning:** Custom tab implementations often miss proper ARIA roles (`role="tablist"`, `role="tab"`, `role="tabpanel"`) and visual keyboard focus indicators, which severely degrades accessibility. Adding a subtle fade-in transition makes tab switching feel premium, but it must be wrapped in a `@media (prefers-reduced-motion: reduce)` block to respect user preferences.
+**Action:** When working on custom tabs, always ensure semantic ARIA connections (`aria-controls`, `aria-labelledby`) are present, `aria-selected` is dynamically toggled, keyboard focus is visible, and animations respect motion preferences.

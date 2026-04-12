@@ -466,6 +466,11 @@ nav button {
   border-bottom: 2px solid transparent; white-space: nowrap; transition: all .2s;
 }
 nav button:hover { color: var(--text); background: rgba(34,49,61,.55); }
+nav button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: rgba(34,49,61,.4);
+}
 nav button.active {
   color: var(--text);
   border-bottom-color: var(--accent);
@@ -473,9 +478,24 @@ nav button.active {
   box-shadow: inset 0 -1px 0 rgba(79,163,165,.18);
 }
 
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes tabFadeIn {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+}
+
 .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 .tab-content { display: none; }
-.tab-content.active { display: block; }
+.tab-content.active {
+  display: block;
+  animation: tabFadeIn 0.25s ease-out forwards;
+}
 
 /* ── Panels ── */
 .calc-grid {

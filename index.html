@@ -49,36 +49,36 @@
   </div>
 </header>
 
-<nav id="nav">
-  <button class="active" data-tab="calcolo">Regime Forfettario</button>
-  <button data-tab="accantonamento">Tasse Accantonate</button>
-  <button data-tab="scadenziario">Scadenziario</button>
-  <button data-tab="calendar">Calendario</button>
-  <button data-tab="fatture">Fatture</button>
-  <button data-tab="budget">Budget</button>
-  <button data-tab="clienti">Clienti</button>
-  <button data-tab="spese" style="display:none">Spese</button>
-  <button data-tab="settings">Impostazioni</button>
+<nav id="nav" role="tablist" aria-label="Menu Principale">
+  <button class="active" id="navbtn-calcolo" data-tab="calcolo" role="tab" aria-selected="true" aria-controls="tab-calcolo">Regime Forfettario</button>
+  <button id="navbtn-accantonamento" data-tab="accantonamento" role="tab" aria-selected="false" aria-controls="tab-accantonamento">Tasse Accantonate</button>
+  <button id="navbtn-scadenziario" data-tab="scadenziario" role="tab" aria-selected="false" aria-controls="tab-scadenziario">Scadenziario</button>
+  <button id="navbtn-calendar" data-tab="calendar" role="tab" aria-selected="false" aria-controls="tab-calendar">Calendario</button>
+  <button id="navbtn-fatture" data-tab="fatture" role="tab" aria-selected="false" aria-controls="tab-fatture">Fatture</button>
+  <button id="navbtn-budget" data-tab="budget" role="tab" aria-selected="false" aria-controls="tab-budget">Budget</button>
+  <button id="navbtn-clienti" data-tab="clienti" role="tab" aria-selected="false" aria-controls="tab-clienti">Clienti</button>
+  <button id="navbtn-spese" data-tab="spese" style="display:none" role="tab" aria-selected="false" aria-controls="tab-spese">Spese</button>
+  <button id="navbtn-settings" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings">Impostazioni</button>
 </nav>
 
 <div class="container">
-  <div id="tab-calcolo" class="tab-content active">
+  <div id="tab-calcolo" class="tab-content active" role="tabpanel" aria-labelledby="navbtn-calcolo">
     <div class="calc-grid" id="calcoloGrid"></div>
   </div>
 
-  <div id="tab-accantonamento" class="tab-content">
+  <div id="tab-accantonamento" class="tab-content" role="tabpanel" aria-labelledby="navbtn-accantonamento">
     <div class="calc-grid" id="accantonamentoGrid"></div>
   </div>
 
-  <div id="tab-scadenziario" class="tab-content">
+  <div id="tab-scadenziario" class="tab-content" role="tabpanel" aria-labelledby="navbtn-scadenziario">
     <div class="calc-grid" id="scadenziarioGrid"></div>
   </div>
 
-  <div id="tab-calendar" class="tab-content">
+  <div id="tab-calendar" class="tab-content" role="tabpanel" aria-labelledby="navbtn-calendar">
     <div class="calendar-grid" id="calendarGrid"></div>
   </div>
 
-  <div id="tab-fatture" class="tab-content">
+  <div id="tab-fatture" class="tab-content" role="tabpanel" aria-labelledby="navbtn-fatture">
     <div class="panel" style="max-width:900px">
       <h3>Fatture</h3>
       <div id="fattureDocsContent"></div>
@@ -87,28 +87,28 @@
     </div>
   </div>
 
-  <div id="tab-budget" class="tab-content">
+  <div id="tab-budget" class="tab-content" role="tabpanel" aria-labelledby="navbtn-budget">
     <div class="panel" style="max-width:700px">
       <h3>Budget Mensile</h3>
       <div id="budgetContent"></div>
     </div>
   </div>
 
-  <div id="tab-clienti" class="tab-content">
+  <div id="tab-clienti" class="tab-content" role="tabpanel" aria-labelledby="navbtn-clienti">
     <div class="panel clienti-panel">
       <h3>Anagrafica Clienti</h3>
       <div id="clientiContent"></div>
     </div>
   </div>
 
-  <div id="tab-spese" class="tab-content">
+  <div id="tab-spese" class="tab-content" role="tabpanel" aria-labelledby="navbtn-spese">
     <div class="panel" style="max-width:900px">
       <h3>Spese Deducibili</h3>
       <div id="speseContent"></div>
     </div>
   </div>
 
-  <div id="tab-settings" class="tab-content">
+  <div id="tab-settings" class="tab-content" role="tabpanel" aria-labelledby="navbtn-settings">
     <div class="panel" style="max-width:560px">
       <h3>Impostazioni Annuali</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
