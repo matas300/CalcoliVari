@@ -1054,6 +1054,26 @@ body.profile-modal-open {
   background: rgba(216,166,87,.08);
   color: var(--yellow);
 }
+.startup-warning-banner {
+  border: 1px solid rgba(216,166,87,.32);
+  background: rgba(216,166,87,.1);
+  color: var(--yellow);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.startup-warning-banner strong {
+  display: block;
+  font-size: .95rem;
+  margin-bottom: 6px;
+  color: var(--yellow);
+}
+.startup-warning-banner p {
+  margin: 0;
+  font-size: .85rem;
+  color: var(--text);
+}
 .lm-note {
   border-color: rgba(111,167,216,.22);
   background: rgba(111,167,216,.08);

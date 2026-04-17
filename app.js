@@ -2364,7 +2364,7 @@ function renderProfiloFiscale() {
     key: 'agevolazioneStartUp',
     editable: true,
     mode: 'select',
-    info: 'Campo informativo per futuri scenari con aliquota agevolata.',
+    info: 'Flag informativo. Non abbassa automaticamente l aliquota dell imposta sostitutiva: se attivi il flag devi anche impostare manualmente l imposta sostitutiva al 5% in Impostazioni. L agevolazione vale 5 anni (L. 190/2014 art. 1 c. 65-bis).',
     options: [
       { value: '0', label: 'No' },
       { value: '1', label: 'Si' }
@@ -3254,7 +3254,7 @@ function renderProfiloFiscale() {
         key: 'agevolazioneStartUp',
         editable: true,
         mode: 'select',
-        info: 'Campo informativo per futuri scenari con aliquota agevolata.',
+        info: 'Flag informativo. Non abbassa automaticamente l aliquota dell imposta sostitutiva: se attivi il flag devi anche impostare manualmente l imposta sostitutiva al 5% in Impostazioni. L agevolazione vale 5 anni (L. 190/2014 art. 1 c. 65-bis).',
         options: [
           { value: '0', label: 'No' },
           { value: '1', label: 'Si' }
@@ -3346,6 +3346,15 @@ function renderCalcoloForfettario(h, el) {
   const cashPerspective = getForfettarioCashPerspectiveForYear(currentYear);
   const crossYear = getCrossYearInvoices();
   const contribLabel = getContribLabel(c.inpsMode);
+
+  const profileFiscal = getProfileFiscalData();
+  const aliquotaEff = Number(s.impostaSostitutiva);
+  if (profileFiscal.agevolazioneStartUp === 1 && aliquotaEff > 5) {
+    h += `<div class="startup-warning-banner" role="alert" style="grid-column:1/-1">
+      <strong>Agevolazione start-up attiva ma aliquota al ${aliquotaEff}%</strong>
+      <p>Il flag "Agevolazione start-up" e attivo nel profilo, ma l imposta sostitutiva per il ${currentYear} e impostata al ${aliquotaEff}%. La normativa (L. 190/2014 art. 1 c. 65-bis) prevede il 5% per i primi 5 anni di attivita, al ricorrere dei requisiti. Verifica i requisiti e, se applicabile, imposta l aliquota al 5% nelle Impostazioni annuali.</p>
+    </div>`;
+  }
 
   h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo${c.useRiduzione ? ' (riduzione 35%)' : ''}</h3>`;
   h += drawDonut(netto, tasse, contrib);
