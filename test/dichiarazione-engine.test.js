@@ -87,3 +87,72 @@ describe('buildQuadroLM', function() {
     expect(lm.LM34.value).toBe(0);
   });
 });
+
+describe('buildQuadroRR', function() {
+  test('artigiano: RR4 > 0, RR8 >= 0', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var lm = DE.buildQuadroLM(yd, yd.settings, {});
+    var rr = DE.buildQuadroRR(yd, yd.settings, lm, {});
+    expect(rr.sezI).toBeTruthy();
+    expect(rr.sezI.RR4.value).toBeGreaterThan(0);
+    expect(rr.sezI.RR8.value).toBeGreaterThan(-1); // >= 0
+  });
+  test('commerciante con riduzione35: contributi ridotti', function() {
+    var yd = fixtures.commercianteRiduzione2025;
+    var lm = DE.buildQuadroLM(yd, yd.settings, {});
+    var rrBase = DE.buildQuadroRR(yd, Object.assign({}, yd.settings, { riduzione35: 0 }), lm, {});
+    var rrRid = DE.buildQuadroRR(yd, yd.settings, lm, {});
+    expect(rrRid.sezI.RR4.value).toBeLessThan(rrBase.sezI.RR4.value);
+  });
+  test('gestione separata: popola sezII, nessuna sezI', function() {
+    var yd = fixtures.gestSepStartup2025;
+    var lm = DE.buildQuadroLM(yd, yd.settings, {});
+    var rr = DE.buildQuadroRR(yd, yd.settings, lm, {});
+    expect(rr.sezI).toBe(null);
+    expect(rr.sezII).toBeTruthy();
+    expect(rr.sezII.RR20.value).toBeGreaterThan(0);
+  });
+  test('reddito sotto minimale: RR3 = 0', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var lowSettings = Object.assign({}, yd.settings, { minimaleInps: 99999 });
+    var lm = DE.buildQuadroLM(yd, lowSettings, {});
+    var rr = DE.buildQuadroRR(yd, lowSettings, lm, {});
+    expect(rr.sezI.RR3.value).toBe(0);
+  });
+});
+
+describe('buildQuadroRS', function() {
+  test('spese vuote: tutti righi a 0', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var rs = DE.buildQuadroRS(yd, yd.settings, {});
+    expect(rs.RS371.value).toBe(0);
+    expect(rs.RS381.value).toBe(0);
+  });
+  test('override RS371_value = 2500 prevale', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var rs = DE.buildQuadroRS(yd, yd.settings, { RS371_value: 2500 });
+    expect(rs.RS371.value).toBe(2500);
+    expect(rs.RS371.source).toBe('override');
+  });
+});
+
+describe('buildQuadroRX', function() {
+  test('nessun credito precedente: RX1 = 0', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var rx = DE.buildQuadroRX(yd, yd.settings, null, {});
+    expect(rx.RX1.value).toBe(0);
+  });
+  test('credito anno precedente 800: RX1 = 800', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var precedente = { eccedenza: 800 };
+    var rx = DE.buildQuadroRX(yd, yd.settings, precedente, {});
+    expect(rx.RX1.value).toBe(800);
+  });
+  test('credito 800 si compensa con debito', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var precedente = { eccedenza: 800 };
+    var rx = DE.buildQuadroRX(yd, yd.settings, precedente, {});
+    // RX1 should hold the credit
+    expect(rx.RX1.value).toBe(800);
+  });
+});

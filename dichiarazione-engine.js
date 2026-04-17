@@ -107,9 +107,97 @@
         _meta: { coeff: coeff, aliquota: aliquota, perditePregresse: perditePregresse }
       };
     },
-    buildQuadroRR: function() { return {}; },
-    buildQuadroRS: function() { return {}; },
-    buildQuadroRX: function() { return {}; },
+    buildQuadroRR: function(yearData, settings, quadroLM, overrides) {
+      overrides = overrides || {};
+      var reddito = (quadroLM && quadroLM.LM4) ? quadroLM.LM4.value : 0;
+      var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
+
+      function rigo(val, desc, src) {
+        return { value: Math.round(val * 100) / 100, descrizione: desc, source: src || 'computed' };
+      }
+
+      if (settings.inpsMode === 'gestione_separata') {
+        var aliqGs = parseFloat(settings.aliqContributi) || 26.23;
+        var contrib = Math.round(reddito * (aliqGs / 100) * 100) / 100;
+        return {
+          sezI: null,
+          sezII: {
+            RR19: rigo(reddito, 'Reddito imponibile gestione separata'),
+            RR20: rigo(contrib, 'Contributi gestione separata'),
+            RR21: rigo(0, 'Contributi già versati'),
+            RR22: rigo(Math.max(0, contrib), 'Saldo contributi')
+          }
+        };
+      }
+
+      // Artigiani / Commercianti
+      var minimale = parseFloat(settings.minimaleInps) || 0;
+      var aliq = parseFloat(settings.aliqContributi) || 0;
+      var fissiAnnui = parseFloat(settings.contribFissi) || 0;
+      var eccedenti = reddito > minimale ? Math.round((reddito - minimale) * (aliq / 100) * 100) / 100 : 0;
+      var rr2 = Math.round(fissiAnnui * riduzione * 100) / 100;
+      var rr3 = Math.round(eccedenti * riduzione * 100) / 100;
+      var rr4 = Math.round((rr2 + rr3) * 100) / 100;
+      var rr5 = parseFloat(overrides.RR5_value) || 0;
+      var rr8 = Math.max(0, Math.round((rr4 - rr5) * 100) / 100);
+
+      return {
+        sezI: {
+          RR1: rigo(reddito, 'Reddito imponibile previdenziale'),
+          RR2: rigo(rr2, 'Contributi sul minimale'),
+          RR3: rigo(rr3, 'Contributi eccedenti il minimale'),
+          RR4: rigo(rr4, 'Totale contributi dovuti'),
+          RR5: rigo(rr5, 'Contributi già versati (acconti)'),
+          RR8: rigo(rr8, 'Saldo contributi da versare')
+        },
+        sezII: null
+      };
+    },
+    buildQuadroRS: function(yearData, settings, overrides) {
+      overrides = overrides || {};
+
+      function rigoRS(key, desc) {
+        if (overrides[key + '_value'] != null) {
+          return { value: parseFloat(overrides[key + '_value']), descrizione: desc, source: 'override' };
+        }
+        return { value: 0, descrizione: desc, source: 'computed' };
+      }
+
+      return {
+        RS371: rigoRS('RS371', 'Acquisti di beni strumentali'),
+        RS372: rigoRS('RS372', 'Spese per collaboratori'),
+        RS373: rigoRS('RS373', 'Spese per prestazioni di lavoro'),
+        RS374: rigoRS('RS374', 'Premi assicurazione RC professionale'),
+        RS375: rigoRS('RS375', 'Acquisti di beni e servizi'),
+        RS376: rigoRS('RS376', 'Spese per locazioni'),
+        RS377: rigoRS('RS377', 'Altre spese'),
+        RS378: rigoRS('RS378', 'Totale spese'),
+        RS379: rigoRS('RS379', 'Ricavi dichiarati'),
+        RS380: rigoRS('RS380', 'Numero clienti'),
+        RS381: rigoRS('RS381', 'Numero dipendenti')
+      };
+    },
+    buildQuadroRX: function(yearData, settings, precedente, overrides) {
+      overrides = overrides || {};
+      var eccedenza = 0;
+      if (precedente && precedente.eccedenza != null) {
+        eccedenza = parseFloat(precedente.eccedenza) || 0;
+      } else if (settings.creditoAnnoPrecedente != null) {
+        eccedenza = parseFloat(settings.creditoAnnoPrecedente) || 0;
+      }
+
+      function rigo(val, desc, src) {
+        return { value: Math.round(val * 100) / 100, descrizione: desc, source: src || 'computed' };
+      }
+
+      return {
+        RX1: rigo(eccedenza, 'Credito da anno precedente'),
+        RX2: rigo(0, 'Importo chiesto a rimborso'),
+        RX3: rigo(0, 'Importo portato in compensazione'),
+        RX4: rigo(eccedenza, 'Importo portato al periodo successivo'),
+        eccedenza: eccedenza
+      };
+    },
     buildQuadroRW: function() { return {}; },
     buildCondizionali: function() { return {}; },
     buildDichiarazione: function() { return {}; },
