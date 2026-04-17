@@ -4195,3 +4195,24 @@ html[data-theme="light"] .qpay-input {
   .dich-rigo { flex-wrap: wrap; }
   .dich-rigo-desc { min-width: 100%; }
 }
+
+/* ── Dichiarazione: light theme overrides ──────────────────────────────── */
+html[data-theme="light"] .dich-sidebar {
+  background: #f0f4f8;
+  border-right-color: #dde3ea;
+}
+html[data-theme="light"] .dich-step-item:hover {
+  background: rgba(46,170,220,0.08);
+}
+html[data-theme="light"] .dich-field-group input,
+html[data-theme="light"] .dich-field-group select {
+  background: #fff;
+  border-color: #c0c8d4;
+  color: #1a1a2e;
+}
+html[data-theme="light"] .dich-rigo {
+  border-bottom-color: #e0e6ed;
+}
+html[data-theme="light"] .dich-conto-estero {
+  border-color: #dde3ea;
+}
