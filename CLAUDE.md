@@ -153,6 +153,54 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - Stores manual edits per year in `yearData.lmQuadro.overrides`
 - `saveQuadroLMDraft()` persists the current year snapshot, `exportQuadroLMPrint()` opens a print-friendly HTML view
 - No telematic XML or PDF generation: the feature is a compilation aid only
+- **Superseded** by the Dichiarazione Redditi PF module (see below); legacy functions kept for backward compatibility
+
+### Dichiarazione Redditi PF
+- **Files**: `dichiarazione-engine.js`, `dichiarazione-ui.js`, `dichiarazione-exports.js`
+- **Replaces** legacy `openQuadroLMModal`, `saveQuadroLMDraft`, `exportQuadroLMPrint`
+- **APIs**: `window.DichiarazioneEngine`, `window.DichiarazioneUI`, `window.DichiarazioneExports`
+
+#### Data Shape
+- `settings.anagrafica` — per-profile, stable: codice fiscale, nome, cognome, comune, etc.
+- `settings.attivita` — per-profile: P.IVA, codice ATECO, comune domicilio fiscale
+- `yearData.dichiarazione` — per-anno:
+  - `tipoDichiarazione` — `'ordinaria'` | `'correttiva'` | `'integrativa'`
+  - `flags` — `{ annoMisto, imposteEstere, altriCrediti }` (boolean toggles for conditional quadri)
+  - `contiEsteri` — array of foreign account records for Quadro RW
+  - `overrides` — per-rigo manual overrides (same structure as legacy `lmQuadro.overrides`)
+  - `statoCompilazione` — progress tracker per step
+  - `_confirmedWarnings` — set of suppressed validation warning keys
+
+#### Migration
+- On load, `ensureDataShape` silently migrates `yearData.lmQuadro.overrides` → `yearData.dichiarazione.overrides`
+- No data loss: migration is additive; legacy key is preserved until explicitly cleared
+
+#### Wizard
+- 12 steps, activated via `openDichiarazione()` or tab click
+- Steps 8 (`annoMisto`), 9 (`imposteEstere`), 10 (`altriCrediti`) are conditional on the corresponding flag
+- Progress is persisted in `yearData.dichiarazione.statoCompilazione`
+
+#### Engine Functions (`DichiarazioneEngine`)
+| Function | Description |
+|---|---|
+| `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
+| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
+| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: INPS sezione I (artigiani/commercianti) or sezione II (gestione separata) |
+| `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
+| `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
+| `buildQuadroRW(contiEsteri)` | Quadro RW: conti e investimenti esteri (one rigo per account) |
+| `buildCondizionali(input, yearData)` | Conditional quadri: quadroRN (annoMisto), quadroCE (imposteEstere) |
+| `buildDichiarazione(year, profile, input)` | Assembles all quadri into the full dichiarazione object |
+| `validateDichiarazione(dich)` | Returns `{ errors, warnings }` arrays; errors block export, warnings are confirmable |
+| `validateCodiceFiscale(cf)` | Validates CF format + check digit; case-insensitive |
+
+#### Exports (`DichiarazioneExports`)
+- **C2 — JSON + CSV zip**: `DichiarazioneExports.exportC2(dich)` — zips a structured JSON and a human-readable CSV of all righi values
+- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout
+
+#### Unit Tests
+- `test/dichiarazione-engine.test.js` — 39 tests covering all engine functions
+- Run with: `node test/run-tests.js`
 
 ### Color System
 - Canonical color CSS variables defined in `:root` (dark theme) and `html[data-theme="light"]`:

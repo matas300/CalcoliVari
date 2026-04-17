@@ -3992,3 +3992,227 @@ html[data-theme="light"] .qpay-input {
     box-shadow: 0 -4px 12px rgba(0,0,0,.08);
   }
 }
+
+/* ── Profilo Fiscale Esteso (Anagrafica + Attività) ── */
+.settings-subsection-title {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text3);
+  margin: 18px 0 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.settings-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.settings-grid-2 .settings-group {
+  margin-bottom: 0;
+}
+.settings-grid-2 .settings-group input,
+.settings-grid-2 .settings-group select {
+  width: 100%;
+}
+.cf-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cf-input-wrap input {
+  flex: 1;
+  min-width: 0;
+}
+.cf-status {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 1.2em;
+  text-align: center;
+}
+.cf-status.ok  { color: var(--color-success); }
+.cf-status.err { color: var(--color-error); }
+@media (max-width: 560px) {
+  .settings-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══ Dichiarazione Wizard ═══ */
+.dich-wizard {
+  display: flex;
+  gap: 0;
+  min-height: 600px;
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dich-sidebar {
+  width: 220px;
+  min-width: 180px;
+  background: var(--bg-card, #16213e);
+  border-right: 1px solid var(--border-color, #333);
+  padding: 16px 0;
+  flex-shrink: 0;
+}
+.dich-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+.dich-step-item:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); }
+.dich-step-item.active {
+  border-left-color: var(--color-chart-netto, #2EAADC);
+  background: var(--bg-active, rgba(46,170,220,0.1));
+}
+.dich-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-hover, #333);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.dich-step-item.active .dich-step-num { background: var(--color-chart-netto, #2EAADC); color: #fff; }
+.dich-step-label { font-size: 13px; }
+.dich-main {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+.dich-step-content h2 { margin: 0 0 20px; font-size: 1.3rem; }
+.dich-step-content h3 { margin: 16px 0 12px; font-size: 1rem; color: var(--text2, #aaa); }
+.dich-field-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.dich-field-group label { font-size: 12px; color: var(--text2, #aaa); }
+.dich-field-group input,
+.dich-field-group select {
+  padding: 8px 10px;
+  background: var(--bg-input, #0f3460);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 4px;
+  color: var(--text1, #fff);
+  font-size: 14px;
+}
+.dich-readonly { opacity: 0.7; cursor: not-allowed; }
+.dich-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dich-hint { font-size: 13px; color: var(--text2, #aaa); margin-bottom: 16px; }
+.dich-hint a { color: var(--color-chart-netto, #2EAADC); }
+.dich-nav-btns { display: flex; gap: 12px; margin-top: 24px; }
+.dich-nav-btns .btn-primary,
+.dich-nav-btns .btn-secondary {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dich-nav-btns .btn-primary { background: var(--color-chart-netto, #2EAADC); color: #fff; }
+.dich-nav-btns .btn-secondary { background: var(--card-border, #333); color: var(--text1, #fff); }
+.dich-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+.dich-summary-item {
+  background: var(--bg-card, #16213e);
+  padding: 16px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dich-summary-item span { font-size: 12px; color: var(--text2, #aaa); }
+.dich-summary-item strong { font-size: 1.2rem; }
+.dich-export-btns { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+.dich-export-btns button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dich-export-btns .btn-primary { background: var(--color-chart-netto, #2EAADC); color: #fff; }
+.dich-export-btns button:disabled { opacity: 0.4; cursor: not-allowed; }
+.dich-alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+.dich-alert-error {
+  background: rgba(233,69,96,0.15);
+  border: 1px solid var(--color-chart-tasse, #E94560);
+  color: var(--color-chart-tasse, #E94560);
+}
+.dich-alert-warn {
+  background: rgba(245,166,35,0.15);
+  border: 1px solid var(--color-cal-ferie, #F5A623);
+  color: var(--color-cal-ferie, #F5A623);
+}
+/* ── Dichiarazione: validation step ─────────────────────────────────────── */
+.dich-validation-item { padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+.dich-error { background: rgba(233,69,96,0.1); border-left: 3px solid var(--color-chart-tasse, #E94560); }
+.dich-warn { background: rgba(245,166,35,0.1); border-left: 3px solid var(--color-cal-ferie, #F5A623); }
+.dich-alert-ok { background: rgba(46,204,113,0.1); border: 1px solid #2ecc71; color: #2ecc71; padding: 12px 16px; border-radius: 6px; }
+.dich-validation-item a { color: var(--color-chart-netto, #2EAADC); text-decoration: none; margin-left: 8px; }
+/* ── Dichiarazione: rigo override components ─────────────────────────────── */
+.dich-rigo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #2a2a3e);
+}
+.dich-rigo-override { background: rgba(245,166,35,0.05); border-radius: 4px; padding: 8px; }
+.dich-rigo-key { font-weight: 700; font-size: 12px; min-width: 80px; color: var(--color-chart-netto, #2EAADC); }
+.dich-rigo-desc { flex: 1; font-size: 13px; color: var(--text-secondary, #aaa); }
+.dich-rigo-val-wrap { display: flex; align-items: center; gap: 6px; }
+.dich-rigo-input { width: 120px; text-align: right; }
+.dich-rigo-badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+.badge-auto { background: var(--bg-hover, #333); color: var(--text-secondary, #aaa); }
+.badge-override { background: rgba(245,166,35,0.2); color: var(--color-cal-ferie, #F5A623); }
+.dich-conto-estero { border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 16px; margin-bottom: 12px; }
+.btn-remove { background: rgba(233,69,96,0.15); border: 1px solid var(--color-chart-tasse, #E94560); color: var(--color-chart-tasse, #E94560); padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px; }
+.btn-add { background: rgba(46,170,220,0.15); border: 1px solid var(--color-chart-netto, #2EAADC); color: var(--color-chart-netto, #2EAADC); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin: 12px 0; }
+
+@media (max-width: 768px) {
+  .dich-wizard { flex-direction: column; }
+  .dich-sidebar {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color, #333);
+  }
+  .dich-step-item { flex-direction: column; min-width: 60px; text-align: center; padding: 8px; border-left: none; border-bottom: 3px solid transparent; }
+  .dich-step-item.active { border-left-color: transparent; border-bottom-color: var(--color-chart-netto, #2EAADC); }
+  .dich-grid-2 { grid-template-columns: 1fr; }
+  .dich-summary-grid { grid-template-columns: 1fr; }
+  .dich-rigo { flex-wrap: wrap; }
+  .dich-rigo-desc { min-width: 100%; }
+}
+
+/* ── Dichiarazione: light theme overrides ──────────────────────────────── */
+html[data-theme="light"] .dich-sidebar {
+  background: #f0f4f8;
+  border-right-color: #dde3ea;
+}
+html[data-theme="light"] .dich-step-item:hover {
+  background: rgba(46,170,220,0.08);
+}
+html[data-theme="light"] .dich-field-group input,
+html[data-theme="light"] .dich-field-group select {
+  background: #fff;
+  border-color: #c0c8d4;
+  color: #1a1a2e;
+}
+html[data-theme="light"] .dich-rigo {
+  border-bottom-color: #e0e6ed;
+}
+html[data-theme="light"] .dich-conto-estero {
+  border-color: #dde3ea;
+}
