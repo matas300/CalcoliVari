@@ -1,8 +1,112 @@
 (function () {
   'use strict';
   var DichiarazioneEngine = {
-    buildFrontespizio: function() { return {}; },
-    buildQuadroLM: function() { return {}; },
+    buildFrontespizio: function(profile, year, input) {
+      var ana = (profile.settings && profile.settings.anagrafica) || {};
+      var att = (profile.settings && profile.settings.attivita) || {};
+      var inp = input || {};
+      return {
+        codiceFiscale: ana.codiceFiscale || '',
+        cognome: ana.cognome || '',
+        nome: ana.nome || '',
+        sesso: ana.sesso || '',
+        dataNascita: ana.dataNascita || '',
+        comuneNascita: ana.comuneNascita || '',
+        provNascita: ana.provNascita || '',
+        residenzaVia: inp.residenzaVia || ana.residenzaVia || '',
+        residenzaComune: inp.residenzaComune || ana.residenzaComune || '',
+        residenzaProv: inp.residenzaProv || ana.residenzaProv || '',
+        residenzaCap: inp.residenzaCap || ana.residenzaCap || '',
+        domicilioFiscaleVia: ana.domicilioFiscaleVia || '',
+        domicilioFiscaleComune: ana.domicilioFiscaleComune || '',
+        domicilioFiscaleProv: ana.domicilioFiscaleProv || '',
+        domicilioFiscaleCap: ana.domicilioFiscaleCap || '',
+        telefono: ana.telefono || '',
+        email: ana.email || '',
+        codiceAteco: att.codiceAteco || '',
+        descrizioneAttivita: att.descrizioneAttivita || '',
+        dataInizioAttivita: att.dataInizioAttivita || '',
+        annoImposta: year,
+        tipoDichiarazione: inp.tipoDichiarazione || 'ordinaria',
+        dataPresentazione: inp.dataPresentazione || null,
+        annoDeclarazione: year + 1
+      };
+    },
+    buildQuadroLM: function(yearData, settings, overrides) {
+      overrides = overrides || {};
+      var year = yearData.year || new Date().getFullYear();
+
+      // Compute total ricavi (fatture paid in year)
+      var totalRicavi = 0;
+      var fatture = yearData.fatture || {};
+      Object.keys(fatture).forEach(function(mese) {
+        var lista = fatture[mese] || [];
+        lista.forEach(function(f) {
+          var pagAnno = f.pagAnno != null ? f.pagAnno : year;
+          if (pagAnno === year) {
+            totalRicavi += (parseFloat(f.importo) || 0);
+          }
+        });
+      });
+      totalRicavi = Math.round(totalRicavi * 100) / 100;
+
+      var coeff = parseFloat(settings.coefficiente) || 0;
+      var aliquota = parseFloat(settings.impostaSostitutiva) || 15;
+
+      // LM1: ricavi
+      var lm1 = totalRicavi;
+
+      // LM2: reddito lordo (with override support)
+      var lm2, lm2Source;
+      if (overrides.LM2_value != null) {
+        lm2 = parseFloat(overrides.LM2_value);
+        lm2Source = 'override';
+      } else {
+        lm2 = Math.round(lm1 * (coeff / 100) * 100) / 100;
+        lm2Source = 'computed';
+      }
+
+      // LM3: contributi INPS deducibili (stima da settings)
+      var contribFissi = parseFloat(settings.contribFissi) || 0;
+      var minimale = parseFloat(settings.minimaleInps) || 0;
+      var aliqContrib = parseFloat(settings.aliqContributi) || 0;
+      var redditoCassa = lm2;
+      var contribVar = 0;
+      if (aliqContrib > 0 && redditoCassa > minimale && settings.inpsMode === 'artigiani') {
+        contribVar = Math.round((redditoCassa - minimale) * (aliqContrib / 100) * 100) / 100;
+      } else if (settings.inpsMode === 'gestione_separata' && aliqContrib > 0) {
+        contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
+        contribFissi = 0;
+      }
+      var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
+      var lm3 = Math.round((contribFissi + contribVar) * riduzione * 100) / 100;
+      if (overrides.LM3_value != null) { lm3 = parseFloat(overrides.LM3_value); }
+
+      // LM4: reddito netto
+      var lm4 = Math.max(0, Math.round((lm2 - lm3) * 100) / 100);
+
+      // LM34: after perdite pregresse
+      var perditePregresse = parseFloat(overrides.LM_perditePregresse) || 0;
+      var lm34 = Math.max(0, Math.round((lm4 - perditePregresse) * 100) / 100);
+
+      // LM36: imposta sostitutiva
+      var lm36 = Math.round(lm34 * (aliquota / 100) * 100) / 100;
+
+      function rigo(val, desc, source) {
+        return { value: val, descrizione: desc, source: source || 'computed' };
+      }
+
+      return {
+        LM1: rigo(lm1, 'Ricavi o compensi percepiti'),
+        LM2: { value: lm2, descrizione: 'Reddito lordo (ricavi \u00d7 coefficiente)', source: lm2Source },
+        LM3: rigo(lm3, 'Contributi previdenziali deducibili'),
+        LM4: rigo(lm4, 'Reddito al netto dei contributi'),
+        LM34: rigo(lm34, 'Reddito imponibile (al netto perdite)'),
+        LM36: rigo(lm36, 'Imposta sostitutiva'),
+        LM47: rigo(lm36, 'Imposta sostitutiva (riepilogo)'),
+        _meta: { coeff: coeff, aliquota: aliquota, perditePregresse: perditePregresse }
+      };
+    },
     buildQuadroRR: function() { return {}; },
     buildQuadroRS: function() { return {}; },
     buildQuadroRX: function() { return {}; },
