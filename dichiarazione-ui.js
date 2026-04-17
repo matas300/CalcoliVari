@@ -798,8 +798,7 @@
       if (!yd.dichiarazione.overrides) yd.dichiarazione.overrides = {};
       yd.dichiarazione.overrides[key] = isNaN(val) ? 0 : val;
       if (typeof saveData === 'function') saveData();
-      var main = document.getElementById('dich-main-content');
-      if (main) main.innerHTML = renderCurrentStep();
+      render();
     },
     addContoEstero: function() {
       var yd = getYearData();

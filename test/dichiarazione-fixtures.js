@@ -11,7 +11,7 @@ var artigianoStandard2025 = {
     coefficiente: 67,
     impostaSostitutiva: 15,
     dailyRate: 300,
-    inpsMode: 'artigiani',
+    inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
     usaInpsUfficiale: 1,
     contribFissi: 4460.64,

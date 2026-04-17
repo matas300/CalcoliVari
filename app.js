@@ -1131,8 +1131,9 @@ function ensureDataShape(target, year = currentYear) {
     };
   }
   if (out.lmQuadro && out.lmQuadro.overrides) {
+    if (!out.dichiarazione.overrides) out.dichiarazione.overrides = {};
     Object.assign(out.dichiarazione.overrides, out.lmQuadro.overrides);
-    delete out.lmQuadro;
+    delete out.lmQuadro; // safe: in-memory only; saveData() caller persists
   }
   return out;
 }

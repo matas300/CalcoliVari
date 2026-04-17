@@ -72,7 +72,7 @@
       var aliqContrib = parseFloat(settings.aliqContributi) || 0;
       var redditoCassa = lm2;
       var contribVar = 0;
-      if (aliqContrib > 0 && redditoCassa > minimale && settings.inpsMode === 'artigiani') {
+      if (aliqContrib > 0 && redditoCassa > minimale && settings.inpsMode !== 'gestione_separata') {
         contribVar = Math.round((redditoCassa - minimale) * (aliqContrib / 100) * 100) / 100;
       } else if (settings.inpsMode === 'gestione_separata' && aliqContrib > 0) {
         contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
