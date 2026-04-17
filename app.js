@@ -1296,6 +1296,48 @@ function applySettings() {
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
   if (typeof updateNavLabels === 'function') updateNavLabels();
+  // Anagrafica fields
+  const ana = s.anagrafica || {};
+  const anagraficaMap = {
+    settCf:           'codiceFiscale',
+    settCognome:      'cognome',
+    settNome:         'nome',
+    settSesso:        'sesso',
+    settDataNascita:  'dataNascita',
+    settComuneNascita:'comuneNascita',
+    settProvNascita:  'provNascita',
+    settResVia:       'residenzaVia',
+    settResComune:    'residenzaComune',
+    settResProv:      'residenzaProv',
+    settResCap:       'residenzaCap',
+    settDomVia:       'domicilioFiscaleVia',
+    settDomComune:    'domicilioFiscaleComune',
+    settDomProv:      'domicilioFiscaleProv',
+    settDomCap:       'domicilioFiscaleCap',
+    settTelefono:     'telefono',
+    settEmail:        'email',
+    settStatoCivile:  'statoCivile'
+  };
+  for (const [id, key] of Object.entries(anagraficaMap)) {
+    const el = document.getElementById(id);
+    if (el) el.value = ana[key] || '';
+  }
+  if (ana.codiceFiscale !== undefined) updateCfStatus(ana.codiceFiscale);
+  // Attivita fields
+  const att = s.attivita || {};
+  const attivitaMap = {
+    settAttCodiceAteco:  'codiceAteco',
+    settAttDescrizione:  'descrizioneAttivita',
+    settAttDataInizio:   'dataInizioAttivita',
+    settSedeVia:         'sedeVia',
+    settSedeComune:      'sedeComune',
+    settSedeProv:        'sedeProv',
+    settSedeCap:         'sedeCap'
+  };
+  for (const [id, key] of Object.entries(attivitaMap)) {
+    const el = document.getElementById(id);
+    if (el) el.value = att[key] || '';
+  }
 }
 
 function saveSetting(key, val) {
@@ -1312,6 +1354,27 @@ function saveTextSetting(key, val) {
 function saveOptionalNumberSetting(key, val) {
   data.settings[key] = String(val).trim() === '' ? '' : (parseFloat(val) || 0);
   saveData();
+}
+
+function saveAnagraficaField(key, val) {
+  if (!data.settings.anagrafica) data.settings.anagrafica = {};
+  data.settings.anagrafica[key] = val;
+  saveData();
+}
+
+function saveAttivitaField(key, val) {
+  if (!data.settings.attivita) data.settings.attivita = {};
+  data.settings.attivita[key] = val;
+  saveData();
+}
+
+function updateCfStatus(val) {
+  const el = document.getElementById('cfStatus');
+  if (!el) return;
+  if (!val || val.trim() === '') { el.textContent = ''; el.className = 'cf-status'; return; }
+  const ok = typeof DichiarazioneEngine !== 'undefined' && DichiarazioneEngine.validateCodiceFiscale(val);
+  el.textContent = ok ? '\u2713' : '\u2717';
+  el.className = 'cf-status ' + (ok ? 'ok' : 'err');
 }
 
 function saveYearSetting(year, key, val) {
