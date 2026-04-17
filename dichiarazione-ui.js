@@ -413,8 +413,265 @@
 
     html += '<div class="dich-nav-btns">' +
       '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(6)">&larr; Indietro</button>' +
-      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(8)">Avanti &rarr;</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.nextStep(7))">Avanti &rarr;</button>' +
       '</div></div>';
+    return html;
+  }
+
+  // ── Navigation helpers for conditional steps ────────────────────────────────
+
+  function nextStep(current) {
+    var dich = getDichiarazione();
+    var flags = dich.flags || {};
+    var order = [1,2,3,4,5,6,7];
+    if (flags.annoMisto) order.push(8);
+    if (flags.imposteEstere) order.push(9);
+    if (flags.altriCrediti) order.push(10);
+    order.push(11, 12);
+    var idx = order.indexOf(current);
+    return idx >= 0 && idx < order.length - 1 ? order[idx + 1] : 12;
+  }
+
+  function prevStep(current) {
+    var dich = getDichiarazione();
+    var flags = dich.flags || {};
+    var order = [1,2,3,4,5,6,7];
+    if (flags.annoMisto) order.push(8);
+    if (flags.imposteEstere) order.push(9);
+    if (flags.altriCrediti) order.push(10);
+    order.push(11, 12);
+    var idx = order.indexOf(current);
+    return idx > 0 ? order[idx - 1] : 1;
+  }
+
+  // ── Step 8: RN/RP/RV (anno misto) ───────────────────────────────────────────
+
+  function renderStep8() {
+    var dich = getDichiarazione();
+    var flags = dich.flags || {};
+
+    var html = '<div class="dich-step-content"><h2>RN / RP / RV &mdash; Anno misto</h2>';
+
+    if (!flags.annoMisto) {
+      html += '<div class="dich-alert dich-alert-warn">Questo quadro non &egrave; applicabile: la casella "Anno misto" non &egrave; selezionata nel passo 1.</div>';
+      html += '<div class="dich-nav-btns">' +
+        '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(7)">&larr; Indietro</button>' +
+        '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.nextStep(8))">Avanti &rarr;</button>' +
+        '</div></div>';
+      return html;
+    }
+
+    var redditoDip = dich.redditoDipendente != null ? dich.redditoDipendente : '';
+    var addReg = dich.addizionaleRegionale != null ? dich.addizionaleRegionale : '';
+    var addCom = dich.addizionaleComunale != null ? dich.addizionaleComunale : '';
+    var oneri = dich.oneriDetraibili || [];
+
+    html += '<h3>Quadro RN &mdash; Redditi da lavoro dipendente e altri redditi</h3>';
+    html += '<div class="dich-field-group"><label>Reddito da lavoro dipendente (&euro;)</label>' +
+      '<input type="number" step="0.01" value="' + escHtml(String(redditoDip)) + '" ' +
+      'onchange="window.saveDichField(\'redditoDipendente\', parseFloat(this.value) || 0)"></div>';
+
+    html += '<h3>Quadro RV &mdash; Addizionali IRPEF</h3>';
+    html += '<div class="dich-grid-2">' +
+      '<div class="dich-field-group"><label>Addizionale regionale IRPEF (&euro;)</label>' +
+      '<input type="number" step="0.01" value="' + escHtml(String(addReg)) + '" ' +
+      'onchange="window.saveDichField(\'addizionaleRegionale\', parseFloat(this.value) || 0)"></div>' +
+      '<div class="dich-field-group"><label>Addizionale comunale IRPEF (&euro;)</label>' +
+      '<input type="number" step="0.01" value="' + escHtml(String(addCom)) + '" ' +
+      'onchange="window.saveDichField(\'addizionaleComunale\', parseFloat(this.value) || 0)"></div>' +
+      '</div>';
+
+    html += '<h3>Quadro RP &mdash; Oneri detraibili</h3>';
+    oneri.forEach(function(o, idx) {
+      html += '<div class="dich-conto-estero">' +
+        '<div class="dich-grid-2">' +
+          '<div class="dich-field-group"><label>Tipo onere</label>' +
+            '<input type="text" value="' + escHtml(o.tipo || '') + '" ' +
+            'onchange="window.DichiarazioneUI.updateOnereDetraibile(' + idx + ', \'tipo\', this.value)"></div>' +
+          '<div class="dich-field-group"><label>Importo (&euro;)</label>' +
+            '<input type="number" step="0.01" value="' + (o.importo || 0) + '" ' +
+            'onchange="window.DichiarazioneUI.updateOnereDetraibile(' + idx + ', \'importo\', parseFloat(this.value) || 0)"></div>' +
+        '</div>' +
+        '<button class="btn-remove" onclick="window.DichiarazioneUI.removeOnereDetraibile(' + idx + ')">&#x2715; Rimuovi</button>' +
+        '</div>';
+    });
+    html += '<button class="btn-add" onclick="window.DichiarazioneUI.addOnereDetraibile()">+ Aggiungi onere detraibile</button>';
+
+    // IRPEF preview
+    if (window.DichiarazioneEngine) {
+      var input = {
+        flags: flags,
+        redditoDipendente: parseFloat(dich.redditoDipendente) || 0,
+        addizionaleRegionale: parseFloat(dich.addizionaleRegionale) || 0,
+        addizionaleComunale: parseFloat(dich.addizionaleComunale) || 0,
+        oneriDetraibili: oneri
+      };
+      var cond = window.DichiarazioneEngine.buildCondizionali(input, getYearData());
+      if (cond.quadroRN) {
+        html += '<div class="dich-rigo"><span class="dich-rigo-key">IRPEF lorda</span>' +
+          '<span class="dich-rigo-desc">Anteprima calcolata sul reddito da dipendente</span>' +
+          '<div class="dich-rigo-val-wrap"><input type="text" class="dich-readonly" readonly value="' + fmtEur(cond.quadroRN.irpefLorda) + '">' +
+          '<span class="dich-rigo-badge badge-auto">auto</span></div></div>';
+      }
+    }
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(8))">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.nextStep(8))">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 9: Quadro CE (imposte estere) ──────────────────────────────────────
+
+  function renderStep9() {
+    var dich = getDichiarazione();
+    var flags = dich.flags || {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro CE &mdash; Credito imposte estere</h2>';
+
+    if (!flags.imposteEstere) {
+      html += '<div class="dich-alert dich-alert-warn">Questo quadro non &egrave; applicabile: la casella "Imposte estere" non &egrave; selezionata nel passo 1.</div>';
+      html += '<div class="dich-nav-btns">' +
+        '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(9))">&larr; Indietro</button>' +
+        '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.nextStep(9))">Avanti &rarr;</button>' +
+        '</div></div>';
+      return html;
+    }
+
+    var credito = dich.creditoImposteEstere != null ? dich.creditoImposteEstere : '';
+    var paese = dich.paeseImpostaPagata || '';
+
+    html += '<div class="dich-field-group"><label>Credito per imposte pagate all\'estero (&euro;)</label>' +
+      '<input type="number" step="0.01" value="' + escHtml(String(credito)) + '" ' +
+      'onchange="window.saveDichField(\'creditoImposteEstere\', parseFloat(this.value) || 0)"></div>';
+
+    html += '<div class="dich-field-group"><label>Paese in cui l\'imposta &egrave; stata pagata</label>' +
+      '<input type="text" value="' + escHtml(paese) + '" ' +
+      'onchange="window.saveDichField(\'paeseImpostaPagata\', this.value)"></div>';
+
+    // CE1 preview
+    if (window.DichiarazioneEngine) {
+      var input = {
+        flags: flags,
+        creditoImposteEstere: parseFloat(dich.creditoImposteEstere) || 0
+      };
+      var cond = window.DichiarazioneEngine.buildCondizionali(input, getYearData());
+      if (cond.quadroCE && cond.quadroCE.CE1) {
+        html += '<div class="dich-rigo"><span class="dich-rigo-key">CE1</span>' +
+          '<span class="dich-rigo-desc">' + escHtml(cond.quadroCE.CE1.descrizione || '') + '</span>' +
+          '<div class="dich-rigo-val-wrap"><input type="text" class="dich-readonly" readonly value="' + fmtEur(cond.quadroCE.CE1.value) + '">' +
+          '<span class="dich-rigo-badge badge-auto">auto</span></div></div>';
+      }
+    }
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(9))">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.nextStep(9))">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 10: Quadro CR (altri crediti) ──────────────────────────────────────
+
+  function renderStep10() {
+    var dich = getDichiarazione();
+    var flags = dich.flags || {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro CR &mdash; Altri crediti d\'imposta</h2>';
+
+    if (!flags.altriCrediti) {
+      html += '<div class="dich-alert dich-alert-warn">Questo quadro non &egrave; applicabile: la casella "Altri crediti" non &egrave; selezionata nel passo 1.</div>';
+      html += '<div class="dich-nav-btns">' +
+        '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(10))">&larr; Indietro</button>' +
+        '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(11)">Avanti &rarr;</button>' +
+        '</div></div>';
+      return html;
+    }
+
+    var crediti = dich.altriCrediti || [];
+    var tipiCredito = [
+      { value: 'canone_rai', label: 'Canone RAI' },
+      { value: 'detrazione_affitto', label: 'Detrazione affitto' },
+      { value: 'ristrutturazione', label: 'Ristrutturazione' },
+      { value: 'altro', label: 'Altro' }
+    ];
+
+    crediti.forEach(function(c, idx) {
+      var tipoOpts = tipiCredito.map(function(t) {
+        return '<option value="' + t.value + '"' + (c.tipo === t.value ? ' selected' : '') + '>' + escHtml(t.label) + '</option>';
+      }).join('');
+
+      html += '<div class="dich-conto-estero">' +
+        '<div class="dich-grid-2">' +
+          '<div class="dich-field-group"><label>Tipo credito</label>' +
+            '<select onchange="window.DichiarazioneUI.updateAltroCredito(' + idx + ', \'tipo\', this.value)">' +
+            tipoOpts + '</select></div>' +
+          '<div class="dich-field-group"><label>Importo (&euro;)</label>' +
+            '<input type="number" step="0.01" value="' + (c.importo || 0) + '" ' +
+            'onchange="window.DichiarazioneUI.updateAltroCredito(' + idx + ', \'importo\', parseFloat(this.value) || 0)"></div>' +
+        '</div>' +
+        '<button class="btn-remove" onclick="window.DichiarazioneUI.removeAltroCredito(' + idx + ')">&#x2715; Rimuovi</button>' +
+        '</div>';
+    });
+
+    html += '<button class="btn-add" onclick="window.DichiarazioneUI.addAltroCredito()">+ Aggiungi credito</button>';
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(10))">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(11)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 11: Validazione ─────────────────────────────────────────────────────
+
+  function renderStep11() {
+    var snapshot = buildDichiarazioneSnapshot();
+    var v = window.DichiarazioneEngine ? window.DichiarazioneEngine.validateDichiarazione(snapshot) : { errors: [], warnings: [] };
+    var dich = getDichiarazione();
+    var confirmedWarnings = dich._confirmedWarnings || {};
+
+    var html = '<div class="dich-step-content"><h2>Validazione</h2>';
+
+    if (v.errors.length === 0 && v.warnings.length === 0) {
+      html += '<div class="dich-alert dich-alert-ok">&#x2713; Nessun errore o avviso. Puoi procedere al riepilogo.</div>';
+    }
+
+    if (v.errors.length > 0) {
+      html += '<h3>Errori (da correggere prima dell\'export)</h3>';
+      v.errors.forEach(function(e) {
+        html += '<div class="dich-validation-item dich-error">' +
+          '<strong>[' + escHtml(e.code) + ']</strong> ' + escHtml(e.message) +
+          (e.quadro ? ' <a href="#" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.stepForQuadro(\'' + escHtml(e.quadro) + '\'));return false;">[Vai a ' + escHtml(e.quadro) + ']</a>' : '') +
+          '</div>';
+      });
+    }
+
+    if (v.warnings.length > 0) {
+      html += '<h3>Avvisi (verificare)</h3>';
+      v.warnings.forEach(function(w) {
+        var confirmed = confirmedWarnings[w.code];
+        html += '<div class="dich-validation-item dich-warn">' +
+          '<label><input type="checkbox" ' + (confirmed ? 'checked' : '') + ' onchange="window.DichiarazioneUI.confirmWarning(\'' + escHtml(w.code) + '\', this.checked)">' +
+          ' <strong>[' + escHtml(w.code) + ']</strong> ' + escHtml(w.message) + '</label>' +
+          '</div>';
+      });
+    }
+
+    var allWarningsConfirmed = v.warnings.every(function(w) { return confirmedWarnings[w.code]; });
+    var canProceed = v.errors.length === 0 && allWarningsConfirmed;
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(window.DichiarazioneUI.prevStep(11))">&larr; Indietro</button>';
+
+    if (canProceed) {
+      html += '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(12)">Vai al riepilogo &rarr;</button>';
+    } else if (v.errors.length === 0) {
+      html += '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(12)" style="opacity:0.5" title="Conferma gli avvisi prima">Vai al riepilogo &rarr;</button>';
+    }
+
+    html += '</div></div>';
     return html;
   }
 
@@ -440,6 +697,10 @@
       case 5:  return renderStep5();
       case 6:  return renderStep6();
       case 7:  return renderStep7();
+      case 8:  return renderStep8();
+      case 9:  return renderStep9();
+      case 10: return renderStep10();
+      case 11: return renderStep11();
       case 12: return renderStep12();
       default:
         var step = null;
@@ -568,8 +829,70 @@
       if (typeof saveData === 'function') saveData();
       var main = document.getElementById('dich-main-content');
       if (main) main.innerHTML = renderCurrentStep();
+    },
+    // ── Step 8: oneri detraibili list helpers ──────────────────────────────────
+    addOnereDetraibile: function() {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione) return;
+      if (!yd.dichiarazione.oneriDetraibili) yd.dichiarazione.oneriDetraibili = [];
+      yd.dichiarazione.oneriDetraibili.push({ tipo: '', importo: 0 });
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    removeOnereDetraibile: function(idx) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.oneriDetraibili) return;
+      yd.dichiarazione.oneriDetraibili.splice(idx, 1);
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    updateOnereDetraibile: function(idx, field, val) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.oneriDetraibili) return;
+      yd.dichiarazione.oneriDetraibili[idx][field] = val;
+      if (typeof saveData === 'function') saveData();
+    },
+    // ── Step 10: altri crediti list helpers ───────────────────────────────────
+    addAltroCredito: function() {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione) return;
+      if (!yd.dichiarazione.altriCrediti) yd.dichiarazione.altriCrediti = [];
+      yd.dichiarazione.altriCrediti.push({ tipo: 'altro', importo: 0 });
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    removeAltroCredito: function(idx) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.altriCrediti) return;
+      yd.dichiarazione.altriCrediti.splice(idx, 1);
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    updateAltroCredito: function(idx, field, val) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.altriCrediti) return;
+      yd.dichiarazione.altriCrediti[idx][field] = val;
+      if (typeof saveData === 'function') saveData();
+    },
+    // ── Step 11: validation helpers ───────────────────────────────────────────
+    confirmWarning: function(code, val) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione) return;
+      if (!yd.dichiarazione._confirmedWarnings) yd.dichiarazione._confirmedWarnings = {};
+      yd.dichiarazione._confirmedWarnings[code] = val;
+      if (typeof saveData === 'function') saveData();
+      var main = document.getElementById('dich-main-content');
+      if (main) main.innerHTML = renderCurrentStep();
+    },
+    stepForQuadro: function(quadro) {
+      var map = { 'Frontespizio': 2, 'LM': 3, 'RR': 4, 'RS': 5, 'RW': 6, 'RX': 7, 'RN': 8, 'CE': 9, 'CR': 10 };
+      return map[quadro] || 1;
     }
   };
+
+  // Expose navigation helpers for inline onclick use in step 8/9/10/11 templates
+  DichiarazioneUI.nextStep = nextStep;
+  DichiarazioneUI.prevStep = prevStep;
 
   if (typeof window !== 'undefined') window.DichiarazioneUI = DichiarazioneUI;
   if (typeof module !== 'undefined') module.exports = DichiarazioneUI;
