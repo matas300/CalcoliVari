@@ -71,6 +71,13 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - `buildInstallmentStatus` / `buildInstallmentExplanation`: deadline status and tooltips
 - Exposed via `window.TaxEngine`
 
+### Doppia logica competenza vs cassa
+The forfettario engine has two parallel calculators with intentionally different semantics:
+- `calcForfettarioValues` (`app.js:1462`) — **per competenza**: deduces all 4 INPS fixed quarters of the current year + the full annual variable INPS, regardless of when paid.
+- `buildForfettarioScenario` (`tax-engine.js:528`) — **per cassa**: deduces only the INPS rates actually paid in-year (typically 3 fixed quarters of year N pagate in-year + the 4th of N-1 paid in February of N + variable saldo/acconti by cash flow).
+
+A small delta between the two views is **expected**, not a bug. Audit B1 documents a 15,18 € delta on the fixed component for an artigiano 2026 scenario (= `(4521,36 − 4460,64) / 4`, i.e. the difference between the 4th-quarter INPS fissi 2026 and 2025). The dashboard summary uses competenza; the scadenziario uses cassa. Whenever values seem to disagree, check first whether one is competenza and the other is cassa.
+
 ### Tabs
 1. **Regime Forfettario/Ordinario** — Main tax calculation summary with donut chart
 2. **Tasse Accantonate** — Monthly tax accrual tracking per invoice, cumulative chart

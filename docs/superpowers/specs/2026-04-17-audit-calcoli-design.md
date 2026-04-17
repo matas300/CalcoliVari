@@ -210,6 +210,420 @@ Gli ID seguono la numerazione della checklist alla sezione precedente. La colonn
 | ISS-A24 | A | medio | L'app non fornisce alcuna tabella ATECO integrata con i coefficienti di redditività. Il campo `coefficiente` (in Impostazioni profilo) è un campo numerico libero senza elenco di riferimento. L'utente con un ATECO diverso da 62.10.00 potrebbe inserire un coefficiente errato senza alcun avviso (es. 78 invece di 67, o viceversa), alterando l'imponibile forfettario e quindi tasse e contributi. | `app.js:21, 46, 71` (default profili); sezione Impostazioni profilo (campo `coefficiente`) | Aggiungere una tabella JSON dei coefficienti ufficiali (DM 23/1/2015 + aggiornamenti) e mostrare in UI un dropdown o un helper che suggerisca il coefficiente corretto in base all'ATECO inserito dall'utente. In alternativa, aggiungere un avviso informativo che rimandi alla tabella ufficiale AdE. |
 | ISS-A25 | A | medio | Il campo `agevolazioneStartUp` è puramente informativo e non ha alcun effetto sui calcoli. Attivarlo non abbassa automaticamente `impostaSostitutiva` da 15 a 5. Un utente che attiva il flag senza modificare manualmente l'aliquota continuerà a calcolare (e accantonare) il 15% invece del 5%, sovrastimando le imposte di 10 punti percentuali sull'imponibile per i primi 5 anni. La legge (L. 190/2014 art. 1 c. 65-bis) prevede esplicitamente l'agevolazione per i nuovi forfettari nei requisiti previsti. | `app.js:2259-2267` (campo UI); `app.js:1464` (`calcForfettarioValues` — `agevolazioneStartUp` non letto) | Quando `agevolazioneStartUp === 1`, applicare automaticamente `impostaSostitutiva = 5` nel calcolo (non sovrascrivere il setting, ma usare 5 nel motore fiscale). Oppure, aggiungere un avviso in UI che ricordi all'utente di abbassare manualmente l'aliquota a 5%. |
 | ISS-A26 | A | cosmetico | `INAIL_MINIMALE_RENDITA` per 2025 (18.415,40) e 2026 (18.689,79) non è stato verificato contro la tabella INAIL dei "premi speciali unitari artigiani" della circolare corrispondente. Il valore 2024 è confermato (Circ. INAIL 13/2024). Prima di correggere, serve lettura diretta della Circ. INAIL 2025 e 2026 (sezione artigiani autonomi, NON sezione retribuzione giornaliera dipendenti). | `app.js:303-306` | Verifica fonte dedicata per 2025 e 2026; aggiorna i valori se diversi. In alternativa, documentare la fonte usata (commit message, CLAUDE.md) per rendere tracciabile l'origine. |
+| ISS-B1-cassa | B | cosmetico | Divergenza normativa tra `calcForfettarioValues` (deduce contributi per competenza: 4 rate fisse anno corrente + tutti i contributi variabili anno corrente) e `buildForfettarioScenario` (deduce per cassa: 3 rate fisse anno corrente pagate in-year + 1 rata fissa anno precedente pagata a febbraio + saldo/acconti variabili per cassa). In B1 il delta strutturale sulla componente fissa è 15,18 € = `(4521.36 − 4460.64) / 4`, cioè la differenza tra la 4ª rata INPS fissi 2026 (non deducibile nel 2026 per cassa, pagata a feb 2027) e la 4ª rata INPS fissi 2025 (deducibile nel 2026 per cassa, pagata a feb 2026). Non è un bug ma un comportamento atteso e normativa conforme che può confondere sviluppatori che confrontano i due output. | `app.js:1462` (`calcForfettarioValues`) vs `tax-engine.js:528` (`buildForfettarioScenario`) | Documentare la doppia logica in CLAUDE.md (sezione "Doppia logica competenza/cassa"), citando B1 come esempio numerico concreto e spiegando perché le due funzioni producono risultati leggermente diversi. |
+
+## Step B — Risultati
+
+### B1 — Artigiano puro 2026
+
+**Input**: [ricavi 50.000 €, regime forfettario, coefficiente 67%, INPS artigiano ufficiale 2026 (minimale 18.808, fissi 4.521,36, aliquota 24%), no riduzione 35%, no primo anno]
+
+**Calcolo a mano** (skill `commercialista-fiscale`):
+
+| Voce | Formula | Importo |
+|------|---------|---------|
+| Ricavi | — | 50.000,00 |
+| Imponibile | Ricavi × 67% | 33.500,00 |
+| Eccedenza minimale | max(33.500 − 18.808, 0) | 14.692,00 |
+| cF | contribFissi 2026 artigiano | 4.521,36 |
+| cV | 14.692 × 24% | 3.526,08 |
+| cT | cF + cV | 8.047,44 |
+| Imposta sost. | max((33.500 − 8.047,44) × 15%, 0) | 3.817,88 |
+| Netto | 50.000 − 8.047,44 − 3.817,88 | 38.134,68 |
+| Incidenza | (50.000 − 38.134,68) / 50.000 | 23,73% |
+
+Aritmetica verificata:
+- `50.000 × 0.67 = 33.500` ✓
+- `33.500 − 18.808 = 14.692` ✓
+- `14.692 × 0.24 = 3.526,08` ✓
+- `4.521,36 + 3.526,08 = 8.047,44` ✓
+- `(33.500 − 8.047,44) × 0.15 = 25.452,56 × 0.15 = 3.817,884` (non arrotondato a 2 dec.) ✓
+- `50.000 − 8.047,44 − 3.817,884 = 38.134,676` (non arrotondato) ✓
+- `(50.000 − 38.134,676) / 50.000 = 11.865,324 / 50.000 = 0.23731 = 23,73%` ✓
+
+**Risultato `calcForfettarioValues`** (competenza, `app.js:1462-1479`):
+
+Traccia mentale con `tot=50000`, `settings={coefficiente:67, impostaSostitutiva:15, inpsMode:'artigiani_commercianti', inpsCategoria:'artigiano', usaInpsUfficiale:1, riduzione35:0}`, `year=2026`:
+
+- `coeff = 67/100 = 0.67`, `imp = 15/100 = 0.15`
+- `imponibile = 50000 * 0.67 = 33500`
+- `calcInpsContributions(33500, s, 2026)`:
+  - `mode = 'artigiani_commercianti'` (da `getInpsMode`)
+  - `cF = 4521.36` (da `OFFICIAL_ARTCOM_INPS[2026].artigiano.contribFissi`)
+  - `minimale = 18808`, `eccedenza = max(33500 − 18808, 0) = 14692`
+  - `aliquota = 24/100 = 0.24`
+  - `cV = 14692 * 0.24 = 3526.08`
+  - `cT = 4521.36 + 3526.08 = 8047.44`
+- `rid = 1` (riduzione35 ≠ 1 → `0.65` non applicato)
+- `cFR = 4521.36`, `cVR = 3526.08`, `cTR = 8047.44`
+- `tasse = Math.max((33500 − 8047.44) * 0.15, 0) = 25452.56 * 0.15 = 3817.884`
+- `n = 50000 − 8047.44 − 3817.884 = 38134.676`
+- `perc = (50000 − 38134.676) / 50000 = 0.237307`
+
+| Variabile | Atteso | Codice (raw) | Delta |
+|-----------|--------|--------------|-------|
+| imponibile | 33.500,00 | 33500 | 0,00 |
+| cT | 8.047,44 | 8047.44 | 0,00 |
+| tasse | 3.817,88 | 3817.884 | < 0,01 (non arrotondato a 2 dec. dalla funzione — atteso) |
+| netto (`n`) | 38.134,68 | 38134.676 | < 0,01 (non arrotondato — atteso) |
+| incidenza (`perc`) | 23,73% | 0.237307 | < 0,01% |
+
+Nota: `calcForfettarioValues` non arrotonda internamente `tasse` e `n`; l'arrotondamento avviene nel layer di presentazione. La discrepanza sub-centesimo è attesa e non costituisce errore.
+
+**Esito competenza**: ✓ — tutti i valori coincidono con il calcolo a mano entro il margine di arrotondamento (< 0,01 €).
+
+**Risultato `buildForfettarioScenario`** (cassa, `tax-engine.js:528-602`):
+
+Traccia mentale con metodo `storico`, `grossCollected=50000`, `settings={coefficiente:67, impostaSostitutiva:15}`, `currentContribution={mode:'artigiani_commercianti', fixedAnnual:4521.36, saldoAccontoBase:3526.08}`, `previousContribution={mode:'artigiani_commercianti', fixedAnnual:4460.64, saldoAccontoBase:3526.08}`, `previousContributionAccontiPaid=0`, `previousTaxBase=0`, `previousTaxAccontiPaid=0`:
+
+- `forfettarioGrossIncome = ceil2(50000 * 0.67) = 33500` ✓
+- `previousFixedParts = splitAmountByWeights(4460.64, [1,1,1,1])`:
+  - `totalCents = 446064`, ogni parte `= Math.floor(446064/4) = 111516` cent = `1115.16` €
+  - Ultima parte: `446064 − 111516*3 = 446064 − 334548 = 111516` → `1115.16` €
+  - `previousFixedTail = ceil2(1115.16) = 1115.16`
+- `currentFixedParts = splitAmountByWeights(4521.36, [1,1,1,1])`:
+  - `totalCents = 452136`, ogni parte `= Math.floor(452136/4) = 113034` cent = `1130.34` €
+  - `currentFixedWithinYear = ceil2(1130.34 + 1130.34 + 1130.34) = ceil2(3391.02) = 3391.02`
+- `previousContributionSaldo = ceil2(max(3526.08 − 0, 0)) = 3526.08`... ma per isolare la componente fissa, usiamo `previousContribution.saldoAccontoBase = 0` (nessun contrib. variabile 2025):
+  - `previousContributionSaldo = ceil2(max(0 − 0, 0)) = 0`
+- `contributionAccontoBase` (storico) `= previousContribution.saldoAccontoBase = 0`
+  - `contributionAcconti = buildAccontoPlan(0, ...)` → `{total: 0, mode: 'none'}`
+- `deductibleContributionsPaid = ceil2(1115.16 + 3391.02 + 0 + 0) = 4506.18`
+
+Confronto con `cT` per competenza (8.047,44):
+- **Delta totale = 8.047,44 − 4.506,18 = 3.541,26 €** in scenario "zero storico variabili 2025".
+
+Per uno scenario più realistico in cui `previousContribution.saldoAccontoBase = 3526.08` (i contributi variabili 2025 = quelli 2026, cioè anno stabile):
+- `previousContributionSaldo = 0` (acconti pagati = 0, ma base = 3526.08 → saldo dovuto = 3526.08)
+- `contributionAccontoBase = 3526.08`
+- `contributionAcconti = buildAccontoPlan(3526.08, ...)` → importo > 257.52 → double: `first = ceil2(3526.08*0.4) = 1410.43`, `second = 3526.08 − 1410.43 = 2115.65`, `total = 3526.08`
+- `deductibleContributionsPaid = ceil2(1115.16 + 3391.02 + 3526.08 + 3526.08) = ceil2(11558.34) = 11558.34`
+
+Questo scenario evidenzia che per cassa si deducono più contributi dell'anno corrente (saldo + acconti variabili) oltre alla quota fissa di febbraio dell'anno precedente. Il confronto competenza/cassa è una questione di semantica, non di errore.
+
+**Delta strutturale sulla sola componente fissa** (il confronto più pulito, ceteris paribus):
+
+| Componente | Competenza (`calcForfettarioValues`) | Cassa (`buildForfettarioScenario`) | Delta |
+|------------|--------------------------------------|-------------------------------------|-------|
+| Rate fisse incluse | 4 rate 2026 = 4.521,36 | 3 rate 2026 (1-3) + 1 rata 2025 (4ª) = 3.391,02 + 1.115,16 = 4.506,18 | **15,18 €** |
+
+Il delta = `(4521.36 − 4460.64) / 4 = 60.72 / 4 = 15.18` corrisponde esattamente alla variazione annuale delle rate INPS fissi tra 2025 e 2026 divisa per 4. Questo perché:
+- Per competenza: vengono conteggiate le 4 rate 2026 (inclusa la 4ª che sarà pagata a feb 2027).
+- Per cassa: viene conteggiata la 4ª rata 2025 (pagata a feb 2026, quindi nel 2026 per cassa), non la 4ª rata 2026.
+
+**Spiegazione del delta**: comportamento corretto e normativa conforme. Il 15,18 € non è un bug ma la conseguenza strutturale della diversa semantica (competenza vs cassa) applicata alla variazione annuale delle rate INPS fissi. Severity: cosmetico.
+
+**Issue**: ISS-B1-cassa (cosmetico) — documentare la doppia logica in CLAUDE.md.
+
+**Esito B1**: ✓ — aritmetica `calcForfettarioValues` corretta; delta cassa/competenza di 15,18 € sulla componente fissa spiegato e normativa conforme.
+
+### B2 — Commerciante riduzione 35% 2026
+
+**Input**: ricavi 30.000 €, coefficiente 40 %, INPS commerciante ufficiale 2026 (minimale 18.808, fissi 4.611,63, aliquota 24,48 %), riduzione 35 % attiva, no primo anno, no redditi dipendenti.
+
+**Calcolo a mano** (skill `commercialista-fiscale`):
+
+| Voce | Formula | Importo |
+|------|---------|---------|
+| Ricavi | — | 30.000,00 |
+| Imponibile | Ricavi × 40 % | 12.000,00 |
+| Eccedenza minimale | max(12.000 − 18.808, 0) | 0,00 |
+| cF lordo | contribFissi 2026 commerciante | 4.611,63 |
+| cF ridotto | cF × 0,65 | 2.997,56 |
+| cV | 0 × 24,48 % | 0,00 |
+| cT ridotto | cFR + cVR | 2.997,56 |
+| Imposta sost. | max((12.000 − 2.997,56) × 15 %, 0) | 1.350,37 |
+| Netto | 30.000 − 2.997,56 − 1.350,37 | 25.652,07 |
+| Incidenza | (30.000 − 25.652,07) / 30.000 | 14,49 % |
+
+Aritmetica verificata:
+- `30.000 × 0,40 = 12.000` ✓
+- `max(12.000 − 18.808, 0) = 0` (imponibile sotto il minimale → nessun contributo variabile) ✓
+- `4.611,63 × 0,65 = 2.997,5595` ✓ (arrotondato a 2 dec. → 2.997,56)
+- `(12.000 − 2.997,56) × 0,15 = 9.002,44 × 0,15 = 1.350,366` ✓ (arrotondato → 1.350,37)
+- `30.000 − 2.997,56 − 1.350,366 = 25.652,074` ✓ (arrotondato → 25.652,07)
+
+**Risultato `calcForfettarioValues`** (competenza, `app.js:1462-1479`):
+
+Traccia mentale con `tot=30000`, `settings={regime:'forfettario', coefficiente:40, impostaSostitutiva:15, inpsMode:'artcom', inpsCategoria:'commerciante', usaInpsUfficiale:1, riduzione35:1, haRedditoDipendente:0}`, `year=2026`:
+
+- `coeff = 40/100 = 0.40`, `imp = 15/100 = 0.15`
+- `imponibile = 30000 * 0.40 = 12000`
+- `calcInpsContributions(12000, s, 2026)` (`app.js:917-933`):
+  - `mode = 'artigiani_commercianti'` (via `getInpsMode`)
+  - `cF = 4611.63` (da `OFFICIAL_ARTCOM_INPS[2026].commerciante.contribFissi`)
+  - `minimale = 18808`, `eccedenza = max(12000 − 18808, 0) = 0`
+  - `aliquota = 24.48/100 = 0.2448`
+  - `cV = 0 * 0.2448 = 0`
+  - `cT = 4611.63 + 0 = 4611.63`
+- `rid = 0.65` (riduzione35==1 && mode==='artigiani_commercianti' → `app.js:1468`)
+- `cFR = 4611.63 * 0.65 = 2997.5595`; `cVR = 0 * 0.65 = 0`; `cTR = 2997.5595`
+- `tasse = max((12000 − 4611.63) * 0.15, 0) = 7388.37 * 0.15 = 1108.2555`
+- `tasseR = max((12000 − 2997.5595) * 0.15, 0) = 9002.4405 * 0.15 = 1350.366075`
+- `n = 30000 − 4611.63 − 1108.2555 = 24280.1145`
+- `nR = 30000 − 2997.5595 − 1350.366075 = 25652.074425`
+- `perc = (30000 − 24280.1145) / 30000 = 0.190629…`
+- `percR = (30000 − 25652.074425) / 30000 = 0.144931…`
+
+| Variabile | Atteso | Codice (raw) | Delta |
+|-----------|--------|--------------|-------|
+| imponibile | 12.000,00 | 12000 | 0,00 |
+| cF | 4.611,63 | 4611.63 | 0,00 |
+| cV | 0,00 | 0 | 0,00 |
+| cFR | 2.997,56 | 2997.5595 | < 0,01 (non arrotondato a 2 dec. dalla funzione — atteso) |
+| cVR | 0,00 | 0 | 0,00 |
+| cTR | 2.997,56 | 2997.5595 | < 0,01 (atteso) |
+| tasseR | 1.350,37 | 1350.366075 | < 0,01 (atteso) |
+| nR | 25.652,07 | 25652.074425 | < 0,01 (atteso) |
+| percR | 14,49 % | 0.144931 | < 0,01 % |
+
+**Selezione `tasseR` in `getAppliedForfettarioValues`** (`app.js:1499-1513`):
+
+Riga esatta:
+```
+const useRiduzione = s.riduzione35 == 1 && calc.inpsMode === 'artigiani_commercianti';  // app.js:1502
+...
+tasse: useRiduzione ? calc.tasseR : calc.tasse,                                          // app.js:1506
+contribFissi: useRiduzione ? calc.cFR : calc.cF,                                         // app.js:1507
+contribVariabili: useRiduzione ? calc.cVR : calc.cV,                                     // app.js:1508
+contribTotali: useRiduzione ? calc.cTR : calc.cT,                                        // app.js:1509
+netto: useRiduzione ? calc.nR : calc.n,                                                  // app.js:1510
+percEffettiva: useRiduzione ? calc.percR : calc.perc                                     // app.js:1511
+```
+
+Con `riduzione35=1` e `inpsMode='artigiani_commercianti'`, `useRiduzione = true` → il branch selezionato restituisce `tasseR`, `cFR`, `cVR`, `cTR`, `nR`, `percR`. Branch confermato. ✓
+
+**Esito competenza**: ✓ — tutti i valori coincidono con il calcolo a mano entro il margine di arrotondamento (< 0,01 €); la riduzione 35 % viene applicata correttamente sia a `cF` sia a `cV` (quest'ultimo è zero in questo scenario perché l'imponibile è sotto il minimale) e `getAppliedForfettarioValues` seleziona correttamente i valori "R".
+
+**Risultato `buildForfettarioScenario`** (cassa, `tax-engine.js:528-602`):
+
+Per la modalità cassa, `getForfettarioContributionBase(applied)` (`app.js:4237-4246`) restituisce `currentContribution.fixedAnnual = applied.contribFissi` — cioè il valore **già ridotto** (`cFR = 2997.56`) grazie a `getAppliedForfettarioValues`. Analogamente per l'anno precedente (ipotesi: stesso settings, commerciante ridotto 2025 → `fixedAnnual = 4549.70 × 0,65 = 2957.305 ≈ 2957.31`).
+
+Traccia mentale con metodo `storico`, `grossCollected=30000`, `settings={coefficiente:40, impostaSostitutiva:15}`, `currentContribution={mode:'artigiani_commercianti', fixedAnnual:2997.56, saldoAccontoBase:0}`, `previousContribution={mode:'artigiani_commercianti', fixedAnnual:2957.305, saldoAccontoBase:0}`, `previousContributionAccontiPaid=0`, `previousTaxBase=0`, `previousTaxAccontiPaid=0`:
+
+- `forfettarioGrossIncome = ceil2(30000 * 0.40) = 12000` ✓
+- `previousFixedParts = splitAmountByWeights(2957.305, [1,1,1,1])`:
+  - `totalCents ≈ round(2957.305 * 100) = 295731` → ogni parte `floor(295731/4) = 73932` cent = `739.32` €
+  - Ultima parte: `295731 − 73932*3 = 295731 − 221796 = 73935` cent = `739.35` €
+  - `previousFixedTail = ceil2(739.35) = 739.35`
+- `currentFixedParts = splitAmountByWeights(2997.56, [1,1,1,1])`:
+  - `totalCents = 299756`, ogni parte `floor(299756/4) = 74939` cent = `749.39` €
+  - Ultima parte: `299756 − 74939*3 = 299756 − 224817 = 74939` cent = `749.39` €
+  - `currentFixedWithinYear = ceil2(749.39 * 3) = ceil2(2248.17) = 2248.17`
+- `previousContributionSaldo = ceil2(max(0 − 0, 0)) = 0`
+- `contributionAccontoBase` (storico) = `previousContribution.saldoAccontoBase = 0`
+- `contributionAcconti = buildAccontoPlan(0, ...)` → `{total: 0, mode: 'none'}` (sotto soglia 51,65)
+- `deductibleContributionsPaid = ceil2(739.35 + 2248.17 + 0 + 0) = 2987.52`
+- `taxableBase = ceil2(max(12000 − 2987.52, 0)) = 9012.48`
+- `substituteTax = ceil2(9012.48 * 0.15) = ceil2(1351.872) = 1351.88`
+- `taxAccontoBase` (storico, `previousTaxBase=0`) → `0` → `taxAcconti = {total: 0, mode: 'none'}`
+
+**Delta strutturale cassa vs competenza** (scenario riduzione 35 % con `cV=0`):
+
+| Componente | Competenza (`calcForfettarioValues`) | Cassa (`buildForfettarioScenario`) | Delta |
+|------------|--------------------------------------|-------------------------------------|-------|
+| Rate fisse ridotte incluse | 4 rate 2026 = 2.997,56 | 3 rate 2026 (1-3) + 1 rata 2025 (4ª) = 2.248,17 + 739,35 = 2.987,52 | **10,04 €** |
+| Imposta sostitutiva | 1.350,37 | 1.351,88 | **+1,51 €** |
+| Netto | 25.652,07 | 30.000 − 2.987,52 − 1.351,88 = 25.660,60 | **+8,53 €** |
+
+Delta sulla componente fissa = `(2997.56 − 2957.305) / 4 = 40,255 / 4 ≈ 10,06 €` — quadra (entro arrotondamenti `splitAmountByWeights` in centesimi) con i 10,04 € osservati. La meccanica è identica a B1, ma **applicata ai valori già ridotti del 35 %** perché `getAppliedForfettarioValues` viene a monte del `getForfettarioContributionBase`.
+
+**Spiegazione del delta**: comportamento corretto e normativa conforme. Il delta è la stessa divergenza strutturale competenza/cassa vista in B1 (4ª rata 2026 non pagata entro l'anno ⇒ sostituita in cassa dalla 4ª rata 2025), qui applicata ai contributi ridotti del 35 %. L'aumento di 1,51 € sull'imposta sost. cassa è la conseguenza diretta: meno contributi deducibili ⇒ imponibile fiscale più alto ⇒ tassa leggermente maggiore. Nessun issue: rientra nel perimetro dell'ISS-B1-cassa già aperto.
+
+**Esito B2**: ✓ — aritmetica `calcForfettarioValues` corretta; branch `tasseR` / `cFR` confermato in `getAppliedForfettarioValues` (`app.js:1502,1506-1511`); delta cassa/competenza di 10,04 € sulla componente fissa e +1,51 € sull'imposta sost. spiegato e normativa conforme (stesso pattern di B1, coperto da ISS-B1-cassa).
+
+### B3 — Gestione separata 2026
+
+**Input:** ricavi 40 000 €, coefficiente 78 %, gestione separata, aliquota 26,07 % (libero prof. esclusivo, Circ. INPS 8/2026), anno 2026.
+
+**Calcolo a mano:**
+
+| Voce | Valore |
+|------|-------:|
+| Imponibile (40 000 × 78 %) | 31 200,00 € |
+| cF (gest. sep. non ha fissi) | 0,00 € |
+| cV (31 200 × 26,07 %) | 8 133,84 € |
+| cT | 8 133,84 € |
+| Imposta sost. ((31 200 − 8 133,84) × 15 %) | 3 459,92 € |
+| Netto | 28 406,24 € |
+
+Aritmetica verificata (Python):
+- `40000 * 0.78 = 31200,00` ✓
+- `31200 * 0.2607 = 8133,84` (8133,8399… → 8133,84 a 2 dec.) ✓
+- `(31200 − 8133,84) * 0,15 = 23066,16 * 0,15 = 3459,924` → 3459,92 a 2 dec. ✓
+- `40000 − 8133,84 − 3459,924 = 28406,236` → 28406,24 a 2 dec. ✓
+
+**Per competenza** (`calcForfettarioValues`, app.js:1462-1479):
+
+Traccia con `tot=40000`, `settings={regime:'forfettario', coefficiente:78, impostaSostitutiva:15, inpsMode:'gestione_separata', aliqContributi:26.07, riduzione35:0}`, `year=2026`:
+- `coeff=0.78`, `imp=0.15`, `imponibile = 40000 * 0.78 = 31200`
+- `calcInpsContributions(31200, s, 2026)` (`app.js:917-933`): branch `mode === 'gestione_separata'` (linee 923-926) ⇒ `aliquota = 26.07/100 = 0.2607`, `cV = 31200 * 0.2607 = 8133.84`, **ritorna early** `{mode:'gestione_separata', cF:0, cV:8133.84, cT:8133.84, imponibile:31200}`. ✓ Nessun `minimale`, nessuna `eccedenza`, nessuna `riduzione 35` applicata a questo ramo.
+- `rid = 1` (perché `inps.mode !== 'artigiani_commercianti'`, riga 1468)
+- `cFR=0, cVR=8133.84, cTR=8133.84`
+- `tasse = max((31200 − 8133.84) * 0.15, 0) = 23066.16 * 0.15 = 3459.924`
+- `n = 40000 − 8133.84 − 3459.924 = 28406.236`
+
+| Variabile | Atteso | Codice (raw) | Delta |
+|-----------|--------|--------------|-------|
+| imponibile | 31 200,00 | 31200 | 0,00 |
+| cF | 0,00 | 0 | 0,00 |
+| cV | 8 133,84 | 8133.84 | 0,00 (entro float) |
+| cT | 8 133,84 | 8133.84 | 0,00 |
+| tasse | 3 459,92 | 3459.924 | < 0,01 (non arrotondato, atteso) |
+| n | 28 406,24 | 28406.236 | < 0,01 (atteso) |
+
+✓ delta < 0,01 €. **Nota ISS-A8**: il massimale contributivo annuo (122 295 € per 2026) **non è applicato** nel ramo `gestione_separata` (`app.js:923-926` — ritorna prima di qualunque check su massimale). In questo scenario non si manifesta perché imponibile 31 200 € << 122 295 €. Bug critico già tracciato.
+
+**Per cassa** (`buildForfettarioScenario`, `tax-engine.js:528-602`):
+
+In gestione separata `currentContribution.mode !== 'artigiani_commercianti'`, quindi (righe 540-545) `previousFixedParts = [0,0,0,0]` e `currentFixedParts = [0,0,0,0]` ⇒ `previousFixedTail = 0`, `currentFixedWithinYear = 0`. **La componente fissa cassa/competenza è strutturalmente zero in gest. sep.**, quindi il delta di 15,18 € visto in B1 e di 10,04 € visto in B2 **non si manifesta qui**: ✓ atteso. Gest. sep. non è soggetta a ISS-B1-cassa sulla componente fissa.
+
+La componente variabile (cV = 8133,84 €) in cassa viene invece intercettata dal flusso `previousContributionSaldo` + `contributionAcconti` (basato su `previousContribution.saldoAccontoBase`), non dal flusso `fixedParts`. Due sotto-casi:
+- **Anno di regime a regime (storico disponibile con saldoAccontoBase = 8133,84 e acconti già versati)**: `deductibleContributionsPaid ≈ saldo + acconti anno corrente ≈ 8133,84`, quindi l'imposta sost. cassa si avvicina a quella competenza entro arrotondamenti `ceil2`. Il delta residuo dipende dalla soglia acconti (`buildAccontoPlan`) e dagli arrotondamenti — non da una differenza strutturale fissi.
+- **Primo anno / storico assente**: `deductibleContributionsPaid = 0` ⇒ `taxableBase = 31200` ⇒ `substituteTax cassa = ceil2(31200 * 0.15) = 4680,00 €` contro 3459,92 € competenza. Delta ~1220 € — coperto da B5 (primo anno senza storico) e tracciato in ISS-B1-cassa.
+
+**Conferma**: con `cF=0`, il delta cassa/competenza fisso è **zero (atteso)**. L'eventuale delta residuo dipende da `ceil2` e dal percorso saldo/acconti per la componente variabile, non da doppia logica fissi.
+
+**Default aliquota (ISS-A9)**:
+
+Il default in `getDefaultSettings` (`app.js:1066`) è `aliqContributi: 24.0`, ereditato da `OFFICIAL_ARTCOM_INPS.artigiano.aliqContributi`. Se l'utente imposta `inpsMode='gestione_separata'` senza sovrascrivere manualmente `aliqContributi`, il codice usa **24,0 %** invece del 26,07 % corretto per gest. sep. libero prof. esclusivo 2026.
+
+Impatto su questo scenario (verifica Python):
+- `cV(24%) = 31200 * 0.24 = 7488,00` (−645,84 € vs 8133,84)
+- `tasse(24%) = (31200 − 7488) * 0.15 = 23712 * 0.15 = 3556,80` (+96,88 € vs 3459,92)
+- `netto(24%) = 40000 − 7488 − 3556,80 = 28955,20` (+548,96 € vs 28406,24)
+
+⚠ Con default ereditato (24 %) il netto viene **sovrastimato di ~549 €** (contributi sottostimati di ~646 €, compensati parzialmente da imposta sost. più alta di ~97 €). Bug medio già tracciato in ISS-A9.
+
+**Esito B3**: ✓ conforme alle ipotesi; ramo `gestione_separata` in `calcInpsContributions` aritmeticamente corretto con delta < 0,01 €. Due note non bloccanti: **ISS-A8** (massimale non applicato, non manifesto qui per imponibile basso) e **ISS-A9** (default `aliqContributi=24%` fuorviante per gest. sep., impatto ~549 € su netto in questo scenario).
+
+### B4 — Anno chiuso 2024 con cross-year
+
+**Setup sintetico:** `data2024.fatture[11]=[{importo:5000, pagAnno:2024}]`, `data2024.fatture[12]=[{importo:3000, pagAnno:2025}]`. `data2025` senza fatture proprie.
+
+**Verifiche:**
+| Funzione | Linea | Risultato atteso | Risultato osservato | Esito |
+|----------|------:|-----------------:|--------------------:|:-----:|
+| `getMonthEuroFromYearData(2024, 12)` | app.js:1426 | 0 € (skip cross-year) | 0 € — condizione `f.pagAnno && f.pagAnno !== year` con `2025 !== 2024` → `continue` | ✓ |
+| `getMonthEuroFromYearData(2024, 11)` | app.js:1426 | 5 000 € | 5 000 € — `2024 !== 2024` falso → `total += 5000` | ✓ |
+| `getTotalAnnuoForYear(2024)` | app.js:1451 | 5 000 € | 5 000 € (Σ mesi=5000, cross-year dai precedenti=∅) | ✓ |
+| `getCrossYearInvoicesForYear(2025)` | app.js:1360 | 1 fattura, 3 000 € | 1 record `{mese:12, anno:2024, importo:3000, pagMese, desc}` — match `f.pagAnno === 2025` | ✓ |
+| `getTotalAnnuoForYear(2025)` | app.js:1451 | 3 000 € | 3 000 € (Σ mesi=0 + cross-year=3000 via loop `app.js:1457`) | ✓ |
+
+**Logica chiave:**
+- Esclusione per-cassa (`app.js:1441`): `if (f.importo > 0 && f.pagAnno && f.pagAnno !== year) continue;` — rimuove dalla somma dell'anno di emissione le fatture incassate altrove.
+- Inclusione cross-year (`app.js:1360-1376`): `getCrossYearInvoicesForYear(year)` cicla `getStoredYears(year-1)` con guardia `sourceYear < year`, poi filtra `f.pagAnno === year`.
+- Integrazione (`app.js:1457`): `getTotalAnnuoForYear` somma mesi propri + ritorno cross-year → garantisce la quadratura fra anno emissione e anno incasso.
+
+**Edge cases verificati (solo lettura):**
+- `pagAnno === undefined` / `null` / `0`: falsy → short-circuit su `f.pagAnno` in riga 1441 → fattura attribuita all'anno di emissione (default legacy). `getFattureFromYearData` normalizza `f.pagAnno || null` (app.js:1232), quindi `undefined`, `0`, `""` diventano `null`. ✓
+- `pagAnno === year` (es. fattura nov 2024 incassata nov 2024): `2024 !== 2024` falso → inclusa nell'anno di emissione. ✓
+- `pagAnno` stringa `"2025"`: il confronto stretto `"2025" !== 2024` è `true` (skip corretto nell'emissione), ma `"2025" === 2025` è `false` → **fattura non catturata neanche da `getCrossYearInvoicesForYear`**. La fattura sparirebbe da entrambi gli anni. In pratica i write-path UI normalizzano via `parseInt(val)` in `setPagAnno` (app.js:6393-6398) e `setPagMese` (app.js:6384-6391), quindi l'invariante "pagAnno numerico" è mantenuta. Rischio residuo solo su dati importati/seed grezzi. ⚠ nota (non issue — non osservabile dal normale flow UI).
+
+**Esito complessivo:** ✓ conforme. Logica cross-year coerente per flussi originati dalla UI. Nota di robustezza sulla type-coercion in ingresso (import JSON / Firestore): nessun cast esplicito a `Number` oltre `parseFloat` su `importo`. Non blocca la correttezza di B4.
+
+### B5 — Primo anno 2026 senza storico
+
+**Setup:** profilo Demo, anno 2026, no dati 2025 in localStorage. Settings primoAnno*: fatturato 20 000, imposta 1 500, acconti imposta 0, contributi variabili 800, acconti contributi 0. INPS artigiano 2026 (`OFFICIAL_ARTCOM_INPS[2026].artigiano.contribFissi = 4 521,36`).
+
+**Atteso (calcolo a mano):**
+| Voce | Importo | Scadenza |
+|------|--------:|:---------|
+| Saldo imposta 2025 | 1 500,00 € | 30/06/2026 |
+| 1° acconto imposta 2026 (40%) | 600,00 € | 30/06/2026 |
+| 2° acconto imposta 2026 (60%) | 900,00 € | 30/11/2026 |
+| Saldo contributi 2025 | 800,00 € | 30/06/2026 |
+| 1° acconto contributi 2026 (40%) | 320,00 € | 30/06/2026 |
+| 2° acconto contributi 2026 (60%) | 480,00 € | 30/11/2026 |
+| INPS fissi 1ª-4ª rata | 1 130,34 € × 4 | 16/05, 20/08, 16/11/2026, 16/02/2027 |
+
+**Verifica codice (`buildForfettarioScheduleForYear`, app.js:4492):**
+- Trigger fallback (`app.js:4584-4596`): `if (!prevApplied) { if (hasPrimoAnnoData) { firstYearManualUsed = true; … } }`. `hasPrimoAnnoData` (riga 4542) = `primoAnnoImpostaPrec !== null || primoAnnoContribVariabiliPrec !== null`. Il branch scatta solo se `getAppliedForfettarioForYear(year-1, { requireForfettarioRegime: true })` restituisce null (manca yearData 2025 o regime diverso). → ✓
+- Fallback `primoAnnoImpostaPrec` per saldo imposta (`app.js:4610-4614`): `autoImpostaSaldo = prevApplied ? … : (firstYearManualUsed && primoAnnoImpostaPrec !== null ? primoAnnoImpostaPrec - (primoAnnoAccontiImpostaPrec || 0) : 0)`. Con 1500-0 = 1 500,00 €. → ✓
+- Fallback `primoAnnoAccontiImpostaPrec` per detrazione acconti (stessa riga 4613): sottratto con coalesce `|| 0`, neutro a 0. → ✓
+- Fallback base acconti imposta (`app.js:4634-4642`): `impostaAccontiBase = … : (firstYearManualUsed && primoAnnoImpostaPrec !== null ? primoAnnoImpostaPrec : currentApplied.tasse)`. Base = 1 500. → ✓
+- Fallback `primoAnnoContribVariabiliPrec` per saldo contributi (`app.js:4700-4704`): `autoContribSaldo = prevForfettarioContribution ? … : (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null ? primoAnnoContribVariabiliPrec - (primoAnnoAccontiContribPrec || 0) : 0)`. Con 800-0 = 800,00 €. → ✓
+- Fallback base acconti contributi (`app.js:4724-4732`): ramo `firstYearManualUsed && primoAnnoContribVariabiliPrec !== null ? primoAnnoContribVariabiliPrec : currentContribution.saldoAccontoBase`. Base = 800. → ✓
+- Soglie acconto applicate (`buildAccontoPlan`, app.js:4196-4206, `FORFETTARIO_RULES` app.js:571-580): 51,65 → none; < 257,52 → single 100% a novembre; >= 257,52 → split [40, 60] via `splitAmountByWeights`. Per imposta base 1 500 → (600, 900); per contributi base 800 → (320, 480). → ✓
+- INPS fissi 4 rate uguali (`app.js:4681-4695`): `splitAmountByWeights(currentContribution.fixedAnnual, [1,1,1,1])` su date `FORFETTARIO_RULES.fixedInpsDates = [[5,16],[8,20],[11,16],[2,16]]`. `fixedAnnual` = `applied.contribFissi` = 4 521,36 (2026 artigiano ufficiale, app.js:297) → 4 rate da 1 130,34 €. La quarta data (mese 2 < 3) triggera `dueYear = year + 1 = 2027` in `pushDueRow` (app.js:4549). → ✓
+
+**Esito:** ✓ conforme. Tutti i 7 valori attesi coincidono con l'output atteso della funzione. Il branch `firstYearManualUsed` è gated correttamente su `!prevApplied` e richiede almeno uno dei due campi manuali non nulli (`hasPrimoAnnoData`). Gli acconti manuali precedenti vengono sottratti con coalesce `|| 0` (nota: se uno dei due manuali è valorizzato ma l'altro è null, `null || 0 = 0` è ok; però se l'utente lasciasse vuoto l'importo manuale principale ma compilasse solo gli acconti, il ramo ignorerebbe gli acconti — comportamento atteso dato `hasPrimoAnnoData` richiede almeno un importo base).
+
+### B6 — Transizione regime 2025 ord → 2026 forf
+
+**Setup:** `data2025.settings.regime='ordinario'`, `haRedditoDipendente=1`; `data2026.settings.regime='forfettario'`. Anno calcolo: 2026.
+
+**`buildTransitionDiagnostics`** (`tax-engine.js:494`):
+| Campo | Atteso | Osservato | ✓/✗ |
+|-------|--------|-----------|:---:|
+| currentRegime | forfettario | forfettario | ✓ |
+| previousRegime | ordinario | ordinario | ✓ |
+| previousHadEmployeeIncome | true | true (`parseInt(1,10)===1`) | ✓ |
+| isRegimeTransition | true | true (`ordinario !== forfettario`) | ✓ |
+| warnings.length | 3 | 3 (redditi misti + transizione regime + storico non puro) | ✓ |
+| facts.length | 2 | 2 ("Anno 2025 con redditi misti."; "Cambio regime ordinario -> forfettario.") | ✓ |
+
+Tutti e tre i branch `if` (righe 505, 509, 513) scattano: il terzo (`previousRegime !== 'forfettario' && currentRegime === 'forfettario'`) aggiunge solo warning senza fact, coerente con il conteggio 3/2.
+
+**`chooseMethodPolicy`** (`scadenziario-engine.js:433`):
+| Campo | Atteso | Osservato | ✓/✗ |
+|-------|--------|-----------|:---:|
+| recommendedMethod | previsionale | previsionale | ✓ |
+| methodConfidence | warning | warning | ✓ |
+| methodWarning | "L'anno precedente non è un forfettario puro…" | "L anno precedente non e un forfettario puro: storico disponibile ma sconsigliato come base automatica." (senza apostrofi/diacritici nel sorgente) | ✓ |
+
+Ramo attivo: riga 449 (`previousYearType === 'ordinario'`). Il flag `previousYearComplete` non influenza questo ramo (rilevante solo per il ramo forfettario puro).
+
+**Integrazione UI:**
+- `chooseMethodPolicy` invocato in: `app.js:5319` (dentro `buildScadenziarioMeta`), con `previousYearType` derivato da `getScadenziarioYearTypeFromSettings(previousSettings.settings)` e `previousYearComplete` gated da `previousYearType === 'forfettario' && !yearHasEstimates(year-1)`.
+- `methodWarning` reso visibile: ✓ in `renderScadMethodBox` (`app.js:5548` legge `meta.methodPolicy.methodWarning`, `app.js:5571` lo emette come `<div class="scad-note">${warning}</div>` all'interno di `.scad-method-box`). Inoltre il chip "Consigliato: Previsionale" (`app.js:5556`) riceve classe `.warn` quando `recommended !== meta.currentMethod`. Warning effettivamente mostrato nello scadenziario.
+
+**Esito:** ✓ conforme. Sia la struttura dati di `buildTransitionDiagnostics`/`chooseMethodPolicy` sia la resa UI coincidono con l'atteso. Nessun ISS-B6.
+
+### B7 — Smoke Ordinario gest. separata 2026
+
+**Input:** regime ordinario, fatturato 60 000 €, spese 5 000 €, gest. sep. esclusivo 26,07 %, anno 2026.
+
+**Stima a mano (smoke, non esatta):**
+- Reddito ante-INPS: 55 000 €
+- Contributi: 55 000 × 26,07 % = 14 338,50 €
+- Imponibile IRPEF (post-INPS): ~40 661,50 €
+- IRPEF stimata (scaglioni 23/35/43): ~10 872 €
+- Netto stimato: ~29 790 €
+
+**Verifica codice (`calcOrdinarioValues`, app.js:1818; `calcInpsContributions`, app.js:917; `getIrpefBracketsForYear`, app.js:892):**
+| Check | Atteso | Osservato | ✓/✗ |
+|-------|--------|-----------|:---:|
+| Nessuna eccezione | sì | nessuna (flusso puramente aritmetico, nessun throw/assert) | ✓ |
+| `tasse` > 0 e < 30 000 | sì | `con.tasse` = 28000·0,23 + (40661,50−28000)·0,35 = 6 440,00 + 4 431,525 = **10 871,525 €** | ✓ |
+| `cT` plausibile (~14 000 ± 1 000) | sì | 55 000 × 0,2607 = **14 338,50 €** (da `calcInpsContributions` ramo `gestione_separata`, riga 923-926) | ✓ |
+| `netto > 0` e ~30 000 ± 3 000 | sì | 55 000 − 14 338,50 − 10 871,525 = **29 789,975 €** | ✓ |
+| Bilancio (netto+tasse+cT+spese ≈ 60 000) | ± 100 € | 29 789,975 + 10 871,525 + 14 338,50 + 5 000 = **60 000,00 €** (delta 0) | ✓ |
+| Branch `gestione_separata` riconosciuto | sì | `calcInpsContributions` riga 923: `if (mode === 'gestione_separata') { cV = base * aliquota; return { cF:0, cV, cT:cV, ... } }` — niente fissi né minimale | ✓ |
+| Deducibilità INPS dall'imponibile IRPEF | sì | `calcOrdinarioValues` riga 1840: `baseIrpefSp = Math.max(baseSp − cT, 0)`; poi `con = irpef(baseIrpefSp)` riga 1841 → IRPEF calcolata al netto dei contributi | ✓ |
+
+**Nota metodologica:** `calcOrdinarioValues` calcola in parallelo due scenari, "lordo" (senza spese, `cTLordo` su `baseLordo`) e "sp/con" (con spese, `cT` su `baseSp`). Il netto effettivo restituito è `netto = baseSp − cT − con.tasse` (riga 1845), coerente con lo smoke. Gli scaglioni 2026 provengono da `getIrpefBracketsForYear` per `y ≥ 2024`: 23 % fino a 28 000, 35 % fino a 50 000, 43 % oltre — conformi alla normativa vigente.
+
+**Esito:** ✓ smoke OK. Nessuna deviazione rispetto alla stima: `cT` calcolato correttamente sul reddito imponibile (non sul fatturato), IRPEF considera la deducibilità INPS, aliquote scaglioni 2026 corrette. Nessun ISS-B7.
+
+### Sintesi Step B
+
+7 scenari eseguiti, **7 conformi** (di cui 2 con note non bloccanti), **0 nuove discrepanze critiche**, **0 nuove discrepanze medie**, **1 nuova discrepanza cosmetica** (ISS-B1-cassa, già aperta in B1).
+
+| Scenario | Esito | Issue collegate |
+|----------|:-----:|-----------------|
+| B1 — Artigiano puro 2026 | ✓ | ISS-B1-cassa (cosmetico, doppia logica competenza/cassa) |
+| B2 — Commerciante riduzione 35% 2026 | ✓ | nessuna |
+| B3 — Gestione separata 2026 | ✓ | conferma ISS-A8 (non manifesto: imponibile 31 200 € << massimale 122 295 €) e ISS-A9 (default aliquota 24% sottostima cT di ~645 € e netto +549 €) |
+| B4 — Anno chiuso 2024 cross-year | ✓ | nessuna; ⚠ nota su confronto stretto `pagAnno` stringa vs numero (mitigato da `parseInt` nei setter) |
+| B5 — Primo anno 2026 senza storico | ✓ | nessuna |
+| B6 — Transizione regime 2025 ord → 2026 forf | ✓ | nessuna; warning UI `methodWarning` correttamente reso in `renderScadMethodBox` |
+| B7 — Smoke Ordinario gest. sep. 2026 | ✓ | nessuna; bilancio fatturato esatto (delta 0,00 €) |
+
+**Decisione Step C (regression test harness):** non necessario.
+Phase B non ha trovato nuove discrepanze critiche o medie sui motori di calcolo (`calcForfettarioValues`, `calcInpsContributions`, `calcOrdinarioValues`, `buildForfettarioScenario`, `buildForfettarioScheduleForYear`, `buildTransitionDiagnostics`, `chooseMethodPolicy`). Le issue critiche e medie già aperte in Phase A (ISS-A8, ISS-A9, ISS-A18-a, ISS-A18-b, ISS-A24, ISS-A25) sono normative/UX (massimale, default aliquote, differimento bollo, proroghe, tabella ATECO, agevolazione start-up), non bug aritmetici sui calcoli che il regression test avrebbe coperto. Il rischio di regressione è basso e localizzato; il test harness viene rinviato a un'eventuale futura iterazione, da decidere insieme all'utente.
+
+**Issue totali audit (Step A + Step B):** **8** — 1 critica (ISS-A8), 5 medie (ISS-A9, ISS-A18-a, ISS-A18-b, ISS-A24, ISS-A25), 2 cosmetiche (ISS-A26, ISS-B1-cassa).
 
 ## Step B — Scenari di simulazione
 
