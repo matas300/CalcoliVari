@@ -1107,6 +1107,35 @@ function ensureDataShape(target, year = currentYear) {
   out.settings.inpsCategoria = getInpsCategory(out.settings);
   syncOfficialInpsValues(out.settings, targetYear);
   migrateFattureFor(out);
+  if (!out.settings.anagrafica) out.settings.anagrafica = {
+    codiceFiscale: '', cognome: '', nome: '', sesso: '', dataNascita: '',
+    comuneNascita: '', provNascita: '',
+    residenzaVia: '', residenzaComune: '', residenzaProv: '', residenzaCap: '',
+    domicilioFiscaleVia: '', domicilioFiscaleComune: '', domicilioFiscaleProv: '', domicilioFiscaleCap: '',
+    telefono: '', email: '', statoCivile: ''
+  };
+  if (!out.settings.attivita) out.settings.attivita = {
+    codiceAteco: '', descrizioneAttivita: '', dataInizioAttivita: '',
+    sedeVia: '', sedeComune: '', sedeProv: '', sedeCap: ''
+  };
+  // Dichiarazione Redditi PF
+  if (!out.dichiarazione || typeof out.dichiarazione !== 'object') {
+    out.dichiarazione = {
+      tipoDichiarazione: 'ordinaria',
+      dataPresentazione: null,
+      flags: { annoMisto: false, imposteEstere: false, altriCrediti: false },
+      contiEsteri: [],
+      coniuge: null,
+      familiariCarico: [],
+      overrides: {},
+      computed: null,
+      statoCompilazione: 'bozza'
+    };
+  }
+  if (out.lmQuadro && out.lmQuadro.overrides) {
+    Object.assign(out.dichiarazione.overrides, out.lmQuadro.overrides);
+    delete out.lmQuadro;
+  }
   return out;
 }
 
