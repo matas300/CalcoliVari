@@ -298,6 +298,25 @@ const OFFICIAL_ARTCOM_INPS = {
     commerciante: { contribFissi: 4611.63, aliqContributi: 24.48 }
   }
 };
+// Massimale contributivo annuo INPS Gestione Separata
+// Fonte: circolari INPS annuali (art. 2 c. 18 L. 335/1995)
+// Si applica a: base imponibile annua per il calcolo dei contributi gestione separata
+const OFFICIAL_GESTIONE_SEPARATA_MASSIMALE = {
+  2020: 103055,
+  2021: 103055,
+  2022: 105014,
+  2023: 113520,
+  2024: 119650,
+  2025: 120607,
+  2026: 122295
+};
+function getGestSepMassimale(year) {
+  const y = parseInt(year, 10);
+  if (OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[y]) return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[y];
+  const known = Object.keys(OFFICIAL_GESTIONE_SEPARATA_MASSIMALE).map(Number).sort((a, b) => a - b);
+  if (y < known[0]) return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[0]];
+  return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[known.length - 1]];
+}
 // Retribuzione convenzionale INAIL (minimale di rendita) per artigiani senza dipendenti
 // Fonte: circolare INAIL annuale. Il premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%)
 const INAIL_MINIMALE_RENDITA = {
@@ -921,8 +940,10 @@ function calcInpsContributions(imponibile, settings, year) {
   const aliquota = (parseFloat(s.aliqContributi) || 0) / 100;
 
   if (mode === 'gestione_separata') {
-    const cV = base * aliquota;
-    return { mode, cF: 0, cV, cT: cV, imponibile: base };
+    const massimale = getGestSepMassimale(year || currentYear);
+    const cappedBase = Math.min(base, massimale);
+    const cV = cappedBase * aliquota;
+    return { mode, cF: 0, cV, cT: cV, imponibile: base, massimale, cappedBase };
   }
 
   const cF = Math.max(parseFloat(s.contribFissi) || 0, 0);
