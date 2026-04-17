@@ -1176,6 +1176,7 @@ function getDefaultSettings(year = currentYear) {
     scadenziarioAccontoImposta: '',
     scadenziarioSaldoContributi: '',
     scadenziarioAccontoContributi: '',
+    scadenziarioOverrideDataSaldoImposta: '',
     scadenziarioDirittoCamerale: '',
     scadenziarioBolloPrecedenteQ4: '',
     scadenziarioBolloCorrente123: '',
@@ -4658,6 +4659,19 @@ function buildForfettarioScheduleForYear(year) {
   const projectionRange = isClosedYear ? null : getForfettarioProjectionRange(year, scheduleSettings.scadenziarioRangePct);
   const prevHasEst = yearHasEstimates(year - 1);
 
+  // Override data saldo/1o acconto imposta (proroga AdE): se impostato, sposta le 4 scadenze
+  // del 30/06 relative a imposta sostitutiva (saldo + 1o acconto) e contributi variabili
+  // (saldo + 1o acconto). 2o acconto e INPS fissi non sono interessati.
+  const overrideRaw = (scheduleSettings.scadenziarioOverrideDataSaldoImposta || '').trim();
+  let overrideSaldoImposta = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(overrideRaw)) {
+    const [oy, om, od] = overrideRaw.split('-').map(n => parseInt(n, 10));
+    const odt = new Date(oy, om - 1, od);
+    if (odt.getFullYear() === oy && odt.getMonth() === om - 1 && odt.getDate() === od) {
+      overrideSaldoImposta = { year: oy, month: om, day: od };
+    }
+  }
+
   // Campi primo utilizzo: fallback manuale quando manca lo storico anno precedente
   const primoAnnoImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoImpostaPrec);
   const primoAnnoAccontiImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiImpostaPrec);
@@ -4730,6 +4744,9 @@ function buildForfettarioScheduleForYear(year) {
   if (manualSaldoImposta !== null || manualAccontoImposta !== null || manualSaldoContributi !== null || manualAccontoContributi !== null) {
     notes.push('Sono attivi uno o piu override manuali nello scadenziario: i relativi importi prevalgono sul calcolo automatico.');
   }
+  if (overrideSaldoImposta) {
+    notes.push(`Proroga applicata: saldo e 1o acconto spostati al ${overrideSaldoImposta.day.toString().padStart(2, '0')}/${overrideSaldoImposta.month.toString().padStart(2, '0')}/${overrideSaldoImposta.year}.`);
+  }
 
   const autoImpostaSaldo = prevApplied
     ? prevApplied.tasse - prevImpostaAccontiPaid
@@ -4739,8 +4756,8 @@ function buildForfettarioScheduleForYear(year) {
   const impostaSaldo = manualSaldoImposta !== null ? manualSaldoImposta : autoImpostaSaldo;
   if (impostaSaldo > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       'Imposta sostitutiva',
       `Saldo ${year - 1}`,
       impostaSaldo,
@@ -4749,7 +4766,7 @@ function buildForfettarioScheduleForYear(year) {
         : (firstYearManualUsed ? 'Manuale primo utilizzo'
           : (prevImpostaAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   } else if (manualSaldoImposta === null && autoImpostaSaldo < 0) {
     credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoImpostaSaldo), fiscalYear: year - 1 });
@@ -4769,8 +4786,8 @@ function buildForfettarioScheduleForYear(year) {
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
   if (impostaAcconti.first > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       'Imposta sostitutiva',
       `1o acconto ${year}`,
       impostaAcconti.first,
@@ -4781,7 +4798,7 @@ function buildForfettarioScheduleForYear(year) {
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
           : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
-      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
+      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   }
   if (impostaAcconti.second > 0) {
@@ -4829,8 +4846,8 @@ function buildForfettarioScheduleForYear(year) {
   const contribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoContribSaldo;
   if (contribSaldo > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       prevForfettarioContribution ? prevForfettarioContribution.saldoLabel : getContribLabel(currentApplied.inpsMode),
       `Saldo ${year - 1}`,
       contribSaldo,
@@ -4839,7 +4856,7 @@ function buildForfettarioScheduleForYear(year) {
         : (firstYearManualUsed ? 'Manuale primo utilizzo'
           : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   } else if (manualSaldoContributi === null && autoContribSaldo < 0) {
     credits.push({ title: prevContribution ? prevContribution.saldoLabel : 'Contributi', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoContribSaldo), fiscalYear: year - 1 });
@@ -4859,8 +4876,8 @@ function buildForfettarioScheduleForYear(year) {
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
   if (contribAcconti.first > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       prevForfettarioContribution ? prevForfettarioContribution.saldoLabel : getContribLabel(currentApplied.inpsMode),
       `1o acconto ${year}`,
       contribAcconti.first,
@@ -4871,7 +4888,7 @@ function buildForfettarioScheduleForYear(year) {
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
           : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
-      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year }
+      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   }
   if (contribAcconti.second > 0) {
@@ -6197,6 +6214,15 @@ function renderScadenziario() {
         </div>`}
         <div class="scad-advanced-block">
           <h4>Allineamento manuale</h4>
+          <div class="settings-group">
+            <label>Override data saldo / 1° acconto imposta (proroga)</label>
+            <input type="date" value="${S().scadenziarioOverrideDataSaldoImposta || ''}"
+              onchange="saveTextSetting('scadenziarioOverrideDataSaldoImposta', this.value); recalcAll()">
+            <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
+              Default 30/06/${currentYear}. Compila solo se l'Agenzia delle Entrate ha pubblicato una proroga per quest'anno.
+              ${S().scadenziarioOverrideDataSaldoImposta ? '<span style="color:var(--color-warning,#F5A623);font-weight:600">Proroga attiva</span>' : ''}
+            </div>
+          </div>
           <div class="settings-group">
             <label>Saldo imposta sostitutiva anno precedente (EUR)</label>
             <input type="number" step="0.01" value="${S().scadenziarioSaldoImposta}" placeholder="auto"
