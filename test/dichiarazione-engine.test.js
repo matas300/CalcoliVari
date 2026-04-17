@@ -266,3 +266,23 @@ describe('validateDichiarazione', function() {
     expect(cfError).toBeFalsy();
   });
 });
+
+var DichExports = require('../dichiarazione-exports.js');
+
+describe('DichiarazioneExports.buildCSV', function() {
+  test('produces CSV with header row', function() {
+    var fakeDich = {
+      quadroLM: { LM1: { value: 60000, descrizione: 'Ricavi', source: 'computed' } },
+      quadroRR: { sezI: { RR4: { value: 4500, descrizione: 'Totale INPS', source: 'computed' } }, sezII: null }
+    };
+    var csv = DichExports.buildCSV(fakeDich);
+    expect(csv).toMatch(/quadro,rigo,valore,descrizione,fonte/i);
+    expect(csv).toMatch(/LM,LM1,60000/);
+  });
+  test('produces valid JSON string', function() {
+    var fakeDich = { frontespizio: { codiceFiscale: 'RSSMRA80A01H501U' } };
+    var json = DichExports.buildJSON(fakeDich);
+    var parsed = JSON.parse(json);
+    expect(parsed.frontespizio.codiceFiscale).toBe('RSSMRA80A01H501U');
+  });
+});
