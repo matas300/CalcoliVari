@@ -22,6 +22,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -47,6 +48,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -72,6 +74,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -86,6 +89,7 @@ const PROFILE_SYNC_FIELDS = [
   'impostaSostitutiva',
   'inpsMode',
   'inpsCategoria',
+  'inpsTipoGestSep',
   'usaInpsUfficiale',
   'limiteForfettario',
   'inailTasso'
@@ -316,6 +320,42 @@ function getGestSepMassimale(year) {
   const known = Object.keys(OFFICIAL_GESTIONE_SEPARATA_MASSIMALE).map(Number).sort((a, b) => a - b);
   if (y < known[0]) return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[0]];
   return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[known.length - 1]];
+}
+// Aliquote INPS Gestione Separata per Partita IVA (libero professionista)
+// Fonte: circolari INPS annuali (12/2020, 12/2021, 25/2022, 12/2023, 24/2024, 26/2025, 8/2026)
+// - esclusivo: iscritti alla sola gestione separata (P.IVA senza altra copertura previdenziale)
+// - altra_cassa: iscritti che hanno già altra copertura (dipendenti, pensionati, altra cassa prof.)
+const OFFICIAL_GESTIONE_SEPARATA_INPS = {
+  2020: { esclusivo: 25.72, altra_cassa: 24.00 },
+  2021: { esclusivo: 25.98, altra_cassa: 24.00 },
+  2022: { esclusivo: 26.23, altra_cassa: 24.00 },
+  2023: { esclusivo: 26.23, altra_cassa: 24.00 },
+  2024: { esclusivo: 26.07, altra_cassa: 24.00 },
+  2025: { esclusivo: 26.07, altra_cassa: 24.00 },
+  2026: { esclusivo: 26.07, altra_cassa: 24.00 }
+};
+function normalizeGestSepTipo(tipo) {
+  const t = String(tipo || '').toLowerCase().trim();
+  return t === 'altra_cassa' ? 'altra_cassa' : 'esclusivo';
+}
+function getOfficialGestSepAliquota(year, tipo) {
+  const y = parseInt(year, 10);
+  const kind = normalizeGestSepTipo(tipo);
+  const known = Object.keys(OFFICIAL_GESTIONE_SEPARATA_INPS).map(Number).sort((a, b) => a - b);
+  let yearUsed;
+  if (OFFICIAL_GESTIONE_SEPARATA_INPS[y]) {
+    yearUsed = y;
+  } else if (y < known[0]) {
+    yearUsed = known[0];
+  } else {
+    yearUsed = known[known.length - 1];
+  }
+  return {
+    aliqContributi: OFFICIAL_GESTIONE_SEPARATA_INPS[yearUsed][kind],
+    tipo: kind,
+    yearUsed,
+    isFallback: yearUsed !== y
+  };
 }
 // Retribuzione convenzionale INAIL (minimale di rendita) per artigiani senza dipendenti
 // Fonte: circolare INAIL annuale. Il premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%)
@@ -757,6 +797,7 @@ function normalizeProfileFiscalData(input, profile = currentProfile) {
     impostaSostitutiva: validatePercentValue(merged.impostaSostitutiva, base.impostaSostitutiva || 15),
     inpsMode: normalizeInpsMode(merged.inpsMode || base.inpsMode),
     inpsCategoria: normalizeInpsCategory(merged.inpsCategoria || base.inpsCategoria),
+    inpsTipoGestSep: normalizeGestSepTipo(merged.inpsTipoGestSep || base.inpsTipoGestSep),
     usaInpsUfficiale: parseInt(merged.usaInpsUfficiale, 10) === 0 ? 0 : 1,
     riduzione35: parseInt(merged.riduzione35, 10) === 1 ? 1 : 0,
     limiteForfettario: validateMoneyValue(merged.limiteForfettario, base.limiteForfettario || 85000),
@@ -865,12 +906,25 @@ function getOfficialArtComInpsParams(year, category) {
 
 function usesOfficialInpsValues(settings) {
   const s = settings || {};
-  return getInpsMode(s) === 'artigiani_commercianti' && (parseInt(s.usaInpsUfficiale, 10) || 0) === 1;
+  if ((parseInt(s.usaInpsUfficiale, 10) || 0) !== 1) return false;
+  const mode = getInpsMode(s);
+  return mode === 'artigiani_commercianti' || mode === 'gestione_separata';
 }
 
 function getResolvedInpsSettings(settings, year) {
   const s = settings || {};
   if (!usesOfficialInpsValues(s)) return { ...s };
+  const mode = getInpsMode(s);
+  if (mode === 'gestione_separata') {
+    const official = getOfficialGestSepAliquota(year, s.inpsTipoGestSep);
+    return {
+      ...s,
+      aliqContributi: official.aliqContributi,
+      inpsTipoGestSep: official.tipo,
+      _officialInpsYear: official.yearUsed,
+      _officialInpsFallback: official.isFallback
+    };
+  }
   const official = getOfficialArtComInpsParams(year, getInpsCategory(s));
   if (!official) return { ...s };
   return {
@@ -887,6 +941,13 @@ function getResolvedInpsSettings(settings, year) {
 function syncOfficialInpsValues(settings, year) {
   const s = settings || {};
   if (!usesOfficialInpsValues(s)) return s;
+  const mode = getInpsMode(s);
+  if (mode === 'gestione_separata') {
+    const official = getOfficialGestSepAliquota(year, s.inpsTipoGestSep);
+    s.aliqContributi = official.aliqContributi;
+    s.inpsTipoGestSep = official.tipo;
+    return s;
+  }
   const official = getOfficialArtComInpsParams(year, getInpsCategory(s));
   if (!official) return s;
   s.minimaleInps = official.minimaleInps;
@@ -898,6 +959,12 @@ function syncOfficialInpsValues(settings, year) {
 
 function getInpsModeLabel(mode) {
   return mode === 'gestione_separata' ? 'Gestione Separata' : 'Artigiani/Commercianti';
+}
+
+function getGestSepTipoLabel(tipo) {
+  return normalizeGestSepTipo(tipo) === 'altra_cassa'
+    ? 'Altra cassa / pensionato'
+    : 'Esclusivo (libero prof.)';
 }
 
 function getContribLabel(mode) {
@@ -1087,13 +1154,18 @@ function getDefaultSettings(year = currentYear) {
     aliqContributi: 24.0,
     category
   };
+  let defaultAliq = official.aliqContributi;
+  if (profile.inpsMode === 'gestione_separata' && (parseInt(profile.usaInpsUfficiale, 10) || 0) === 1) {
+    defaultAliq = getOfficialGestSepAliquota(year, 'esclusivo').aliqContributi;
+  }
   return {
     dailyRate: 0, coefficiente: profile.coefficiente, impostaSostitutiva: profile.impostaSostitutiva,
-    contribFissi: official.contribFissi, minimaleInps: official.minimaleInps, aliqContributi: official.aliqContributi,
+    contribFissi: official.contribFissi, minimaleInps: official.minimaleInps, aliqContributi: defaultAliq,
     riduzione35: 0, limiteForfettario: profile.limiteForfettario, regime: 'forfettario',
     haRedditoDipendente: 0,
     inpsMode: profile.inpsMode,
     inpsCategoria: official.category,
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: profile.usaInpsUfficiale,
     giorniIncasso: 30,
     scadenziarioRangePct: 5,
@@ -2243,6 +2315,17 @@ function renderProfiloFiscale() {
       { value: 'commerciante', label: 'Commerciante' }
     ]
   });
+  h += renderProfileField('Tipologia Gestione Separata', getGestSepTipoLabel(profile.inpsTipoGestSep), {
+    key: 'inpsTipoGestSep',
+    editable: true,
+    mode: 'select',
+    calcParam: true,
+    info: 'Rilevante solo per Gestione Separata con parametri INPS ufficiali: esclusivo ~26% (liberi prof.), altra cassa 24% (dipendenti/pensionati).',
+    options: [
+      { value: 'esclusivo', label: 'Esclusivo (libero prof. senza altra copertura)' },
+      { value: 'altra_cassa', label: 'Altra cassa / pensionato' }
+    ]
+  });
   h += renderProfileField('Parametri INPS', profile.usaInpsUfficiale === 1 ? 'Ufficiali per anno' : 'Manuali', {
     key: 'usaInpsUfficiale',
     editable: true,
@@ -3106,6 +3189,17 @@ function renderProfiloFiscale() {
         options: [
           { value: 'artigiano', label: 'Artigiano' },
           { value: 'commerciante', label: 'Commerciante' }
+        ]
+      })}
+      ${renderProfileField('Tipologia Gestione Separata', getGestSepTipoLabel(profile.inpsTipoGestSep), {
+        key: 'inpsTipoGestSep',
+        editable: true,
+        mode: 'select',
+        calcParam: true,
+        info: 'Rilevante solo per Gestione Separata con parametri INPS ufficiali: esclusivo ~26% (liberi prof.), altra cassa 24% (dipendenti/pensionati).',
+        options: [
+          { value: 'esclusivo', label: 'Esclusivo (libero prof. senza altra copertura)' },
+          { value: 'altra_cassa', label: 'Altra cassa / pensionato' }
         ]
       })}
       ${renderProfileField('Parametri INPS', profile.usaInpsUfficiale === 1 ? 'Ufficiali per anno' : 'Manuali', {
