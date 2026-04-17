@@ -357,12 +357,16 @@ function getOfficialGestSepAliquota(year, tipo) {
     isFallback: yearUsed !== y
   };
 }
-// Retribuzione convenzionale INAIL (minimale di rendita) per artigiani senza dipendenti
-// Fonte: circolare INAIL annuale. Il premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%)
+// Retribuzione convenzionale annua INAIL per artigiani titolari (= retribuzione giornaliera × 300)
+// Usata per stimare il premio INAIL ordinario: premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%).
+// Fonte: circolare INAIL annuale (es. circ. 12/2024 per anno 2024; circ. 29/2025 per anno 2025).
+// La circolare per il 2026 verrà pubblicata indicativamente a maggio 2026; fino ad allora fallback al 2025.
+// Nota: questo NON è il "minimale di rendita" INAIL in senso stretto (= 20.426,70 € per il 2025,
+// rivalutazione rendite ai sopravvissuti). Per l'utente conviene comunque usare l'override manuale
+// "Autoliquidazione INAIL febbraio" nello scadenziario quando si conosce l'importo esatto.
 const INAIL_MINIMALE_RENDITA = {
-  2024: 18415.40,
-  2025: 18415.40,
-  2026: 18689.79
+  2024: 17061.00, // 56,87 × 300 - Circolare INAIL 12/2024 del 23 maggio 2024
+  2025: 17196.00  // 57,32 × 300 - Circolare INAIL 29/2025 del 20 maggio 2025
 };
 function getInailMinimale(year) {
   if (INAIL_MINIMALE_RENDITA[year]) return INAIL_MINIMALE_RENDITA[year];
