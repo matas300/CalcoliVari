@@ -823,6 +823,7 @@ function normalizeProfileFiscalData(input, profile = currentProfile) {
     nazione: String(merged.nazione || base.nazione || 'IT').toUpperCase(),
     ateco: String(merged.ateco || base.ateco || ''),
     atecoDescrizione: String(merged.atecoDescrizione || base.atecoDescrizione || ''),
+    atecoGruppo: String(merged.atecoGruppo || base.atecoGruppo || ''),
     iban: String(merged.iban || ''),
     modalitaPagamento: String(merged.modalitaPagamento || base.modalitaPagamento || 'Bonifico bancario'),
     coefficiente: validatePercentValue(merged.coefficiente, base.coefficiente || 67),
@@ -997,6 +998,20 @@ function getGestSepTipoLabel(tipo) {
   return normalizeGestSepTipo(tipo) === 'altra_cassa'
     ? 'Altra cassa / pensionato'
     : 'Esclusivo (libero prof.)';
+}
+
+function getAtecoGruppoLabel(profile) {
+  const groups = (window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI.GRUPPI) || [];
+  const id = profile && profile.atecoGruppo;
+  if (id) {
+    const g = groups.find(x => x.id === id);
+    if (g) return `${g.label} (${g.coefficiente}%)`;
+  }
+  if (profile && profile.coefficiente !== undefined && profile.coefficiente !== '') {
+    const g = window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI.findGruppoByCoefficiente(profile.coefficiente);
+    if (g) return `${g.label} (${g.coefficiente}%) [auto]`;
+  }
+  return 'Personalizzato';
 }
 
 function getContribLabel(mode) {
@@ -2148,6 +2163,14 @@ function updateProfileFiscalDraftField(key, value) {
     draft[key] = value;
   } else if (['usaInpsUfficiale', 'agevolazioneStartUp', 'primoAnnoAgevolato'].includes(key)) {
     draft[key] = parseInt(value, 10) === 1 ? 1 : 0;
+  } else if (key === 'atecoGruppo') {
+    draft.atecoGruppo = value;
+    if (value && window.ATECO_COEFFICIENTI) {
+      const g = window.ATECO_COEFFICIENTI.GRUPPI.find(x => x.id === value);
+      if (g) draft.coefficiente = g.coefficiente;
+    }
+    renderProfiloFiscale();
+    return;
   } else {
     draft[key] = value;
   }
@@ -3175,11 +3198,26 @@ function renderProfiloFiscale() {
       ${renderProfileField('Note profilo', profile.note || '-', { key: 'note', editable: true, mode: 'textarea', full: true })}
     </div>`
   );
+  const atecoGruppi = (window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI.GRUPPI) || [];
+  const atecoOptions = [{ value: '', label: '(Personalizzato / non in tabella)' }]
+    .concat(atecoGruppi.map(g => ({
+      value: g.id,
+      label: `${g.label} - ${g.coefficiente}%`
+    })));
   h += renderProfileSection(
     'Parametri di calcolo',
     'Questi campi guidano il motore fiscale per tutti gli anni del profilo. Se salvi, l app si riallinea subito.',
     `<div class="profile-section-banner">I campi marcati come parametri di calcolo cambiano direttamente imponibile, contributi, scadenziario e percentuali mostrate nell app.</div>
     <div class="profile-field-grid">
+      ${renderProfileField('Gruppo ATECO (DM 23/1/2015)', getAtecoGruppoLabel(profile), {
+        key: 'atecoGruppo',
+        editable: true,
+        mode: 'select',
+        full: true,
+        calcParam: true,
+        info: 'Selezione automatica del coefficiente di redditivita secondo la tabella ufficiale DM 23/1/2015. Il coefficiente rimane modificabile manualmente.',
+        options: atecoOptions
+      })}
       ${renderProfileField('Coefficiente redditivita (%)', `${fmtPct(profile.coefficiente / 100)}`, {
         key: 'coefficiente',
         editable: true,

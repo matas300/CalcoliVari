@@ -9,6 +9,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - **style.css** — Dark theme, CSS variables, responsive (mobile bottom nav with safe-area support)
 - **firebase-sync.js** — Firebase Firestore sync module (bidirectional merge)
 - **tax-engine.js** — Standalone tax computation engine (forfettario scenarios, method comparison, Fiscozen integration)
+- **ateco-coefficienti.js** — Tabella ufficiale DM 23/1/2015 (9 gruppi ATECO con coefficiente 40-86%). Esposta come `window.ATECO_COEFFICIENTI`. Usata dal dropdown "Gruppo ATECO" nel profilo fiscale per autofillare il `coefficiente`.
 
 ## Key Concepts
 
