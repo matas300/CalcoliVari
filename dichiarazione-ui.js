@@ -230,6 +230,194 @@
     return html;
   }
 
+  // ── Core helper: renderRigo ──────────────────────────────────────────────────
+
+  function renderRigo(key, rigoObj, stepLabel) {
+    var val = rigoObj ? rigoObj.value : 0;
+    var source = rigoObj ? rigoObj.source : 'computed';
+    var desc = rigoObj ? rigoObj.descrizione : key;
+    var isOverride = source === 'override';
+    return '<div class="dich-rigo' + (isOverride ? ' dich-rigo-override' : '') + '">' +
+      '<span class="dich-rigo-key">' + escHtml(stepLabel || key) + '</span>' +
+      '<span class="dich-rigo-desc">' + escHtml(desc || '') + '</span>' +
+      '<div class="dich-rigo-val-wrap">' +
+        '<input type="number" step="0.01" class="dich-rigo-input" ' +
+          'value="' + (val || 0) + '" ' +
+          'data-key="' + escHtml(key) + '" ' +
+          'onchange="window.DichiarazioneUI.saveRigoOverride(\'' + key + '\', parseFloat(this.value))" ' +
+          'onblur="window.DichiarazioneUI.saveRigoOverride(\'' + key + '\', parseFloat(this.value))">' +
+        '<span class="dich-rigo-badge ' + (isOverride ? 'badge-override' : 'badge-auto') + '">' + (isOverride ? 'override' : 'auto') + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Step 3: Quadro LM ────────────────────────────────────────────────────────
+
+  function renderStep3() {
+    var yd = getYearData() || {};
+    var settings = yd.settings || {};
+    var dich = yd.dichiarazione || {};
+    var overrides = dich.overrides || {};
+    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(yd, settings, overrides) : {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro LM &mdash; Regime forfettario</h2>';
+
+    html += '<h3>Sezione I &mdash; Ricavi</h3>';
+    html += renderRigo('LM1_value', lm.LM1, 'LM1');
+    html += renderRigo('LM2_value', lm.LM2, 'LM2');
+
+    html += '<h3>Sezione II &mdash; Determinazione reddito e imposta</h3>';
+    html += renderRigo('LM3_value', lm.LM3, 'LM3');
+    html += renderRigo('LM4_value', lm.LM4, 'LM4');
+    html += renderRigo('LM34_value', lm.LM34, 'LM34');
+    html += renderRigo('LM36_value', lm.LM36, 'LM36 \u2014 Imposta sostitutiva');
+
+    html += '<h3>Sezione III &mdash; Perdite pregresse</h3>';
+    var perdite = overrides.LM_perditePregresse || 0;
+    html += '<div class="dich-field-group"><label>Perdite pregresse da scomputare</label>' +
+      '<input type="number" step="0.01" value="' + perdite + '" ' +
+      'onchange="window.DichiarazioneUI.saveRigoOverride(\'LM_perditePregresse\', parseFloat(this.value))">' +
+      '</div>';
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(2)">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(4)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 4: Quadro RR ────────────────────────────────────────────────────────
+
+  function renderStep4() {
+    var yd = getYearData() || {};
+    var settings = yd.settings || {};
+    var dich = yd.dichiarazione || {};
+    var overrides = dich.overrides || {};
+    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(yd, settings, overrides) : {};
+    var rr = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRR(yd, settings, lm, overrides) : {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro RR &mdash; Contributi previdenziali</h2>';
+
+    if (settings.inpsMode === 'gestione_separata') {
+      html += '<h3>Sezione II &mdash; Gestione Separata</h3>';
+      var s2 = rr.sezII || {};
+      html += renderRigo('RR19_value', s2.RR19, 'RR19 \u2014 Reddito imponibile');
+      html += renderRigo('RR20_value', s2.RR20, 'RR20 \u2014 Contributi dovuti');
+      html += renderRigo('RR21_value', s2.RR21, 'RR21 \u2014 Contributi versati');
+      html += renderRigo('RR22_value', s2.RR22, 'RR22 \u2014 Saldo');
+    } else if (rr.sezI) {
+      html += '<h3>Sezione I &mdash; Artigiani / Commercianti</h3>';
+      var s1 = rr.sezI;
+      html += renderRigo('RR1_value', s1.RR1, 'RR1 \u2014 Reddito imponibile');
+      html += renderRigo('RR2_value', s1.RR2, 'RR2 \u2014 Contributi sul minimale');
+      html += renderRigo('RR3_value', s1.RR3, 'RR3 \u2014 Contributi eccedenti');
+      html += renderRigo('RR4_value', s1.RR4, 'RR4 \u2014 Totale contributi');
+      html += renderRigo('RR5_value', s1.RR5, 'RR5 \u2014 Contributi gi\u00e0 versati');
+      html += renderRigo('RR8_value', s1.RR8, 'RR8 \u2014 Saldo da versare');
+    } else {
+      html += '<p class="dich-hint">Nessun regime INPS configurato. Configura il regime in Impostazioni.</p>';
+    }
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(3)">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(5)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 5: Quadro RS ────────────────────────────────────────────────────────
+
+  function renderStep5() {
+    var yd = getYearData() || {};
+    var settings = yd.settings || {};
+    var dich = yd.dichiarazione || {};
+    var overrides = dich.overrides || {};
+    var rs = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRS(yd, settings, overrides) : {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro RS &mdash; Dati rilevanti forfettari</h2>' +
+      '<p class="dich-hint">RS371-RS381: prospetti obbligatori per i forfettari. Inserisci i valori relativi all\'anno d\'imposta.</p>';
+
+    ['RS371','RS372','RS373','RS374','RS375','RS376','RS377','RS378','RS379','RS380','RS381'].forEach(function(k) {
+      html += renderRigo(k + '_value', rs[k], k);
+    });
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(4)">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(6)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 6: Quadro RW ────────────────────────────────────────────────────────
+
+  function renderStep6() {
+    var yd = getYearData() || {};
+    var dich = yd.dichiarazione || {};
+    var contiEsteri = dich.contiEsteri || [];
+
+    var html = '<div class="dich-step-content"><h2>Quadro RW &mdash; Attivit&agrave; estere</h2>' +
+      '<p class="dich-hint">Elenca i conti correnti e depositi detenuti all\'estero durante l\'anno.</p>';
+
+    contiEsteri.forEach(function(conto, idx) {
+      html += '<div class="dich-conto-estero">' +
+        '<h3>Conto ' + (idx + 1) + ' <button class="btn-remove" onclick="window.DichiarazioneUI.removeContoEstero(' + idx + ')">&#x2715; Rimuovi</button></h3>' +
+        '<div class="dich-grid-2">' +
+          '<div class="dich-field-group"><label>Paese (codice ISO)</label><input type="text" maxlength="2" value="' + escHtml(conto.paese || '') + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'paese\', this.value)"></div>' +
+          '<div class="dich-field-group"><label>Tipo conto</label><input type="text" value="' + escHtml(conto.tipoConto || '') + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'tipoConto\', this.value)"></div>' +
+          '<div class="dich-field-group"><label>IBAN / ID conto</label><input type="text" value="' + escHtml(conto.iban || '') + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'iban\', this.value)"></div>' +
+          '<div class="dich-field-group"><label>Valuta</label><input type="text" maxlength="3" value="' + escHtml(conto.valutaCodice || 'EUR') + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'valutaCodice\', this.value)"></div>' +
+          '<div class="dich-field-group"><label>Valore iniziale (&euro;)</label><input type="number" step="0.01" value="' + (conto.valoreIniziale || 0) + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'valoreIniziale\', parseFloat(this.value))"></div>' +
+          '<div class="dich-field-group"><label>Valore finale (&euro;)</label><input type="number" step="0.01" value="' + (conto.valoreFinale || 0) + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'valoreFinale\', parseFloat(this.value))"></div>' +
+          '<div class="dich-field-group"><label>Giorni detenzione</label><input type="number" value="' + (conto.giorniDetenzione || 365) + '" onchange="window.DichiarazioneUI.updateContoEstero(' + idx + ', \'giorniDetenzione\', parseInt(this.value))"></div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    html += '<button class="btn-add" onclick="window.DichiarazioneUI.addContoEstero()">+ Aggiungi conto estero</button>';
+
+    if (contiEsteri.length > 0) {
+      var rw = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRW(contiEsteri) : { righi: [] };
+      html += '<h3>Anteprima righi RW generati</h3>';
+      (rw.righi || []).forEach(function(r, i) {
+        html += '<div class="dich-rigo"><span class="dich-rigo-key">RW' + (i + 1) + '</span>' +
+          '<span class="dich-rigo-desc">' + escHtml(r.paese) + ' \u2014 ' + escHtml(r.tipoConto) + ' \u2014 ' + (r.valoreFinale || 0).toLocaleString('it-IT') + ' \u20ac</span></div>';
+      });
+    }
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(5)">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(7)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // ── Step 7: Quadro RX ────────────────────────────────────────────────────────
+
+  function renderStep7() {
+    var yd = getYearData() || {};
+    var settings = yd.settings || {};
+    var dich = yd.dichiarazione || {};
+    var overrides = dich.overrides || {};
+    var rx = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRX(yd, settings, null, overrides) : {};
+
+    var html = '<div class="dich-step-content"><h2>Quadro RX &mdash; Compensazioni e crediti</h2>' +
+      '<div class="dich-field-group"><label>Credito da anno precedente (&euro;)</label>' +
+      '<input type="number" step="0.01" value="' + (settings.creditoAnnoPrecedente || 0) + '" ' +
+      'onchange="window.DichiarazioneUI.setCreditoPrec(parseFloat(this.value))">' +
+      '</div>';
+
+    html += renderRigo('RX1_value', rx.RX1, 'RX1 \u2014 Credito da precedente');
+    html += renderRigo('RX2_value', rx.RX2, 'RX2 \u2014 A rimborso');
+    html += renderRigo('RX3_value', rx.RX3, 'RX3 \u2014 In compensazione');
+    html += renderRigo('RX4_value', rx.RX4, 'RX4 \u2014 Al periodo successivo');
+
+    html += '<div class="dich-nav-btns">' +
+      '<button class="btn-secondary" onclick="window.DichiarazioneUI.goToStep(6)">&larr; Indietro</button>' +
+      '<button class="btn-primary" onclick="window.DichiarazioneUI.goToStep(8)">Avanti &rarr;</button>' +
+      '</div></div>';
+    return html;
+  }
+
   // ── Placeholder step ─────────────────────────────────────────────────────────
 
   function renderPlaceholderStep(stepNum, label) {
@@ -247,6 +435,11 @@
     switch (_currentStep) {
       case 1:  return renderStep1();
       case 2:  return renderStep2();
+      case 3:  return renderStep3();
+      case 4:  return renderStep4();
+      case 5:  return renderStep5();
+      case 6:  return renderStep6();
+      case 7:  return renderStep7();
       case 12: return renderStep12();
       default:
         var step = null;
@@ -337,6 +530,44 @@
     },
     refresh: function () {
       render();
+    },
+    saveRigoOverride: function(key, val) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione) return;
+      if (!yd.dichiarazione.overrides) yd.dichiarazione.overrides = {};
+      yd.dichiarazione.overrides[key] = isNaN(val) ? 0 : val;
+      if (typeof saveData === 'function') saveData();
+      var main = document.getElementById('dich-main-content');
+      if (main) main.innerHTML = renderCurrentStep();
+    },
+    addContoEstero: function() {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione) return;
+      if (!yd.dichiarazione.contiEsteri) yd.dichiarazione.contiEsteri = [];
+      yd.dichiarazione.contiEsteri.push({ paese: '', tipoConto: 'conto corrente', iban: '', valoreIniziale: 0, valoreFinale: 0, giorniDetenzione: 365, valutaCodice: 'EUR' });
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    removeContoEstero: function(idx) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.contiEsteri) return;
+      yd.dichiarazione.contiEsteri.splice(idx, 1);
+      if (typeof saveData === 'function') saveData();
+      render();
+    },
+    updateContoEstero: function(idx, field, val) {
+      var yd = getYearData();
+      if (!yd || !yd.dichiarazione || !yd.dichiarazione.contiEsteri) return;
+      yd.dichiarazione.contiEsteri[idx][field] = val;
+      if (typeof saveData === 'function') saveData();
+    },
+    setCreditoPrec: function(val) {
+      var yd = getYearData();
+      if (!yd || !yd.settings) return;
+      yd.settings.creditoAnnoPrecedente = isNaN(val) ? 0 : val;
+      if (typeof saveData === 'function') saveData();
+      var main = document.getElementById('dich-main-content');
+      if (main) main.innerHTML = renderCurrentStep();
     }
   };
 

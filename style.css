@@ -4152,6 +4152,26 @@ html[data-theme="light"] .qpay-input {
   border: 1px solid var(--color-cal-ferie, #F5A623);
   color: var(--color-cal-ferie, #F5A623);
 }
+/* ── Dichiarazione: rigo override components ─────────────────────────────── */
+.dich-rigo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #2a2a3e);
+}
+.dich-rigo-override { background: rgba(245,166,35,0.05); border-radius: 4px; padding: 8px; }
+.dich-rigo-key { font-weight: 700; font-size: 12px; min-width: 80px; color: var(--color-chart-netto, #2EAADC); }
+.dich-rigo-desc { flex: 1; font-size: 13px; color: var(--text-secondary, #aaa); }
+.dich-rigo-val-wrap { display: flex; align-items: center; gap: 6px; }
+.dich-rigo-input { width: 120px; text-align: right; }
+.dich-rigo-badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+.badge-auto { background: var(--bg-hover, #333); color: var(--text-secondary, #aaa); }
+.badge-override { background: rgba(245,166,35,0.2); color: var(--color-cal-ferie, #F5A623); }
+.dich-conto-estero { border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 16px; margin-bottom: 12px; }
+.btn-remove { background: rgba(233,69,96,0.15); border: 1px solid var(--color-chart-tasse, #E94560); color: var(--color-chart-tasse, #E94560); padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px; }
+.btn-add { background: rgba(46,170,220,0.15); border: 1px solid var(--color-chart-netto, #2EAADC); color: var(--color-chart-netto, #2EAADC); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin: 12px 0; }
+
 @media (max-width: 768px) {
   .dich-wizard { flex-direction: column; }
   .dich-sidebar {
@@ -4166,4 +4186,6 @@ html[data-theme="light"] .qpay-input {
   .dich-step-item.active { border-left-color: transparent; border-bottom-color: var(--color-chart-netto, #2EAADC); }
   .dich-grid-2 { grid-template-columns: 1fr; }
   .dich-summary-grid { grid-template-columns: 1fr; }
+  .dich-rigo { flex-wrap: wrap; }
+  .dich-rigo-desc { min-width: 100%; }
 }
