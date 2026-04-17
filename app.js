@@ -2980,7 +2980,7 @@ function renderCalcoloForfettario(h, el) {
   h += drawDonut(netto, tasse, contrib);
   h += `</div>`;
 
-  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="alert('Modulo dichiarazione in costruzione')">Apri Dichiarazione</button></div>`;
+  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="openDichiarazione()">Apri Dichiarazione</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
   h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
@@ -6576,7 +6576,15 @@ function switchToTab(tab) {
   // highlight header settings btn when on settings tab
   const sBtn = document.getElementById('settingsBtn');
   if (sBtn) sBtn.classList.toggle('active', tab === 'settings');
+  // mount Dichiarazione wizard when switching to that tab
+  if (tab === 'dichiarazione' && window.DichiarazioneUI) {
+    window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
+  }
   window.scrollTo(0, 0);
+}
+
+function openDichiarazione() {
+  switchToTab('dichiarazione');
 }
 document.getElementById('nav').addEventListener('click', e => {
   if (e.target.tagName !== 'BUTTON') return;
@@ -6593,6 +6601,7 @@ const NAV_LABELS = {
   budget:         { full: 'Budget', short: 'Budget' },
   clienti:        { full: 'Clienti', short: 'Clienti' },
   spese:          { full: 'Spese', short: 'Spese' },
+  dichiarazione:  { full: 'Dichiarazione', short: 'Dichiar.' },
   settings:       { full: 'Impostazioni', short: 'Impost.' }
 };
 function updateNavLabels() {
