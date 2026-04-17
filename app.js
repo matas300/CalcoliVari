@@ -378,9 +378,10 @@ function calcInailPremio(year, tassoPerMille) {
 
 // Imposta di bollo: 2€ per ogni fattura con importo > 77.47€
 // Scadenze: Q1 → 31/5, Q2 → 30/9, Q3 → 30/11, Q4 → 28/2 anno successivo
-// Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo
+// Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo (L. 73/2022 art. 3)
 const BOLLO_SOGLIA = 77.47;
 const BOLLO_IMPORTO = 2.00;
+const BOLLO_DIFFERIMENTO_SOGLIA = 5000; // EUR — L. 73/2022 art. 3
 const BOLLO_QUARTERS = [
   { label: '1o trimestre', months: [1, 2, 3], dueMonth: 5, dueDay: 31, codice: '2521' },
   { label: '2o trimestre', months: [4, 5, 6], dueMonth: 9, dueDay: 30, codice: '2522' },
@@ -400,6 +401,37 @@ function calcBolloPerQuarter(yearData) {
     }
     return { ...q, count, amount: count * BOLLO_IMPORTO };
   });
+}
+
+// Applica L. 73/2022 art. 3: se Q1 <= 5000, accorpa a Q2; se Q1+Q2 cumulato <= 5000, accorpa a Q3.
+// Nessun differimento dopo Q3: Q4 ha la sua scadenza naturale (28/2 anno successivo).
+// Gli override manuali bypassano il consolidamento sul trimestre interessato.
+function applyBolloDifferimento(quarters, hasManualOverride) {
+  const result = quarters.map(q => ({
+    ...q,
+    finalAmount: q.amount,
+    deferredFromLabels: [],
+    deferred: false
+  }));
+  // Q1 -> Q2
+  if (!hasManualOverride(0) && !hasManualOverride(1)
+      && result[0].finalAmount > 0
+      && result[0].finalAmount <= BOLLO_DIFFERIMENTO_SOGLIA) {
+    result[1].finalAmount += result[0].finalAmount;
+    result[1].deferredFromLabels.push(result[0].label);
+    result[0].deferred = true;
+    result[0].finalAmount = 0;
+  }
+  // Q2 (eventualmente cumulato con Q1) -> Q3
+  if (!hasManualOverride(1) && !hasManualOverride(2)
+      && result[1].finalAmount > 0
+      && result[1].finalAmount <= BOLLO_DIFFERIMENTO_SOGLIA) {
+    result[2].finalAmount += result[1].finalAmount;
+    result[2].deferredFromLabels.push(...result[1].deferredFromLabels, result[1].label);
+    result[1].deferred = true;
+    result[1].finalAmount = 0;
+  }
+  return result;
 }
 
 const F24_GUIDE = {
@@ -4935,19 +4967,32 @@ function buildForfettarioScheduleForYear(year) {
   }
   // Q1-Q4 anno corrente
   const currentBolloQuarters = calcBolloPerQuarter(yearData);
+  // Q1-Q3 always auto-calculated, Q4 can be overridden manually
+  const bolloHasOverride = (qi) => qi === 3 ? manualBolloQ4 !== null : false;
+  const currentBolloConsolidated = applyBolloDifferimento(currentBolloQuarters, bolloHasOverride);
   for (let qi = 0; qi < 4; qi++) {
-    const q = currentBolloQuarters[qi];
-    // Q1-Q3 always auto-calculated, Q4 can be overridden manually
+    const q = currentBolloConsolidated[qi];
     const manualOverride = qi < 3 ? null : manualBolloQ4;
-    const autoAmount = q.amount;
-    const finalAmount = manualOverride !== null ? manualOverride : autoAmount;
-    if (finalAmount > 0) {
+    const baseAmount = manualOverride !== null ? manualOverride : q.finalAmount;
+    if (baseAmount > 0) {
       const dueYear = q.nextYear ? year + 1 : year;
+      let methodText;
+      if (manualOverride !== null) {
+        methodText = 'Importo configurato';
+      } else if (q.deferredFromLabels.length > 0) {
+        methodText = `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)} + differito da ${q.deferredFromLabels.join(', ')}`;
+      } else {
+        methodText = `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`;
+      }
       pushDueRow(q.dueMonth, q.dueDay, 'Imposta di bollo fatture elettroniche',
-        `${q.label} ${year}`, finalAmount, 'altro',
-        manualOverride !== null ? 'Importo configurato' : `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`,
+        `${q.label} ${year}`, baseAmount, 'altro',
+        methodText,
         '', { dueYear, key: `bollo_q${qi + 1}_${year}`, certainty: 'fixed', fiscalYear: year });
     }
+  }
+  const bolloDeferredCount = currentBolloConsolidated.filter(q => q.deferred).length;
+  if (bolloDeferredCount > 0) {
+    notes.push(`Bollo FE: ${bolloDeferredCount} trimestre/i sotto soglia ${fmt(BOLLO_DIFFERIMENTO_SOGLIA)} (L. 73/2022) accorpato/i alla scadenza successiva.`);
   }
   const profileInailTasso = parseFloat(getProfileFiscalData().inailTasso) || 0;
   const autoInailCurrent = profileInailTasso > 0 ? calcInailPremio(year, profileInailTasso) : 0;
