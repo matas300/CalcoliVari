@@ -156,3 +156,113 @@ describe('buildQuadroRX', function() {
     expect(rx.RX1.value).toBe(800);
   });
 });
+
+describe('buildQuadroRW', function() {
+  test('2 conti esteri produce 2 righi', function() {
+    var conti = [
+      { paese: 'DE', tipoConto: 'conto corrente', iban: 'DE89370400440532013000', valoreIniziale: 5000, valoreFinale: 6000, giorniDetenzione: 365, valutaCodice: 'EUR' },
+      { paese: 'US', tipoConto: 'conto deposito', iban: 'US12345', valoreIniziale: 2000, valoreFinale: 2500, giorniDetenzione: 180, valutaCodice: 'USD' }
+    ];
+    var rw = DE.buildQuadroRW(conti);
+    expect(rw.righi.length).toBe(2);
+    expect(rw.righi[0].paese).toBe('DE');
+    expect(rw.righi[1].valoreFinale).toBe(2500);
+  });
+  test('lista vuota produce righi vuoti', function() {
+    var rw = DE.buildQuadroRW([]);
+    expect(rw.righi.length).toBe(0);
+  });
+  test('conto con valoreFinale mancante non blocca', function() {
+    var conti = [{ paese: 'FR', tipoConto: 'test', iban: '', valoreIniziale: 0, giorniDetenzione: 100, valutaCodice: 'EUR' }];
+    var rw = DE.buildQuadroRW(conti);
+    expect(rw.righi.length).toBe(1);
+  });
+});
+
+describe('buildCondizionali', function() {
+  test('nessun flag: result vuoto', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false } };
+    var res = DE.buildCondizionali(input, yd);
+    expect(Object.keys(res).length).toBe(0);
+  });
+  test('annoMisto: produce quadroRN con reddito dipendente', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: true, imposteEstere: false, altriCrediti: false }, redditoDipendente: 30000 };
+    var res = DE.buildCondizionali(input, yd);
+    expect(res.quadroRN).toBeTruthy();
+    expect(res.quadroRN.redditoDipendente).toBe(30000);
+  });
+  test('imposteEstere: produce quadroCE', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: true, altriCrediti: false }, creditoImposteEstere: 500 };
+    var res = DE.buildCondizionali(input, yd);
+    expect(res.quadroCE).toBeTruthy();
+    expect(res.quadroCE.CE1.value).toBe(500);
+  });
+});
+
+describe('buildDichiarazione', function() {
+  test('artigiano standard produce tutti i quadri core', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { tipoDichiarazione: 'ordinaria', flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: {} };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    expect(dich.frontespizio).toBeTruthy();
+    expect(dich.quadroLM).toBeTruthy();
+    expect(dich.quadroRR).toBeTruthy();
+    expect(dich.quadroRS).toBeTruthy();
+    expect(dich.quadroRX).toBeTruthy();
+    expect(dich.quadroRW).toBeTruthy();
+    expect(dich._meta.timestamp).toBeTruthy();
+  });
+  test('anno misto: produce quadroRN', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { tipoDichiarazione: 'ordinaria', flags: { annoMisto: true, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: {}, redditoDipendente: 25000 };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    expect(dich.quadroRN).toBeTruthy();
+  });
+});
+
+describe('validateDichiarazione', function() {
+  test('CF invalido produce error', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: {} };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    dich.frontespizio.codiceFiscale = 'INVALID';
+    var v = DE.validateDichiarazione(dich);
+    var cfError = v.errors.find(function(e) { return e.code === 'CF_INVALID'; });
+    expect(cfError).toBeTruthy();
+  });
+  test('reddito > 85000 produce warning', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: { LM1_value: 130000, LM2_value: 87100 } };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    var v = DE.validateDichiarazione(dich);
+    var warn = v.warnings.find(function(w) { return w.code === 'REDDITO_OLTRE_SOGLIA_85K'; });
+    expect(warn).toBeTruthy();
+  });
+  test('reddito > 100000 produce warning critico', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: { LM1_value: 160000, LM2_value: 107200 } };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    var v = DE.validateDichiarazione(dich);
+    var warn = v.warnings.find(function(w) { return w.code === 'REDDITO_OLTRE_SOGLIA_100K'; });
+    expect(warn).toBeTruthy();
+  });
+  test('RW con paese vuoto produce error', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [{ paese: '', valoreFinale: 1000, giorniDetenzione: 365 }], overrides: {} };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    var v = DE.validateDichiarazione(dich);
+    var rwError = v.errors.find(function(e) { return e.code === 'RW_PAESE_MANCANTE'; });
+    expect(rwError).toBeTruthy();
+  });
+  test('CF valido e dati completi: nessun error CF', function() {
+    var yd = fixtures.artigianoStandard2025;
+    var input = { flags: { annoMisto: false, imposteEstere: false, altriCrediti: false }, contiEsteri: [], overrides: {} };
+    var dich = DE.buildDichiarazione(2025, yd, input);
+    var v = DE.validateDichiarazione(dich);
+    var cfError = v.errors.find(function(e) { return e.code === 'CF_INVALID'; });
+    expect(cfError).toBeFalsy();
+  });
+});

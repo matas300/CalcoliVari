@@ -198,10 +198,126 @@
         eccedenza: eccedenza
       };
     },
-    buildQuadroRW: function() { return {}; },
-    buildCondizionali: function() { return {}; },
-    buildDichiarazione: function() { return {}; },
-    validateDichiarazione: function() { return { errors: [], warnings: [] }; },
+    buildQuadroRW: function(contiEsteri) {
+      contiEsteri = contiEsteri || [];
+      var righi = contiEsteri.map(function(c) {
+        return {
+          paese: c.paese || '',
+          tipoConto: c.tipoConto || '',
+          iban: c.iban || '',
+          valoreIniziale: parseFloat(c.valoreIniziale) || 0,
+          valoreFinale: parseFloat(c.valoreFinale) || 0,
+          giorniDetenzione: parseInt(c.giorniDetenzione) || 0,
+          valutaCodice: c.valutaCodice || 'EUR'
+        };
+      });
+      return { righi: righi };
+    },
+    buildCondizionali: function(input, yearData) {
+      input = input || {};
+      var flags = input.flags || {};
+      var result = {};
+
+      if (flags.annoMisto) {
+        var redditoDip = parseFloat(input.redditoDipendente) || 0;
+        var irpef = 0;
+        if (redditoDip <= 28000) irpef = redditoDip * 0.23;
+        else if (redditoDip <= 50000) irpef = 28000 * 0.23 + (redditoDip - 28000) * 0.35;
+        else irpef = 28000 * 0.23 + 22000 * 0.35 + (redditoDip - 50000) * 0.43;
+        irpef = Math.round(irpef * 100) / 100;
+        result.quadroRN = {
+          redditoDipendente: redditoDip,
+          irpefLorda: irpef,
+          addizionaleRegionale: parseFloat(input.addizionaleRegionale) || 0,
+          addizionaleComunale: parseFloat(input.addizionaleComunale) || 0
+        };
+        result.quadroRP = { oneriDetraibili: input.oneriDetraibili || [] };
+        result.quadroRV = { addizionali: (parseFloat(input.addizionaleRegionale) || 0) + (parseFloat(input.addizionaleComunale) || 0) };
+      }
+
+      if (flags.imposteEstere) {
+        var creditoEstero = parseFloat(input.creditoImposteEstere) || 0;
+        result.quadroCE = {
+          CE1: { value: creditoEstero, descrizione: 'Credito per imposte pagate all\'estero', source: 'input' }
+        };
+      }
+
+      if (flags.altriCrediti) {
+        result.quadroCR = { crediti: input.altriCrediti || [] };
+      }
+
+      return result;
+    },
+    buildDichiarazione: function(year, profile, input) {
+      profile = profile || {};
+      input = input || {};
+      var overrides = input.overrides || {};
+      var settings = (profile && profile.settings) || {};
+
+      var quadroLM = this.buildQuadroLM(profile, settings, overrides);
+      var quadroRR = this.buildQuadroRR(profile, settings, quadroLM, overrides);
+      var quadroRS = this.buildQuadroRS(profile, settings, overrides);
+      var quadroRX = this.buildQuadroRX(profile, settings, input.precedente || null, overrides);
+      var quadroRW = this.buildQuadroRW(input.contiEsteri || (profile && profile.dichiarazione && profile.dichiarazione.contiEsteri) || []);
+      var frontespizio = this.buildFrontespizio(profile, year, input);
+      var condizionali = this.buildCondizionali(input, profile);
+
+      var dich = {
+        frontespizio: frontespizio,
+        quadroLM: quadroLM,
+        quadroRR: quadroRR,
+        quadroRS: quadroRS,
+        quadroRX: quadroRX,
+        quadroRW: quadroRW,
+        _meta: { timestamp: new Date().toISOString(), year: year }
+      };
+
+      Object.keys(condizionali).forEach(function(k) {
+        dich[k] = condizionali[k];
+      });
+
+      return dich;
+    },
+    validateDichiarazione: function(dich) {
+      dich = dich || {};
+      var errors = [];
+      var warnings = [];
+      var fp = dich.frontespizio || {};
+      var lm = dich.quadroLM || {};
+      var rr = dich.quadroRR || {};
+      var rw = dich.quadroRW || {};
+
+      // Errors
+      if (!fp.codiceFiscale || !this.validateCodiceFiscale(fp.codiceFiscale)) {
+        errors.push({ code: 'CF_INVALID', message: 'Codice fiscale mancante o non valido', quadro: 'Frontespizio', rigo: 'CF', severity: 'error' });
+      }
+      if (!fp.cognome || !fp.nome) {
+        errors.push({ code: 'ANAGRAFICA_INCOMPLETA', message: 'Cognome e nome obbligatori', quadro: 'Frontespizio', rigo: 'anagrafica', severity: 'error' });
+      }
+      if (!fp.dataNascita) {
+        errors.push({ code: 'DATA_NASCITA_MANCANTE', message: 'Data di nascita obbligatoria', quadro: 'Frontespizio', rigo: 'dataNascita', severity: 'error' });
+      }
+      if (rw.righi && rw.righi.length > 0) {
+        rw.righi.forEach(function(r, i) {
+          if (!r.paese) {
+            errors.push({ code: 'RW_PAESE_MANCANTE', message: 'Paese mancante per conto estero ' + (i + 1), quadro: 'RW', rigo: 'RW' + (i + 1), severity: 'error' });
+          }
+        });
+      }
+      if (rr.sezI && rr.sezI.RR8 && rr.sezI.RR8.value < 0) {
+        errors.push({ code: 'RR8_NEGATIVO', message: 'RR8 contributi eccedenti negativo', quadro: 'RR', rigo: 'RR8', severity: 'error' });
+      }
+
+      // Warnings
+      var lm2val = lm.LM2 ? lm.LM2.value : 0;
+      if (lm2val > 100000) {
+        warnings.push({ code: 'REDDITO_OLTRE_SOGLIA_100K', message: 'Reddito > 100.000 \u20ac: decadenza forfettario nell\'anno corrente', quadro: 'LM', rigo: 'LM2', severity: 'warning' });
+      } else if (lm2val > 85000) {
+        warnings.push({ code: 'REDDITO_OLTRE_SOGLIA_85K', message: 'Reddito > 85.000 \u20ac: decadenza forfettario dal prossimo anno', quadro: 'LM', rigo: 'LM2', severity: 'warning' });
+      }
+
+      return { errors: errors, warnings: warnings };
+    },
     validateCodiceFiscale: function(cf) {
       if (!cf || typeof cf !== 'string') return false;
       cf = cf.toUpperCase().trim();
