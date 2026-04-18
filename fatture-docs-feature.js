@@ -25,7 +25,25 @@
     return 'MP05'; // default bonifico
   }
   const XML_NAMESPACE = 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2';
-  const XML_FORFETTARIO_REGIME = 'RF19';
+  const XML_FORFETTARIO_REGIME = 'RF19'; // kept for backward compat; buildFatturaElettronicaXml now reads settings
+
+  // ── FatturaPA validation helpers (Task 5 audit) ──────────────────────────
+  function sanitizeProgressivoInvio(s) {
+    return String(s || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) || '00001';
+  }
+  function isValidPartitaIvaIT(s) {
+    return /^\d{11}$/.test(String(s || '').replace(/\s+/g, ''));
+  }
+  function isValidCodiceFiscale(cf) {
+    if (typeof window.DichiarazioneEngine?.validateCodiceFiscale === 'function') {
+      return window.DichiarazioneEngine.validateCodiceFiscale(cf);
+    }
+    return /^[A-Z0-9]{16}$/i.test(String(cf || '').trim());
+  }
+  function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
+    return marcaDaBollo && Number(imponibile) > 77.47;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
   const DRAFT_TEMPLATE = {
     numero: '',
     data: '',
@@ -37,8 +55,39 @@
     modalitaPagamento: DEFAULT_BONIFICO,
     scadenzaPagamento: '',
     incassata: false,
-    dataIncasso: ''
+    dataIncasso: '',
+    // Nuovi campi sub-project 3
+    stato: 'bozza',
+    dataInvioSdi: null,
+    dataPagamento: null,
+    fatturaOriginaleId: null,
+    tipoDocumento: 'TD01',
+    annoProgressivo: null,
+    progressivo: null,
+    ritenuta: 0,
+    aliquotaRitenuta: 20,
+    tipoRitenuta: 'RT02',
+    causaleRitenuta: 'A'
   };
+
+  function normalizeInvoice(inv) {
+    if (!inv || typeof inv !== 'object') return inv;
+    return {
+      ...DRAFT_TEMPLATE,
+      ...inv,
+      stato: inv.stato || 'bozza',
+      tipoDocumento: inv.tipoDocumento || 'TD01',
+      dataInvioSdi: inv.dataInvioSdi ?? null,
+      dataPagamento: inv.dataPagamento ?? null,
+      fatturaOriginaleId: inv.fatturaOriginaleId ?? null,
+      annoProgressivo: inv.annoProgressivo ?? (inv.data ? parseInt(String(inv.data).slice(0, 4), 10) : null),
+      progressivo: inv.progressivo ?? null,
+      ritenuta: Number(inv.ritenuta) || 0,
+      aliquotaRitenuta: Number(inv.aliquotaRitenuta) || 20,
+      tipoRitenuta: inv.tipoRitenuta || 'RT02',
+      causaleRitenuta: inv.causaleRitenuta || 'A'
+    };
+  }
 
   const state = {
     open: false,
@@ -403,6 +452,7 @@
             <button type="button" class="btn-add profile-secondary-btn" onclick="saveFatturaDraft(false)">Salva</button>
             <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaPdf()">Anteprima</button>
             <button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>
+            <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
             <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
           </div>
         </div>
@@ -458,6 +508,32 @@
                 <span>Applica 2,00 € se supera 77,47 €</span>
               </div>
             </label>
+            <div class="fattura-field fattura-field-wide">
+              <span>Ritenuta d'acconto</span>
+              <div class="fattura-bollo-wrap">
+                <input type="checkbox" id="invHasRitenuta" ${Number(draft.ritenuta) > 0 ? 'checked' : ''}>
+                <span>Applica ritenuta d'acconto</span>
+              </div>
+              <div id="invRitenutaFields" style="display:${Number(draft.ritenuta) > 0 ? 'block' : 'none'}; margin-top:8px;">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+                  <label>Aliquota %
+                    <input type="number" id="invAliquotaRitenuta" min="0" max="100" step="0.01" value="${draft.aliquotaRitenuta || 20}" style="width:80px;">
+                  </label>
+                  <label>Tipo ritenuta
+                    <select id="invTipoRitenuta">
+                      <option value="RT01" ${(draft.tipoRitenuta || 'RT02') === 'RT01' ? 'selected' : ''}>RT01 — Persone fisiche</option>
+                      <option value="RT02" ${(draft.tipoRitenuta || 'RT02') === 'RT02' ? 'selected' : ''}>RT02 — Persone giuridiche</option>
+                    </select>
+                  </label>
+                  <label>Causale
+                    <input type="text" id="invCausaleRitenuta" maxlength="2" value="${esc(draft.causaleRitenuta || 'A')}" style="width:60px;">
+                  </label>
+                </div>
+                <div style="margin-top:6px;">
+                  <span>Importo ritenuta calcolato: <strong id="invRitenutaImporto">0,00 €</strong></span>
+                </div>
+              </div>
+            </div>
             <label class="fattura-field fattura-field-wide">
               <span>Nota</span>
               <textarea id="fatturaNota" rows="2" oninput="updateFatturaDraftField('note', this.value)">${esc(draft.note)}</textarea>
@@ -473,7 +549,44 @@
       </div>
     `;
     syncBolloDefault();
+    _bindRitenutaHandlers();
     renderFatturaSummary();
+  }
+
+  function _bindRitenutaHandlers() {
+    const chk = document.getElementById('invHasRitenuta');
+    const fields = document.getElementById('invRitenutaFields');
+    const aliq = document.getElementById('invAliquotaRitenuta');
+    const tipo = document.getElementById('invTipoRitenuta');
+    const caus = document.getElementById('invCausaleRitenuta');
+    const importoEl = document.getElementById('invRitenutaImporto');
+    if (!chk || !fields) return;
+
+    function recalc() {
+      if (!chk.checked) {
+        state.draft.ritenuta = 0;
+        if (importoEl) importoEl.textContent = '0,00 €';
+        return;
+      }
+      const totals = computeDraftTotals(state.draft);
+      const a = Number(aliq ? aliq.value : 0) || 0;
+      const importo = round2((totals.subtotal || 0) * a / 100);
+      state.draft.ritenuta = importo;
+      state.draft.aliquotaRitenuta = a;
+      state.draft.tipoRitenuta = tipo ? tipo.value : 'RT02';
+      state.draft.causaleRitenuta = ((caus ? caus.value : '') || 'A').toUpperCase().slice(0, 2);
+      if (importoEl) importoEl.textContent = formatEur(importo);
+    }
+
+    chk.addEventListener('change', () => {
+      fields.style.display = chk.checked ? 'block' : 'none';
+      recalc();
+    });
+    if (aliq) aliq.addEventListener('input', recalc);
+    if (tipo) tipo.addEventListener('input', recalc);
+    if (caus) caus.addEventListener('input', recalc);
+
+    recalc();
   }
 
   function showFatturaToast(message, tone = 'success') {
@@ -614,6 +727,15 @@
       state.draft = createDefaultDraft();
       state.editingId = null;
       state.numberAuto = true;
+      // Pre-fill progressivo via FattureStorico per coerenza con storico unificato
+      const annoOggi = new Date().getFullYear();
+      const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+      const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+      const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
+      state.draft.numero = window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001');
+      state.draft.annoProgressivo = annoOggi;
+      state.draft.progressivo = prog;
+      state.draft.data = new Date().toISOString().slice(0, 10);
     }
     renderFatturaModal();
     const m = document.getElementById('fatturaModal');
@@ -633,104 +755,258 @@
     return loadFattureEmesse().find(i => i.id === id);
   }
 
-  // --- MOTORE PDF (html2pdf) ---
-  function buildInvoiceHtmlNode(invoice) {
-    const profile = getProfileFiscalData();
-    const cliente = invoice.clienteSnapshot || (typeof getClienteById === 'function' ? getClienteById(invoice.clienteId) : null) || {};
+  // --- MOTORE PDF MINIMALISTA (jsPDF) ---
+  function buildInvoicePdfMinimal(invoice) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error('jsPDF non disponibile (verifica caricamento html2pdf bundle)');
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+    const INK     = [18, 26, 36];
+    const MUTED   = [100, 116, 139];
+    const BORDER  = [226, 232, 240];
+    const ACCENT  = [60, 143, 145];
+    const NEGATIVE = [200, 50, 50];
+
+    const PAGE_W = 210;
+    const MARGIN = 20;
+    const CONTENT_W = PAGE_W - MARGIN * 2;
+    let y = MARGIN;
+
+    const isNC = invoice.tipoDocumento === 'TD04';
+    const titolo = isNC ? 'NOTA DI CREDITO' : 'FATTURA';
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor.apply(doc, INK);
+    doc.text(titolo + ' N. ' + (invoice.numero || ''), MARGIN, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('Data: ' + formatDateIt(invoice.data), PAGE_W - MARGIN, y, { align: 'right' });
+    y += 7;
+    if (isNC && invoice.fatturaOriginaleId) {
+      doc.setFontSize(9);
+      doc.text('Storno fattura: ' + (invoice._fatturaOriginaleNumero || invoice.fatturaOriginaleId), MARGIN, y);
+      y += 5;
+    }
+
+    // Linea separatrice
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Due colonne emittente/destinatario
+    const colW = CONTENT_W / 2 - 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('EMITTENTE', MARGIN, y);
+    doc.text('DESTINATARIO', MARGIN + colW + 10, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, INK);
+
+    const emittente = invoice._emittente || {};
+    const cliente = invoice.clienteSnapshot || {};
+    const emLines = [
+      emittente.denominazione || (emittente.nome + ' ' + (emittente.cognome || '')).trim(),
+      emittente.partitaIva ? 'P.IVA ' + emittente.partitaIva : '',
+      emittente.codiceFiscale ? 'CF ' + emittente.codiceFiscale : '',
+      [emittente.indirizzo, emittente.cap, emittente.comune || emittente.citta, emittente.provincia].filter(Boolean).join(' ')
+    ].filter(Boolean);
+    const clLines = [
+      cliente.denominazione || (cliente.nome + ' ' + (cliente.cognome || '')).trim(),
+      cliente.partitaIva ? 'P.IVA ' + cliente.partitaIva : (cliente.codiceFiscale ? 'CF ' + cliente.codiceFiscale : ''),
+      [cliente.indirizzo, cliente.cap, cliente.comune || cliente.citta, cliente.provincia].filter(Boolean).join(' ')
+    ].filter(Boolean);
+
+    let yL = y, yR = y;
+    emLines.forEach(line => { doc.text(line, MARGIN, yL); yL += 5; });
+    clLines.forEach(line => { doc.text(line, MARGIN + colW + 10, yR); yR += 5; });
+    y = Math.max(yL, yR) + 4;
+
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Tabella righe
+    const colDesc = MARGIN;
+    const colQta  = MARGIN + 100;
+    const colUnit = MARGIN + 130;
+    const colTot  = PAGE_W - MARGIN;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('DESCRIZIONE', colDesc, y);
+    doc.text('Q.tà', colQta, y, { align: 'right' });
+    doc.text('Prezzo', colUnit, y, { align: 'right' });
+    doc.text('Totale', colTot, y, { align: 'right' });
+    y += 3;
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, INK);
+    const PAGE_H = 297;
+    const FOOTER_RESERVE = 60;
+    (invoice.righe || []).forEach(r => {
+      if (y > PAGE_H - FOOTER_RESERVE) {
+        doc.addPage();
+        y = MARGIN;
+      }
+      const desc   = String(r.descrizione || '');
+      const qta    = Number(r.quantita) || 0;
+      const prezzo = Number(r.prezzoUnitario) || 0;
+      const totRiga = qta * prezzo * (isNC ? -1 : 1);
+      const wrapped = doc.splitTextToSize(desc, 95);
+      wrapped.forEach((line, idx) => {
+        doc.text(line, colDesc, y);
+        if (idx === 0) {
+          doc.text(formatNumIt(qta), colQta, y, { align: 'right' });
+          doc.text(formatEur(prezzo), colUnit, y, { align: 'right' });
+          if (totRiga < 0) doc.setTextColor.apply(doc, NEGATIVE);
+          doc.text(formatEur(totRiga), colTot, y, { align: 'right' });
+          doc.setTextColor.apply(doc, INK);
+        }
+        y += 5;
+      });
+    });
+
+    y += 3;
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Riepilogo
+    const totals = invoice._totals || {};
+    const sign = isNC ? -1 : 1;
+    const labelX = PAGE_W - MARGIN - 60;
+    const valX   = PAGE_W - MARGIN;
+    doc.setFontSize(10);
+
+    function row(label, val, opts) {
+      opts = opts || {};
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setTextColor.apply(doc, opts.color || INK);
+      doc.text(label, labelX, y);
+      doc.text(formatEur(val * sign), valX, y, { align: 'right' });
+      y += 5;
+    }
+    // totals.subtotal = imponibile (from computeDraftTotals)
+    row('Imponibile', totals.subtotal || 0);
+    if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
+    if (invoice.marcaDaBollo && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
+    if (Number(invoice.ritenuta) > 0) {
+      doc.setTextColor.apply(doc, NEGATIVE);
+      doc.text('Ritenuta', labelX, y);
+      doc.text('-' + formatEur(Number(invoice.ritenuta)), valX, y, { align: 'right' });
+      doc.setTextColor.apply(doc, INK);
+      y += 5;
+    }
+    // Linea accent teal sopra il totale
+    doc.setDrawColor.apply(doc, ACCENT);
+    doc.setLineWidth(0.4);
+    doc.line(labelX, y, valX, y);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('TOTALE', labelX, y);
+    // totals.total = totale finale (from computeDraftTotals)
+    doc.text(formatEur((totals.total || 0) * sign), valX, y, { align: 'right' });
+    y += 10;
+
+    // Pagamento
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    if (invoice.modalitaPagamento) {
+      doc.text('Pagamento: ' + invoice.modalitaPagamento + (invoice.scadenzaPagamento ? ' \u2014 Scadenza ' + formatDateIt(invoice.scadenzaPagamento) : ''), MARGIN, y);
+      y += 4;
+    }
+    if (invoice.iban) {
+      doc.text('IBAN: ' + invoice.iban, MARGIN, y);
+      y += 4;
+    }
+
+    // Footer legale (forfettario)
+    y += 4;
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor.apply(doc, MUTED);
+    const note = invoice.note || DEFAULT_FORFETTARIO_NOTE;
+    doc.splitTextToSize(note, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+
+    return doc;
+  }
+
+  function formatDateIt(iso) {
+    const parts = parseDateParts(iso);
+    if (!parts) return String(iso || '');
+    return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + parts.year;
+  }
+  function formatEur(n) {
+    const v = Number(n) || 0;
+    return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
+  }
+  function formatNumIt(n) {
+    return Number(n).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function _enrichInvoiceForPdf(invoice) {
     const totals = computeDraftTotals(invoice);
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'absolute'; wrapper.style.left = '-9999px'; wrapper.style.top = '0'; wrapper.style.width = '800px';
-    wrapper.innerHTML = `
-      <div id="invoice-render-box" style="width: 100%; padding: 40px; font-family: 'Helvetica', sans-serif; color: #121a24; background: #fff; box-sizing: border-box;">
-         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 30px;">
-           <div>
-             <h1 style="margin: 0; color: #1e293b; font-size: 28px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">FATTURA</h1>
-             <div style="margin-top: 5px; font-size: 13px; color: #64748b; font-weight: 500;">N. ${esc(invoice.numero)} del ${formatDisplayDate(invoice.data)}</div>
-           </div>
-           <div style="text-align: right; font-size: 11px; color: #1e293b; line-height: 1.5;">
-             <strong style="font-size: 14px;">${esc(profile.nome || currentProfile)}</strong><br>
-             ${esc(profile.indirizzo)}<br>${esc(profile.cap)} ${esc(profile.citta)} ${esc(profile.provincia)}<br>
-             P.IVA ${esc(profile.partitaIva)}<br>${profile.codiceFiscale ? 'C.F. ' + esc(profile.codiceFiscale) : ''}
-           </div>
-         </div>
-         <div style="display: flex; gap: 30px; margin-bottom: 40px;">
-           <div style="flex: 1; border: 1px solid #e2e8f0; padding: 15px; border-radius: 4px;">
-             <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Destinatario</div>
-             <div style="font-size: 13px; font-weight: 700; margin-bottom: 4px; color: #0f172a;">${esc(cliente.nome || 'Cliente non selezionato')}</div>
-             <div style="font-size: 11px; line-height: 1.5; color: #334155;">
-               ${esc(cliente.indirizzo)}<br>${esc(cliente.cap)} ${esc(cliente.citta)} ${esc(cliente.provincia)}<br>
-               ${cliente.partitaIva ? 'P.IVA ' + esc(cliente.partitaIva) + '<br>' : ''}${cliente.codiceFiscale ? 'C.F. ' + esc(cliente.codiceFiscale) + '<br>' : ''}
-               ${cliente.codiceSDI ? 'SDI: ' + esc(cliente.codiceSDI) : ''}
-             </div>
-           </div>
-           <div style="flex: 1; border: 1px solid #e2e8f0; padding: 15px; border-radius: 4px;">
-             <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Dettagli Pagamento</div>
-             <div style="font-size: 11px; line-height: 1.6; color: #334155;">
-               <strong>Scadenza:</strong> ${formatDisplayDate(invoice.scadenzaPagamento) || '-'}<br>
-               <strong>Metodo:</strong> ${esc(invoice.modalitaPagamento)}<br>
-               ${invoice.iban ? '<strong>IBAN:</strong> <span style="font-family: monospace;">' + esc(invoice.iban) + '</span><br>' : ''}
-               <strong>Bollo:</strong> ${invoice.marcaDaBollo ? 'Assolto virtualmente (2,00 €)' : 'Non applicato'}
-             </div>
-           </div>
-         </div>
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px;">
-           <thead>
-             <tr style="background: #1e293b; color: white;">
-               <th style="padding: 12px 10px; text-align: left;">Descrizione</th>
-               <th style="padding: 12px 10px; text-align: right; width: 60px;">Q.tà</th>
-               <th style="padding: 12px 10px; text-align: right; width: 100px;">Prezzo Unit.</th>
-               <th style="padding: 12px 10px; text-align: right; width: 100px;">Totale</th>
-             </tr>
-           </thead>
-           <tbody>
-             ${invoice.righe.map((line, idx) => `
-               <tr style="border-bottom: 1px solid #f1f5f9; ${idx % 2 === 0 ? 'background: #ffffff;' : 'background: #f8fafc;'}">
-                 <td style="padding: 12px 10px; color: #0f172a; font-weight: 500;">${esc(line.descrizione)}</td>
-                 <td style="padding: 12px 10px; text-align: right; color: #475569;">${parseMaybeNumber(line.quantita)}</td>
-                 <td style="padding: 12px 10px; text-align: right; color: #475569;">${formatPdfMoney(parseMaybeNumber(line.prezzoUnitario))}</td>
-                 <td style="padding: 12px 10px; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(parseMaybeNumber(line.quantita) * parseMaybeNumber(line.prezzoUnitario))}</td>
-               </tr>
-             `).join('')}
-           </tbody>
-         </table>
-         <div style="display: flex; gap: 40px; align-items: flex-end;">
-           <div style="flex: 1.5; font-size: 10px; color: #64748b; line-height: 1.6; border-top: 1px solid #f1f5f9; padding-top: 15px;">
-             <strong>Informazioni aggiuntive:</strong><br>${esc(invoice.note)}
-           </div>
-           <div style="flex: 1;">
-             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-               <tr><td style="padding: 6px 0; color: #64748b;">Imponibile</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(totals.subtotal)}</td></tr>
-               ${totals.contributoIntegrativo > 0 ? `<tr><td style="padding: 6px 0; color: #64748b;">Contributo integrativo</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(totals.contributoIntegrativo)}</td></tr>` : ''}
-               ${totals.bollo > 0 ? `<tr><td style="padding: 6px 0; color: #64748b;">Marca da bollo</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">2,00 EUR</td></tr>` : ''}
-               <tr style="border-top: 2px solid #1e293b;"><td style="padding: 12px 0; color: #1e293b; font-weight: 700; font-size: 15px;">TOTALE FATTURA</td><td style="padding: 12px 0; text-align: right; font-weight: 700; color: #1e293b; font-size: 15px;">${formatPdfMoney(totals.total)}</td></tr>
-             </table>
-           </div>
-         </div>
-      </div>
-    `;
-    return wrapper;
+    const profileRaw = getProfileFiscalData();
+    // Map profile fields to emittente shape expected by buildInvoicePdfMinimal
+    const emittente = {
+      nome: profileRaw.nome || currentProfile,
+      cognome: '',
+      partitaIva: profileRaw.partitaIva || '',
+      codiceFiscale: profileRaw.codiceFiscale || '',
+      indirizzo: profileRaw.indirizzo || '',
+      cap: profileRaw.cap || '',
+      comune: profileRaw.citta || '',
+      provincia: profileRaw.provincia || ''
+    };
+    return { ...invoice, _totals: totals, _emittente: emittente };
   }
 
   async function downloadFatturaPdf() {
-    const saved = saveFatturaDraft(true); if (!saved) return;
     try {
-      const node = buildInvoiceHtmlNode(saved); document.body.appendChild(node);
-      const opt = { margin: 0, filename: `fattura_${saved.numero.replace(/\//g,'-')}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
-      await window.html2pdf().set(opt).from(node.firstElementChild).save(); node.remove();
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const enriched = _enrichInvoiceForPdf(saved);
+      const doc = buildInvoicePdfMinimal(enriched);
+      const filename = 'fattura_' + String(saved.numero || 'senza-numero').replace(/\//g, '-') + '.pdf';
+      doc.save(filename);
       showFatturaToast('PDF scaricato.');
-    } catch (err) { console.error(err); showFatturaToast('Errore PDF', 'error'); }
+    } catch (err) {
+      console.error('downloadFatturaPdf', err);
+      showFatturaToast('Errore generazione PDF: ' + err.message, 'error');
+    }
   }
 
   async function previewFatturaPdf() {
-    const saved = saveFatturaDraft(true); if (!saved) return;
     try {
-      const node = buildInvoiceHtmlNode(saved); document.body.appendChild(node);
-      const pdfBlob = await window.html2pdf().set({ margin: 0, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4' } }).from(node.firstElementChild).output('blob');
-      node.remove();
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const enriched = _enrichInvoiceForPdf(saved);
+      const doc = buildInvoicePdfMinimal(enriched);
+      const blob = doc.output('blob');
       if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-      state.previewUrl = URL.createObjectURL(pdfBlob);
+      state.previewUrl = URL.createObjectURL(blob);
       window.open(state.previewUrl, '_blank');
-    } catch (err) { console.error(err); showFatturaToast('Errore Anteprima', 'error'); }
+    } catch (err) {
+      console.error('previewFatturaPdf', err);
+      showFatturaToast('Errore anteprima PDF: ' + err.message, 'error');
+    }
   }
 
   // ── XML helpers ─────────────────────────────────────────────
@@ -767,22 +1043,57 @@
     return { errors };
   }
 
-  function buildFatturaElettronicaXml(draft) {
+  function buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale) {
+    if (!fatturaOriginale) {
+      throw new Error('NC: fattura originale richiesta per DatiFattureCollegate');
+    }
+    const draft = { ...noteCredit, tipoDocumento: 'TD04', _isNC: true };
+    return buildFatturaElettronicaXml(draft, { fatturaOriginale });
+  }
+
+  function buildFatturaElettronicaXml(draft, opts = {}) {
+    const isNC = draft._isNC === true || draft.tipoDocumento === 'TD04';
+    const tipoDoc = isNC ? 'TD04' : 'TD01';
+    const sign = isNC ? -1 : 1;
+
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
     const totals = computeDraftTotals(draft);
 
-    const piva = String(profile.partitaIva || '').replace(/\D/g, '');
-    const progressivo = getXmlInvoiceProgressivo(draft);
-    const codiceSDI = String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7);
+    // Fix #4 — RegimeFiscale dinamico da settings
+    const regimeFiscale = (window.settings?.regime === 'ordinario') ? 'RF01' : 'RF19';
+
+    // Fix #1 — ProgressivoInvio sanitizzato (max 10 alfanum)
+    const progressivo = sanitizeProgressivoInvio(draft.numero || draft.id || '');
+
+    const piva = String(profile.partitaIva || '').replace(/\s+/g, '');
+
+    // Fix #3 — validazione P.IVA cedente
+    if (piva && !isValidPartitaIvaIT(piva)) {
+      console.warn('P.IVA cedente non valida (non 11 cifre):', piva);
+    }
+
+    // Fix #2 — validazione CF cedente con warning
+    const cfCedente = String(profile.codiceFiscale || '').trim();
+    if (cfCedente && !isValidCodiceFiscale(cfCedente)) {
+      console.warn('CF cedente non valido:', cfCedente);
+      if (typeof showToast === 'function') showToast('Attenzione: CF cedente non valido (verifica anagrafica)');
+    }
+
+    // Fix #8 — CodiceDestinatario: privato senza P.IVA → 0000000
+    const clientePivaRaw = String(cliente.partitaIva || '').replace(/\s+/g, '');
+    const clientePivaValida = isValidPartitaIvaIT(clientePivaRaw);
+    const codiceSDI = clientePivaValida
+      ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
+      : String(cliente.codiceSDI || '').trim() || '0000000';
 
     // Split profile name into Nome/Cognome (natural person)
     const nameParts = String(profile.nome || currentProfile).trim().split(/\s+/);
     const profileCognome = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
     const profileNome = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
 
-    // Client identification
-    const clientePiva = String(cliente.partitaIva || '').replace(/\D/g, '');
+    // Client identification (Fix #3 + Fix #8)
+    const clientePiva = clientePivaRaw; // already computed above (spaces stripped)
     const clienteCF = String(cliente.codiceFiscale || '').trim();
 
     // Imponibile = sum of all lines + contributo integrativo (bollo excluded)
@@ -794,7 +1105,7 @@
       lineNum++;
       const qta = parseMaybeNumber(line.quantita) || 1;
       const pu = round2(parseMaybeNumber(line.prezzoUnitario));
-      const tot = round2(qta * pu);
+      const tot = round2(qta * pu * sign);
       return `    <DettaglioLinee>
       <NumeroLinea>${lineNum}</NumeroLinea>
       <Descrizione>${xmlEscape(line.descrizione || 'Prestazione professionale')}</Descrizione>
@@ -813,17 +1124,44 @@
       <Descrizione>Contributo integrativo</Descrizione>
       <Quantita>1.00</Quantita>
       <PrezzoUnitario>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoUnitario>
-      <PrezzoTotale>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoTotale>
+      <PrezzoTotale>${fmtXmlNum(round2(totals.contributoIntegrativo * sign))}</PrezzoTotale>
       <AliquotaIVA>0.00</AliquotaIVA>
       <Natura>N2.2</Natura>
     </DettaglioLinee>`);
     }
 
-    const datiBollo = draft.marcaDaBollo ? `
+    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6)
+    const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo)) ? `
       <DatiBollo>
         <BolloVirtuale>SI</BolloVirtuale>
         <ImportoBollo>2.00</ImportoBollo>
       </DatiBollo>` : '';
+
+    // Fix #9 — DatiRitenuta dentro DatiGeneraliDocumento (prima di ImportoTotaleDocumento)
+    let xmlRitenuta = '';
+    if (Number(draft.ritenuta) > 0) {
+      const tipo = draft.tipoRitenuta || 'RT02';
+      const caus = (draft.causaleRitenuta || 'A').toUpperCase().slice(0, 2);
+      xmlRitenuta = `
+      <DatiRitenuta>
+        <TipoRitenuta>${tipo}</TipoRitenuta>
+        <ImportoRitenuta>${Number(draft.ritenuta).toFixed(2)}</ImportoRitenuta>
+        <AliquotaRitenuta>${Number(draft.aliquotaRitenuta || 0).toFixed(2)}</AliquotaRitenuta>
+        <CausalePagamento>${xmlEscape(caus)}</CausalePagamento>
+      </DatiRitenuta>`;
+    }
+
+    // NC — DatiFattureCollegate (XSD: inside DatiGenerali, after DatiGeneraliDocumento)
+    let datiCollegate = '';
+    if (isNC && opts.fatturaOriginale) {
+      const orig = opts.fatturaOriginale;
+      datiCollegate = `
+    <DatiFattureCollegate>
+      <RiferimentoNumeroLinea>1</RiferimentoNumeroLinea>
+      <IdDocumento>${xmlEscape(String(orig.numero || ''))}</IdDocumento>
+      <Data>${xmlEscape(String(orig.data || ''))}</Data>
+    </DatiFattureCollegate>`;
+    }
 
     const causale = String(draft.note || '').trim();
     const causaleXml = causale ? `
@@ -853,17 +1191,22 @@
     const cfCedenteXml = profile.codiceFiscale
       ? `\n        <CodiceFiscale>${xmlEscape(profile.codiceFiscale)}</CodiceFiscale>` : '';
 
-    // Client fiscal ID
+    // Client fiscal ID — Fix #8: privato senza P.IVA → solo CodiceFiscale
     let cessionarioFiscaleXml = '';
-    if (clientePiva) {
+    if (clientePivaValida) {
+      const cliPaese = String(cliente.paese || 'IT').slice(0, 2).toUpperCase();
       cessionarioFiscaleXml = `
       <IdFiscaleIVA>
-        <IdPaese>IT</IdPaese>
+        <IdPaese>${cliPaese}</IdPaese>
         <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
       </IdFiscaleIVA>`;
       if (clienteCF) cessionarioFiscaleXml += `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
-    } else if (clienteCF) {
-      cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
+    } else {
+      // Privato: solo CF
+      if (!clienteCF) {
+        console.warn('Cessionario privato senza CF: XML potrebbe essere rifiutato da SdI');
+      }
+      if (clienteCF) cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
     }
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -891,7 +1234,7 @@
           <Nome>${xmlEscape(profileNome)}</Nome>
           <Cognome>${xmlEscape(profileCognome)}</Cognome>
         </Anagrafica>
-        <RegimeFiscale>${XML_FORFETTARIO_REGIME}</RegimeFiscale>
+        <RegimeFiscale>${regimeFiscale}</RegimeFiscale>
       </DatiAnagrafici>
       <Sede>
         <Indirizzo>${cedInd}</Indirizzo>
@@ -917,19 +1260,19 @@
   <FatturaElettronicaBody>
     <DatiGenerali>
       <DatiGeneraliDocumento>
-        <TipoDocumento>TD01</TipoDocumento>
+        <TipoDocumento>${tipoDoc}</TipoDocumento>
         <Divisa>EUR</Divisa>
         <Data>${xmlEscape(draft.data)}</Data>
-        <Numero>${xmlEscape(draft.numero)}</Numero>${datiBollo}${causaleXml}
-        <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>
-      </DatiGeneraliDocumento>
+        <Numero>${xmlEscape(draft.numero)}</Numero>${xmlRitenuta}${datiBollo}
+        <ImportoTotaleDocumento>${fmtXmlNum(round2(totals.total * sign))}</ImportoTotaleDocumento>${causaleXml}
+      </DatiGeneraliDocumento>${datiCollegate}
     </DatiGenerali>
     <DatiBeniServizi>
 ${dettaglioLinee.join('\n')}
       <DatiRiepilogo>
         <AliquotaIVA>0.00</AliquotaIVA>
         <Natura>N2.2</Natura>
-        <ImponibileImporto>${fmtXmlNum(imponibile)}</ImponibileImporto>
+        <ImponibileImporto>${fmtXmlNum(round2(imponibile * sign))}</ImponibileImporto>
         <Imposta>0.00</Imposta>
         <RiferimentoNormativo>Art. 1, commi 54-89, L. 190/2014</RiferimentoNormativo>
       </DatiRiepilogo>
@@ -938,7 +1281,7 @@ ${dettaglioLinee.join('\n')}
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
         <ModalitaPagamento>${modalitaToCodiceMP(draft.modalitaPagamento)}</ModalitaPagamento>${scadenzaXml}
-        <ImportoPagamento>${fmtXmlNum(totals.total)}</ImportoPagamento>${ibanXml}
+        <ImportoPagamento>${fmtXmlNum(round2((totals.total - (Number(draft.ritenuta) || 0)) * sign))}</ImportoPagamento>${ibanXml}
       </DettaglioPagamento>
     </DatiPagamento>
   </FatturaElettronicaBody>
@@ -1094,6 +1437,146 @@ ${dettaglioLinee.join('\n')}
     document.body.classList.add('profile-modal-open');
   }
 
+  // ─── Task 8: Anteprima XML + Nota di credito da storico ─────────────────────
+
+  function previewFatturaXml() {
+    try {
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const xml = (saved.tipoDocumento === 'TD04' && saved.fatturaOriginaleId)
+        ? buildFatturaElettronicaXmlNC(saved, _findOriginale(saved.fatturaOriginaleId))
+        : buildFatturaElettronicaXml(saved);
+      showXmlPreviewModal(xml, saved.numero);
+    } catch (err) {
+      console.error('previewFatturaXml', err);
+      showFatturaToast('Errore anteprima XML: ' + err.message, 'error');
+    }
+  }
+
+  function _findOriginale(id) {
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const fatture = loadFattureEmesse(profile);
+    return fatture.find(f => f.id === id);
+  }
+
+  function _formatXml(xml) {
+    // Pretty-print con indent 2 spazi
+    let formatted = '';
+    let pad = 0;
+    xml.replace(/></g, '>\n<').split('\n').forEach(node => {
+      let indent = 0;
+      if (node.match(/^<\/\w/)) pad = Math.max(pad - 1, 0);
+      else if (node.match(/^<\w[^>]*[^/]>$/)) indent = 1;
+      formatted += '  '.repeat(pad) + node + '\n';
+      pad += indent;
+    });
+    return formatted.trim();
+  }
+
+  function showXmlPreviewModal(xml, numero) {
+    // Modal costruito via DOM API (NO innerHTML con XML — security)
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-content';
+    modal.style.cssText = 'background:var(--bg-secondary);border-radius:8px;padding:16px;max-width:90vw;max-height:90vh;width:800px;display:flex;flex-direction:column;gap:12px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+    const h = document.createElement('h3');
+    h.textContent = 'Anteprima XML — ' + (numero || '');
+    h.style.margin = '0';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '\u00d7';
+    closeBtn.style.cssText = 'background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-primary);';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.appendChild(h);
+    header.appendChild(closeBtn);
+
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'flex:1;overflow:auto;background:var(--bg-primary);padding:12px;border-radius:4px;font-size:12px;font-family:monospace;color:var(--text-primary);white-space:pre;';
+    pre.textContent = _formatXml(xml);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-add';
+    copyBtn.textContent = 'Copia negli appunti';
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.textContent);
+        copyBtn.textContent = 'Copiato!';
+        setTimeout(() => { copyBtn.textContent = 'Copia negli appunti'; }, 1500);
+      } catch (err) {
+        showFatturaToast('Errore copia: ' + err.message, 'error');
+      }
+    });
+
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'btn-add';
+    dlBtn.textContent = 'Scarica XML';
+    dlBtn.addEventListener('click', () => {
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'IT_' + (numero || 'fattura').replace(/\//g, '_') + '.xml';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(dlBtn);
+    modal.appendChild(header);
+    modal.appendChild(pre);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  function openNotaCreditoModal(fatturaOriginaleId) {
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const fatture = loadFattureEmesse(profile);
+    const orig = fatture.find(f => f.id === fatturaOriginaleId);
+    if (!orig) { showFatturaToast('Fattura originale non trovata', 'error'); return; }
+    const annoOggi = new Date().getFullYear();
+    const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+    const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
+    const draft = {
+      ...DRAFT_TEMPLATE,
+      id: 'nc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      numero: window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001'),
+      annoProgressivo: annoOggi,
+      progressivo: prog,
+      data: new Date().toISOString().slice(0, 10),
+      anno: annoOggi,
+      clienteId: orig.clienteId,
+      clienteSnapshot: { ...orig.clienteSnapshot },
+      righe: (orig.righe || []).map(r => ({ ...r, descrizione: 'STORNO \u2014 ' + r.descrizione })),
+      tipoDocumento: 'TD04',
+      fatturaOriginaleId: orig.id,
+      stato: 'bozza',
+      marcaDaBollo: false,
+      contributoIntegrativo: orig.contributoIntegrativo || 0
+    };
+    state.draft = draft;
+    state.editingId = null;
+    state.numberAuto = false;
+    renderFatturaModal();
+    const m = document.getElementById('fatturaModal');
+    if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
+    document.body.classList.add('profile-modal-open');
+  }
+
+  window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
+  window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
   window.closeFatturaModal = closeFatturaModal;
   window.openSdiGuideModal = openSdiGuideModal;
@@ -1106,6 +1589,9 @@ ${dettaglioLinee.join('\n')}
   window.previewFatturaPdf = previewFatturaPdf;
   window.downloadFatturaPdf = downloadFatturaPdf;
   window.downloadFatturaXml = downloadFatturaXml;
+  window.previewFatturaXml = previewFatturaXml;
+  window.showXmlPreviewModal = showXmlPreviewModal;
+  window.openNotaCreditoModal = openNotaCreditoModal;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 })();

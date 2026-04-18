@@ -211,19 +211,48 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 
 ### FatturaPA / SdI
 - **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
-- **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-matches a free-text payment method string to the correct FatturaPA `ModalitaPagamento` code (MP01–MP15); defaults to MP05 (bonifico)
-- **`showSdiUploadGuide(fileName)`**: after XML download, replaces the modal with a 4-step guide for manual upload to the AdE "Fatture e Corrispettivi" portal (`ivaservizi.agenziaentrate.gov.it/portale/...`); includes a direct portal button
+- **`buildFatturaElettronicaXml(draft, opts)`**: genera XML TD01 (fattura) o TD04 (nota di credito) a seconda di `opts.isNC`; quando isNC=true, applica segni negativi agli importi e inserisce `DatiFattureCollegate` con `IdDocumento`/`Data` dalla fattura originale
+- **`buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale)`**: wrapper per generazione NC
+- **XML audit fixes (11 punti conformità AdE v1.2):**
+  - `sanitizeProgressivoInvio` — max 10 char alfanumerici
+  - `isValidPartitaIvaIT` — 11 cifre IT
+  - `isValidCodiceFiscale` — 16 char + check digit
+  - `RegimeFiscale` da `settings.regime` (RF19 forfettario / RF01 ordinario)
+  - Natura riga (N2.2 forfettario / N1 escluse / N6 reverse charge) con `AliquotaIVA=0.00` sempre presente
+  - `applicaBolloSeDovuto` — soglia 77,47 € per `DatiBollo`
+  - Fattura a privato: `CodiceDestinatario=0000000`, CF cessionario obbligatorio
+  - `DatiRitenuta` con `TipoRitenuta`, `ImportoRitenuta`, `CausalePagamento` se `ritenuta > 0`
+  - Contributo integrativo su riga separata con propria `Natura`
+  - `DatiPagamento.ImportoPagamento` = totale lordo − ritenuta
+  - XSD element order in `DatiGeneraliDocumento`: Numero → DatiRitenuta → DatiBollo → ImportoTotaleDocumento → Causale
+- **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
+- **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
+- **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"
+- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`
 - No automated SdI submission — upload is always manual via the AdE portal
 
-### Invoice PDF (`buildInvoicePdfModern`)
-- Professional layout via jsPDF:
-  - Full-width teal header band with "FATTURA" label + invoice number badge
-  - Two-column issuer / client section (client in a rounded rect card)
-  - Meta bar: date, due date, payment method, IBAN
-  - Line-item table with teal header row and alternating soft rows
-  - Right-aligned summary box with highlighted total row
-  - Footer: payment info box + legal note box
-- Key palette constants (inside the function): `ACCENT=[60,143,145]`, `ACCENT_LIGHT=[232,244,244]`, `INK=[18,26,36]`, `MUTED=[96,112,128]`, `BORDER=[210,218,226]`, `SOFT=[245,248,251]`
+### Storico fatture e numerazione (sub-project 3)
+- **File**: `fatture-storico.js` (IIFE, espone `window.FattureStorico`)
+- **Storage key**: `calcoliPIVA_{profile}_fattureEmesse` (array di fatture); sync via `syncProfileMetaToCloud(profile, 'fattureEmesse')` (`PROFILE_META_KEYS` in `firebase-sync.js` già include `'fattureEmesse'`)
+- **API**: `load(profile)`, `save(profile, fatture)`, `nextProgressivo(anno, fatture)`, `formatNumero(anno, progressivo)`, `storageKey(profile)`, `renderStorico(annoFiltro)`, `renderAnnoFilter(selectedAnno)`
+- **Numerazione**: formato `YYYY/NNN` (zero-padded 3 cifre). `nextProgressivo` scansiona fatture dell'anno e ritorna `max(progressivo)+1`. Pre-filled al nuovo fattura, editabile come override manuale.
+- **Stati**: `bozza` | `inviata` | `pagata` | `annullata` (badge CSS `.badge-stato.{stato}` in `style.css`)
+- **Campi estesi** sull'oggetto fattura (tutti backwards-compatible): `stato`, `dataInvioSdi`, `dataPagamento`, `fatturaOriginaleId`, `tipoDocumento` (TD01/TD04), `annoProgressivo`, `progressivo`, `ritenuta`, `aliquotaRitenuta`, `tipoRitenuta`, `causaleRitenuta`
+- **Normalizzazione**: `window.normalizeInvoice(inv)` applica default ai campi mancanti al load; chiamata da `FattureStorico.load`
+- **UI storico** (`#storico-fatture` card in tab Fatture): tabella Numero/Data/Cliente/Importo/Tipo/Stato/Azioni, filtro anno, azioni contestuali per stato (Riapri/Annulla su bozza, Duplica ovunque, Segna inviata/pagata, Nota di credito su inviata/pagata)
+- **Hook tab**: `switchToTab()` in `app.js` chiama `FattureStorico.renderAnnoFilter()` + `renderStorico()` all'attivazione tab Fatture
+
+### Invoice PDF (`buildInvoicePdfMinimal`)
+- Layout minimalista A4 portrait, margini 20 mm, font Helvetica (built-in jsPDF):
+  - Header testo "FATTURA N. YYYY/NNN" + Data, senza bande colore; "NOTA DI CREDITO" per TD04
+  - Due colonne EMITTENTE / DESTINATARIO (no card colorate)
+  - Tabella righe: Descrizione / Q.tà / P.Unit. / Totale
+  - Riepilogo allineato a destra con unica linea ACCENT teal sopra TOTALE (bold 14pt)
+  - TD04: importi in rosso (`NEGATIVE`)
+  - Footer payment info + nota legale franchigia IVA art. 1 c. 58 L. 190/2014
+  - Multi-pagina con header ripetuto se righe > ~20
+- Palette: `INK=[18,26,36]`, `MUTED=[100,116,139]`, `BORDER=[226,232,240]`, `ACCENT=[60,143,145]`, `NEGATIVE=[220,53,69]`
+- Costruttore: `window.jspdf.jsPDF` (bundle caricato via html2pdf)
 
 ## Conventions
 - Italian UI language throughout

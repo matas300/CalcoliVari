@@ -6581,6 +6581,11 @@ function switchToTab(tab) {
   if (tab === 'dichiarazione' && window.DichiarazioneUI) {
     window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
   }
+  // render storico fatture when switching to fatture tab
+  if (tab === 'fatture' && typeof window.FattureStorico?.renderStorico === 'function') {
+    window.FattureStorico.renderAnnoFilter();
+    window.FattureStorico.renderStorico();
+  }
   window.scrollTo(0, 0);
 }
 
