@@ -1,7 +1,7 @@
 /* Fatture: gestione storico, stati, numerazione progressiva (sub-project 3) */
 (function () {
   const STORAGE_PREFIX = 'calcoliPIVA_';
-  const STORAGE_SUFFIX = '_fatture';
+  const STORAGE_SUFFIX = '_fattureEmesse';
 
   function storageKey(profile) {
     if (!profile) throw new Error('FattureStorico: profile richiesto');
@@ -26,7 +26,7 @@
     if (!Array.isArray(fatture)) throw new Error('FattureStorico.save: fatture deve essere array');
     localStorage.setItem(storageKey(profile), JSON.stringify(fatture));
     if (typeof window.syncProfileMetaToCloud === 'function') {
-      try { window.syncProfileMetaToCloud(profile, 'fatture'); } catch (_) { /* sync best-effort */ }
+      try { window.syncProfileMetaToCloud(profile, 'fattureEmesse'); } catch (_) { /* sync best-effort */ }
     }
   }
 
