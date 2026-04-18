@@ -25,7 +25,25 @@
     return 'MP05'; // default bonifico
   }
   const XML_NAMESPACE = 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2';
-  const XML_FORFETTARIO_REGIME = 'RF19';
+  const XML_FORFETTARIO_REGIME = 'RF19'; // kept for backward compat; buildFatturaElettronicaXml now reads settings
+
+  // ── FatturaPA validation helpers (Task 5 audit) ──────────────────────────
+  function sanitizeProgressivoInvio(s) {
+    return String(s || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) || '00001';
+  }
+  function isValidPartitaIvaIT(s) {
+    return /^\d{11}$/.test(String(s || '').replace(/\s+/g, ''));
+  }
+  function isValidCodiceFiscale(cf) {
+    if (typeof window.DichiarazioneEngine?.validateCodiceFiscale === 'function') {
+      return window.DichiarazioneEngine.validateCodiceFiscale(cf);
+    }
+    return /^[A-Z0-9]{16}$/i.test(String(cf || '').trim());
+  }
+  function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
+    return marcaDaBollo && Number(imponibile) > 77.47;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
   const DRAFT_TEMPLATE = {
     numero: '',
     data: '',
@@ -1015,22 +1033,45 @@
     return { errors };
   }
 
-  function buildFatturaElettronicaXml(draft) {
+  function buildFatturaElettronicaXml(draft, opts = {}) {
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
     const totals = computeDraftTotals(draft);
 
-    const piva = String(profile.partitaIva || '').replace(/\D/g, '');
-    const progressivo = getXmlInvoiceProgressivo(draft);
-    const codiceSDI = String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7);
+    // Fix #4 — RegimeFiscale dinamico da settings
+    const regimeFiscale = (window.settings?.regime === 'ordinario') ? 'RF01' : 'RF19';
+
+    // Fix #1 — ProgressivoInvio sanitizzato (max 10 alfanum)
+    const progressivo = sanitizeProgressivoInvio(draft.numero || draft.id || '');
+
+    const piva = String(profile.partitaIva || '').replace(/\s+/g, '');
+
+    // Fix #3 — validazione P.IVA cedente
+    if (piva && !isValidPartitaIvaIT(piva)) {
+      console.warn('P.IVA cedente non valida (non 11 cifre):', piva);
+    }
+
+    // Fix #2 — validazione CF cedente con warning
+    const cfCedente = String(profile.codiceFiscale || '').trim();
+    if (cfCedente && !isValidCodiceFiscale(cfCedente)) {
+      console.warn('CF cedente non valido:', cfCedente);
+      if (typeof showToast === 'function') showToast('Attenzione: CF cedente non valido (verifica anagrafica)');
+    }
+
+    // Fix #8 — CodiceDestinatario: privato senza P.IVA → 0000000
+    const clientePivaRaw = String(cliente.partitaIva || '').replace(/\s+/g, '');
+    const clientePivaValida = isValidPartitaIvaIT(clientePivaRaw);
+    const codiceSDI = clientePivaValida
+      ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
+      : String(cliente.codiceSDI || '').trim() || '0000000';
 
     // Split profile name into Nome/Cognome (natural person)
     const nameParts = String(profile.nome || currentProfile).trim().split(/\s+/);
     const profileCognome = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
     const profileNome = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
 
-    // Client identification
-    const clientePiva = String(cliente.partitaIva || '').replace(/\D/g, '');
+    // Client identification (Fix #3 + Fix #8)
+    const clientePiva = clientePivaRaw; // already computed above (spaces stripped)
     const clienteCF = String(cliente.codiceFiscale || '').trim();
 
     // Imponibile = sum of all lines + contributo integrativo (bollo excluded)
@@ -1067,11 +1108,26 @@
     </DettaglioLinee>`);
     }
 
-    const datiBollo = draft.marcaDaBollo ? `
+    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag
+    const datiBollo = applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo) ? `
       <DatiBollo>
         <BolloVirtuale>SI</BolloVirtuale>
         <ImportoBollo>2.00</ImportoBollo>
       </DatiBollo>` : '';
+
+    // Fix #9 — DatiRitenuta dentro DatiGeneraliDocumento (prima di ImportoTotaleDocumento)
+    let xmlRitenuta = '';
+    if (Number(draft.ritenuta) > 0) {
+      const tipo = draft.tipoRitenuta || 'RT02';
+      const caus = (draft.causaleRitenuta || 'A').toUpperCase().slice(0, 2);
+      xmlRitenuta = `
+      <DatiRitenuta>
+        <TipoRitenuta>${tipo}</TipoRitenuta>
+        <ImportoRitenuta>${Number(draft.ritenuta).toFixed(2)}</ImportoRitenuta>
+        <AliquotaRitenuta>${Number(draft.aliquotaRitenuta || 0).toFixed(2)}</AliquotaRitenuta>
+        <CausalePagamento>${xmlEscape(caus)}</CausalePagamento>
+      </DatiRitenuta>`;
+    }
 
     const causale = String(draft.note || '').trim();
     const causaleXml = causale ? `
@@ -1101,17 +1157,22 @@
     const cfCedenteXml = profile.codiceFiscale
       ? `\n        <CodiceFiscale>${xmlEscape(profile.codiceFiscale)}</CodiceFiscale>` : '';
 
-    // Client fiscal ID
+    // Client fiscal ID — Fix #8: privato senza P.IVA → solo CodiceFiscale
     let cessionarioFiscaleXml = '';
-    if (clientePiva) {
+    if (clientePivaValida) {
+      const cliPaese = String(cliente.paese || 'IT').slice(0, 2).toUpperCase();
       cessionarioFiscaleXml = `
       <IdFiscaleIVA>
-        <IdPaese>IT</IdPaese>
+        <IdPaese>${cliPaese}</IdPaese>
         <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
       </IdFiscaleIVA>`;
       if (clienteCF) cessionarioFiscaleXml += `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
-    } else if (clienteCF) {
-      cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
+    } else {
+      // Privato: solo CF
+      if (!clienteCF) {
+        console.warn('Cessionario privato senza CF: XML potrebbe essere rifiutato da SdI');
+      }
+      if (clienteCF) cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
     }
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -1139,7 +1200,7 @@
           <Nome>${xmlEscape(profileNome)}</Nome>
           <Cognome>${xmlEscape(profileCognome)}</Cognome>
         </Anagrafica>
-        <RegimeFiscale>${XML_FORFETTARIO_REGIME}</RegimeFiscale>
+        <RegimeFiscale>${regimeFiscale}</RegimeFiscale>
       </DatiAnagrafici>
       <Sede>
         <Indirizzo>${cedInd}</Indirizzo>
@@ -1168,7 +1229,7 @@
         <TipoDocumento>TD01</TipoDocumento>
         <Divisa>EUR</Divisa>
         <Data>${xmlEscape(draft.data)}</Data>
-        <Numero>${xmlEscape(draft.numero)}</Numero>${datiBollo}${causaleXml}
+        <Numero>${xmlEscape(draft.numero)}</Numero>${datiBollo}${xmlRitenuta}${causaleXml}
         <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>
       </DatiGeneraliDocumento>
     </DatiGenerali>
@@ -1186,7 +1247,7 @@ ${dettaglioLinee.join('\n')}
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
         <ModalitaPagamento>${modalitaToCodiceMP(draft.modalitaPagamento)}</ModalitaPagamento>${scadenzaXml}
-        <ImportoPagamento>${fmtXmlNum(totals.total)}</ImportoPagamento>${ibanXml}
+        <ImportoPagamento>${fmtXmlNum(round2(totals.total - (Number(draft.ritenuta) || 0)))}</ImportoPagamento>${ibanXml}
       </DettaglioPagamento>
     </DatiPagamento>
   </FatturaElettronicaBody>
