@@ -6686,5 +6686,11 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeProfileMenu();
+  if (e.key !== 'Escape') return;
+  // Don't close the dropdown when ESC is meant for an open modal — let the modal's own handler win.
+  const profileModal = document.getElementById('profileFiscalModal');
+  const ocrModal = document.getElementById('ocrPagamentoModal');
+  if (profileModal && profileModal.classList.contains('open')) return;
+  if (ocrModal && ocrModal.classList.contains('open')) return;
+  closeProfileMenu();
 });
