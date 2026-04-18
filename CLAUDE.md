@@ -195,11 +195,31 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - Run with: `node test/run-tests.js`
 
 ### Color System
-- Canonical color CSS variables defined in `:root` (dark theme) and `html[data-theme="light"]`:
-  - **Charts**: `--color-chart-netto` (#2EAADC), `--color-chart-tasse` (#E94560), `--color-chart-contributi` (#F5A623)
-  - **Calendar day types**: `--color-cal-lavoro` (#4ECCA3), `--color-cal-ferie` (#F5A623), `--color-cal-festivo` (#E94560), `--color-cal-mezzagiornata` (#4A9EFF), `--color-cal-malattia` (#E67E22), `--color-cal-donazione` (#7C5CBF)
-- `getCSSVar(name)` helper in `app.js`: reads a CSS variable at runtime via `getComputedStyle` — use this in JS wherever a resolved color value is needed (e.g. SVG fills, canvas)
-- `DAY_TYPES` constant uses `var(--color-cal-*)` references; `drawDonut()` and `drawMiniBars()` call `getCSSVar()` at render time so colors update on theme switch
+
+Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (light). Mai hard-coded.
+
+**Palette — Espresso & Mint (palette C, restyling sub-progetto B 2026-04-18):**
+- **Surface scale**: `--color-bg` → `--color-surface` → `--color-surface-2` → `--color-surface-3` (dal più scuro/sfondo al più chiaro/elevato)
+- **Text scale**: `--color-text` (primario) → `--color-text-muted` (secondario, label) → `--color-text-faint` (terziario, placeholder)
+- **Accent**: `--color-primary` (mint, CTA), `--color-primary-hover`, `--color-secondary` (arancio caldo), `--color-tertiary` (rosa caldo)
+- **Stato**: `--color-success`, `--color-warning`, `--color-error`, `--color-info`
+- **Charts**: `--color-chart-netto` / `--color-chart-tasse` / `--color-chart-contributi` (allineati a primary/secondary/tertiary)
+- **Calendar day types**: `--color-cal-lavoro`, `--color-cal-ferie`, `--color-cal-festivo`, `--color-cal-mezzagiornata`, `--color-cal-malattia`, `--color-cal-donazione`
+
+**Token di sistema (Crisp & Tight):**
+- **Radii**: `--radius-xs` 4px (badge), `--radius-sm` 6px (btn, input), `--radius-md` 8px (card), `--radius-lg` 12px (modal), `--radius-pill` 999px
+- **Spacing scale**: `--space-1` 4px, `--space-2` 8px, `--space-3` 12px, `--space-4` 16px, `--space-5` 24px, `--space-6` 32px
+- **Shadows**: `--shadow-sm/md/lg` sono `none` (stile Crisp); usare `--shadow-modal` solo per modali
+- **Typography**: `--font-display` (Satoshi, valori prominenti), `--font-body` (Inter)
+
+**Componenti:**
+- Bottoni: piatti, no shadow, padding 7×14, raggio `--radius-sm`. CTA primaria = `--color-primary` su `--color-bg`. Ghost = transparent + bordo `--color-border`.
+- Input: `--color-bg` bg, bordo 1px `--color-border`, font 12px, focus `--color-primary` + alone 2px.
+- Badge stato: outline maiuscolo, `transparent` + `currentColor` border, font 10px letter-spacing .04em.
+- Card: `--color-surface` bg, `--color-border` 1px, raggio `--radius-md`, padding `--space-3 --space-4`, no shadow.
+- Modal: bg `--color-surface-3`, raggio `--radius-lg`, `--shadow-modal`. Header `--color-surface-2`.
+
+**Helper JS**: `getCSSVar(name)` in `app.js` legge una CSS variable a runtime via `getComputedStyle` — usarla in JS dove serve un colore risolto (es. SVG fill, canvas). `DAY_TYPES` usa `var(--color-cal-*)`; `drawDonut()` e `drawMiniBars()` chiamano `getCSSVar()` al render time così i colori si aggiornano al cambio tema.
 
 ### FatturaPA / SdI
 - **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
