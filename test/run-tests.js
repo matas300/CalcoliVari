@@ -54,6 +54,7 @@ global.expect = expect;
 // Load test files
 require('./dichiarazione-engine.test.js');
 require('./tax-engine.test.js');
+require('./fatture-storico.test.js');
 
 console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);
