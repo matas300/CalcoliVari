@@ -37,8 +37,39 @@
     modalitaPagamento: DEFAULT_BONIFICO,
     scadenzaPagamento: '',
     incassata: false,
-    dataIncasso: ''
+    dataIncasso: '',
+    // Nuovi campi sub-project 3
+    stato: 'bozza',
+    dataInvioSdi: null,
+    dataPagamento: null,
+    fatturaOriginaleId: null,
+    tipoDocumento: 'TD01',
+    annoProgressivo: null,
+    progressivo: null,
+    ritenuta: 0,
+    aliquotaRitenuta: 20,
+    tipoRitenuta: 'RT02',
+    causaleRitenuta: 'A'
   };
+
+  function normalizeInvoice(inv) {
+    if (!inv || typeof inv !== 'object') return inv;
+    return {
+      ...DRAFT_TEMPLATE,
+      ...inv,
+      stato: inv.stato || 'bozza',
+      tipoDocumento: inv.tipoDocumento || 'TD01',
+      dataInvioSdi: inv.dataInvioSdi ?? null,
+      dataPagamento: inv.dataPagamento ?? null,
+      fatturaOriginaleId: inv.fatturaOriginaleId ?? null,
+      annoProgressivo: inv.annoProgressivo ?? (inv.data ? parseInt(String(inv.data).slice(0, 4), 10) : null),
+      progressivo: inv.progressivo ?? null,
+      ritenuta: Number(inv.ritenuta) || 0,
+      aliquotaRitenuta: Number(inv.aliquotaRitenuta) || 20,
+      tipoRitenuta: inv.tipoRitenuta || 'RT02',
+      causaleRitenuta: inv.causaleRitenuta || 'A'
+    };
+  }
 
   const state = {
     open: false,
@@ -1094,6 +1125,7 @@ ${dettaglioLinee.join('\n')}
     document.body.classList.add('profile-modal-open');
   }
 
+  window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
   window.closeFatturaModal = closeFatturaModal;
   window.openSdiGuideModal = openSdiGuideModal;
