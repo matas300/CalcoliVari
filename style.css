@@ -71,6 +71,21 @@
   --red: var(--color-error);
   --yellow: var(--color-warning);
   --blue: var(--color-info);
+
+  /* alias legacy — sezione dichiarazione (auto-switch via canonical tokens) */
+  --bg-secondary: var(--color-bg);
+  --bg-card: var(--color-surface);
+  --bg-input: var(--color-bg);
+  --bg-hover: var(--color-surface-2);
+  --bg-active: rgba(93,170,138,.12);
+  --border-color: var(--color-border);
+  --card-border: var(--color-border);
+  --text1: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-faint);
+  --primary-color: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --danger: var(--color-error);
 }
 /* ── Light theme ── */
 html[data-theme="light"] {
@@ -105,6 +120,7 @@ html[data-theme="light"] {
   --shadow-lg: none;
   --shadow-modal: 0 16px 40px rgba(0,0,0,.18);
   --accent2: #DCE8E2;
+  --bg-active: rgba(63,132,103,.10);
 }
 html[data-theme="light"] .login-box button,
 html[data-theme="light"] .btn-add,
