@@ -233,17 +233,8 @@ function toggleTheme() {
   const next = current === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.innerHTML = next === 'dark' ? '&#9790;' : '&#9728;';
   if (typeof updateProfileMenuTheme === 'function') updateProfileMenuTheme();
 }
-(function initThemeIcon() {
-  const t = localStorage.getItem('theme') || 'dark';
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.innerHTML = t === 'dark' ? '&#9790;' : '&#9728;';
-  });
-})();
 
 function doLogout() {
   clearYearDataCache();
@@ -6381,9 +6372,6 @@ function switchToTab(tab) {
   if (navBtn) navBtn.classList.add('active');
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.classList.add('active');
-  // highlight header settings btn when on settings tab
-  const sBtn = document.getElementById('settingsBtn');
-  if (sBtn) sBtn.classList.toggle('active', tab === 'settings');
   // mount Dichiarazione wizard when switching to that tab
   if (tab === 'dichiarazione' && window.DichiarazioneUI) {
     window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
