@@ -147,17 +147,9 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - Export scoped to current profile; import filters keys by current profile prefix
 - Profile-scoped meta storage is supported too: `calcoliPIVA_{profile}_clienti` syncs separately from yearly docs and is merged with the same profile namespace.
 
-### Quadro LM
-- Accessed from the `Regime Forfettario` view with `openQuadroLMModal()`
-- Prefills LM1, LM2, LM22, LM27, LM34, LM35, LM40 and related fields from the yearly source of truth
-- Stores manual edits per year in `yearData.lmQuadro.overrides`
-- `saveQuadroLMDraft()` persists the current year snapshot, `exportQuadroLMPrint()` opens a print-friendly HTML view
-- No telematic XML or PDF generation: the feature is a compilation aid only
-- **Superseded** by the Dichiarazione Redditi PF module (see below); legacy functions kept for backward compatibility
-
 ### Dichiarazione Redditi PF
 - **Files**: `dichiarazione-engine.js`, `dichiarazione-ui.js`, `dichiarazione-exports.js`
-- **Replaces** legacy `openQuadroLMModal`, `saveQuadroLMDraft`, `exportQuadroLMPrint`
+- **Replaces** the legacy Quadro LM modal (rimosso nel cleanup pre-launch 2026-04-18). La migrazione `yearData.lmQuadro.overrides` → `yearData.dichiarazione.overrides` in `ensureDataShape` resta attiva per recuperare dati storici.
 - **APIs**: `window.DichiarazioneEngine`, `window.DichiarazioneUI`, `window.DichiarazioneExports`
 
 #### Data Shape
