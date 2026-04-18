@@ -1378,12 +1378,6 @@ function updateCfStatus(val) {
   el.className = 'cf-status ' + (ok ? 'ok' : 'err');
 }
 
-function saveYearSetting(year, key, val) {
-  const yearData = getYearDataFor(year) || ensureDataShape({}, year);
-  yearData.settings[key] = parseFloat(val) || 0;
-  saveYearData(year, yearData);
-}
-
 function saveYearTextSetting(year, key, val) {
   const yearData = getYearDataFor(year) || ensureDataShape({}, year);
   yearData.settings[key] = val;
@@ -1472,14 +1466,6 @@ function getFattureFromYearData(yearData, month) {
 
 function getFatture(month) {
   return getFattureFromYearData(data, month);
-}
-
-function getFattura(month) {
-  const arr = getFatture(month);
-  if (arr.length === 0) return { importo: 0, pagMese: null, pagAnno: null };
-  const total = arr.reduce((s, f) => s + f.importo, 0);
-  if (arr.length === 1) return { importo: total, pagMese: arr[0].pagMese, pagAnno: arr[0].pagAnno };
-  return { importo: total, pagMese: null, pagAnno: null };
 }
 
 function setFatturaImporto(month, idx, val) {
@@ -2368,210 +2354,6 @@ function renderProfileField(label, value, options) {
   const key = opts.key || '';
   const info = opts.info ? ` ${helpPill(opts.info)}` : '';
   const draft = profileFiscalState.draft || getProfileFiscalData();
-  if (!profileFiscalState.editing || !opts.editable) {
-    return `<div class="profile-field">
-      <label>${label}${info}</label>
-      <div class="profile-value${opts.calcParam ? ' calc-param' : ''}">${value || '—'}</div>
-    </div>`;
-  }
-
-  let input = '';
-  if (mode === 'select') {
-    input = `<select onchange="updateProfileFiscalDraftField('${key}', this.value)">
-      ${(opts.options || []).map(option => `<option value="${option.value}" ${String(draft[key]) === String(option.value) ? 'selected' : ''}>${option.label}</option>`).join('')}
-    </select>`;
-  } else if (mode === 'textarea') {
-    input = `<textarea onchange="updateProfileFiscalDraftField('${key}', this.value)">${draft[key] || ''}</textarea>`;
-  } else {
-    const step = opts.step ? ` step="${opts.step}"` : '';
-    const min = opts.min !== undefined ? ` min="${opts.min}"` : '';
-    const max = opts.max !== undefined ? ` max="${opts.max}"` : '';
-    const type = opts.inputType || 'text';
-    input = `<input type="${type}" value="${draft[key] ?? ''}"${step}${min}${max} onchange="updateProfileFiscalDraftField('${key}', this.value)">`;
-  }
-  return `<div class="profile-field editing">
-    <label>${label}${info}</label>
-    ${input}
-  </div>`;
-}
-
-function renderProfiloFiscale() {
-  const el = document.getElementById('profiloGrid');
-  if (!el) return;
-  const profile = getProfileFiscalData();
-  const history = getProfileRegimeHistory();
-  const currentSettings = S();
-  const currentResolved = getResolvedInpsSettings(currentSettings, currentYear);
-  const external = getExternalFiscalData();
-  const official2025 = external && external.summaries ? external.summaries.summary2025 : null;
-  let h = '';
-
-  h += `<div class="panel profile-panel"><h3>Profilo fiscale</h3>`;
-  h += `<div class="profile-toolbar">
-    <div class="profile-toolbar-copy">Single source of truth dei parametri fiscali del profilo ${currentProfile}.</div>
-    <div class="profile-toolbar-actions">
-      ${profileFiscalState.editing
-        ? `<button class="btn-add" onclick="saveProfileFiscalDraft()" style="margin-top:0">Salva</button>
-           <button class="btn-add profile-secondary-btn" onclick="cancelProfileFiscalEdit()" style="margin-top:0">Annulla</button>`
-        : `<button class="btn-add" onclick="startProfileFiscalEdit()" style="margin-top:0">Modifica</button>`}
-    </div>
-  </div>`;
-  h += `<div class="profile-grid">`;
-  h += renderProfileField('Nome / denominazione', profile.nome, { key: 'nome', editable: true });
-  h += renderProfileField('Codice fiscale', profile.codiceFiscale, { key: 'codiceFiscale', editable: true });
-  h += renderProfileField('Partita IVA', profile.partitaIva, { key: 'partitaIva', editable: true });
-  h += renderProfileField('Codice ATECO', profile.ateco, { key: 'ateco', editable: true, calcParam: true, info: 'Determina il coefficiente di redditivita e aiuta a documentare il profilo.' });
-  h += renderProfileField('Descrizione ATECO', profile.atecoDescrizione, { key: 'atecoDescrizione', editable: true });
-  h += renderProfileField('Coefficiente redditivita (%)', `${fmtPct(profile.coefficiente / 100)}`, {
-    key: 'coefficiente',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    max: 100,
-    step: '0.01',
-    calcParam: true,
-    info: 'Modifica la base imponibile forfettaria: reddito lordo = incassato x coefficiente.'
-  });
-  h += renderProfileField('Aliquota imposta sostitutiva (%)', `${fmtPct(profile.impostaSostitutiva / 100)}`, {
-    key: 'impostaSostitutiva',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    max: 100,
-    step: '0.01',
-    calcParam: true,
-    info: 'Aliquota della sostitutiva applicata all imponibile fiscale forfettario.'
-  });
-  h += renderProfileField('Gestione previdenziale', getInpsModeLabel(profile.inpsMode), {
-    key: 'inpsMode',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Cambia il modo in cui il motore calcola contributi fissi e variabili.',
-    options: [
-      { value: 'artigiani_commercianti', label: 'Artigiani / Commercianti' },
-      { value: 'gestione_separata', label: 'Gestione Separata' }
-    ]
-  });
-  h += renderProfileField('Categoria INPS', getInpsCategoryLabel(profile.inpsCategoria), {
-    key: 'inpsCategoria',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Per artigiani/commercianti puo cambiare il fisso annuo e l aliquota ufficiale.',
-    options: [
-      { value: 'artigiano', label: 'Artigiano' },
-      { value: 'commerciante', label: 'Commerciante' }
-    ]
-  });
-  h += renderProfileField('Tipologia Gestione Separata', getGestSepTipoLabel(profile.inpsTipoGestSep), {
-    key: 'inpsTipoGestSep',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Rilevante solo per Gestione Separata con parametri INPS ufficiali: esclusivo ~26% (liberi prof.), altra cassa 24% (dipendenti/pensionati).',
-    options: [
-      { value: 'esclusivo', label: 'Esclusivo (libero prof. senza altra copertura)' },
-      { value: 'altra_cassa', label: 'Altra cassa / pensionato' }
-    ]
-  });
-  h += renderProfileField('Parametri INPS', profile.usaInpsUfficiale === 1 ? 'Ufficiali per anno' : 'Manuali', {
-    key: 'usaInpsUfficiale',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Se attivo, minimale, fissi e aliquota vengono precompilati con i valori ufficiali dell anno selezionato.',
-    options: [
-      { value: '1', label: 'Usa parametri ufficiali' },
-      { value: '0', label: 'Mantieni inserimento manuale' }
-    ]
-  });
-  h += renderProfileField('Riduzione contributiva 35%', 'Gestita anno per anno', {
-    info: 'Questo flag non e globale: si imposta nelle Impostazioni Annuali dell anno selezionato.'
-  });
-  h += renderProfileField('Limite forfettario', fmt(profile.limiteForfettario), {
-    key: 'limiteForfettario',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    step: '0.01',
-    calcParam: true,
-    info: 'Parametro informativo usato per warning e controlli di superamento regime.'
-  });
-  h += renderProfileField('Tasso INAIL', profile.inailTasso > 0 ? (profile.inailTasso + ' ‰') : 'Non configurato', {
-    key: 'inailTasso',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    step: '0.01',
-    calcParam: true,
-    info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL o nella visura. Per artigiani IT tipicamente ~5,19 ‰. Se impostato, il premio INAIL viene calcolato automaticamente nello scadenziario.'
-  });
-  h += renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
-    key: 'agevolazioneStartUp',
-    editable: true,
-    mode: 'select',
-    info: 'Flag informativo. Non abbassa automaticamente l aliquota dell imposta sostitutiva: se attivi il flag devi anche impostare manualmente l imposta sostitutiva al 5% in Impostazioni. L agevolazione vale 5 anni (L. 190/2014 art. 1 c. 65-bis).',
-    options: [
-      { value: '0', label: 'No' },
-      { value: '1', label: 'Si' }
-    ]
-  });
-  h += renderProfileField('Primo anno agevolato', profile.primoAnnoAgevolato === 1 ? 'Si' : 'No', {
-    key: 'primoAnnoAgevolato',
-    editable: true,
-    mode: 'select',
-    info: 'Serve a spiegare i warning del primo ciclo completo saldo + acconti.',
-    options: [
-      { value: '0', label: 'No' },
-      { value: '1', label: 'Si' }
-    ]
-  });
-  h += renderProfileField('Note profilo', profile.note || '—', {
-    key: 'note',
-    editable: true,
-    mode: 'textarea'
-  });
-  h += `</div></div>`;
-
-  h += `<div class="panel profile-panel"><h3>Storico sintetico</h3>`;
-  h += row('Regime corrente', currentSettings.regime === 'forfettario' ? 'Forfettario' : 'Ordinario', 'highlight');
-  h += row('Anno visualizzato', currentYear);
-  h += row('Parametri INPS applicati', currentSettings.usaInpsUfficiale == 1 ? `Ufficiali ${currentResolved._officialInpsYear || currentYear}` : 'Manuali');
-  h += row('Minimale INPS anno selezionato', fmt(currentResolved.minimaleInps || 0));
-  h += row('Contributi fissi anno selezionato', fmt(currentResolved.contribFissi || 0));
-  h += row('Aliquota contributiva anno selezionato', `${(parseFloat(currentResolved.aliqContributi) || 0).toFixed(2)}%`);
-  if (official2025 && official2025.revenueTotal) {
-    const local2025 = getTotalAnnuoForYear(2025, { includeEstimates: false });
-    const delta2025 = ceil2(local2025 - official2025.revenueTotal);
-    h += row('Ricavi 2025 da bilancino', fmt(official2025.revenueTotal), 'highlight');
-    h += row('Ricavi 2025 presenti nell app', fmt(local2025), '', delta2025 === 0 ? 'positive' : 'negative');
-    if (Math.abs(delta2025) >= 0.01) {
-      h += `<div class="scad-note-list" style="margin-top:10px"><div class="scad-note">Il bilancino 2025 del commercialista riporta ${fmt(official2025.revenueTotal)} mentre i dati fatture presenti in app sommano ${fmt(local2025)}. Finche non li riallineiamo, i confronti 2025 vs Fiscozen restano indicativi.</div></div>`;
-    }
-  }
-  h += `<div class="profile-history-list">`;
-  for (const item of history) {
-    h += `<div class="profile-history-item">
-      <div><b>${item.year}</b> - ${item.regime === 'forfettario' ? 'Forfettario' : 'Ordinario'}</div>
-      <div>${item.employeeIncome ? 'Anno misto con reddito dipendente.' : 'Nessun reddito dipendente segnalato.'}</div>
-    </div>`;
-  }
-  h += `</div></div>`;
-
-  el.innerHTML = h;
-}
-
-function renderProfileField(label, value, options) {
-  const opts = options || {};
-  const mode = opts.mode || 'text';
-  const key = opts.key || '';
-  const info = opts.info ? ` ${helpPill(opts.info)}` : '';
-  const draft = profileFiscalState.draft || getProfileFiscalData();
   const displayValue = value !== undefined && value !== null && String(value) !== '' ? value : '-';
   const escapedLabel = escapeHtml(label);
   const escapedDisplayValue = escapeHtml(displayValue);
@@ -3383,14 +3165,6 @@ function removePagamento(year, idx) {
   recalcAll();
 }
 
-function getPaymentForScheduleKey(scheduleKey) {
-  if (!scheduleKey) return null;
-  for (const p of getPagamentiAcrossYears()) {
-    if (p.scheduleKey === scheduleKey) return p;
-  }
-  return null;
-}
-
 function getPaymentEventsForScheduleKey(scheduleKey) {
   if (!scheduleKey) return [];
   return getPagamentiAcrossYears()
@@ -3479,20 +3253,8 @@ function removePagamentoByScheduleKey(scheduleKey) {
   recalcAll();
 }
 
-function registerPartialPayment(scheduleKey, dueDate, kind, title, competence, amount) {
-  addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount);
-}
-
 function reopenPaidScheduleItem(scheduleKey) {
   removePagamentoByScheduleKey(scheduleKey);
-}
-
-function editPaidScheduleItem(year, idx, patch) {
-  if (!patch || typeof patch !== 'object') return;
-  if (patch.amount !== undefined) setPagamentoImporto(year, idx, patch.amount);
-  if (patch.data !== undefined) setPagamentoField(year, idx, 'data', patch.data);
-  if (patch.tipo !== undefined) setPagamentoField(year, idx, 'tipo', patch.tipo);
-  if (patch.descrizione !== undefined) setPagamentoField(year, idx, 'descrizione', patch.descrizione);
 }
 
 function pad2(n) {
@@ -4782,11 +4544,6 @@ function setScadenziarioView(view) {
 
 function toggleScadenziarioHistoricalYears() {
   scadenziarioUiState.showHistoricalYears = !scadenziarioUiState.showHistoricalYears;
-  renderScadenziario();
-}
-
-function toggleScadenziarioEmptyYears() {
-  scadenziarioUiState.showEmptyYears = !scadenziarioUiState.showEmptyYears;
   renderScadenziario();
 }
 
