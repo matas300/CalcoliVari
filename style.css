@@ -4008,3 +4008,97 @@ html[data-theme="light"] .dich-conto-estero {
 .storico-table th { color: var(--text2); font-weight: 500; font-size: 11px; text-transform: uppercase; }
 .storico-actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .storico-actions button { padding: 4px 8px; font-size: 11px; }
+
+/* === C1 — Header avatar + dropdown menu === */
+.profile-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-primary);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.profile-avatar:hover,
+.profile-avatar[aria-expanded="true"] {
+  background: var(--color-surface-3);
+  border-color: var(--color-primary-hover);
+}
+.profile-avatar:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  padding: 6px 0;
+  z-index: 50;
+}
+.profile-menu[hidden] { display: none; }
+
+.profile-menu-header {
+  padding: 10px 14px 8px;
+}
+.profile-menu-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.profile-menu-subtitle {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.profile-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.profile-menu-item:hover { background: var(--color-surface-2); }
+
+.profile-menu-item-toggle { justify-content: space-between; gap: 12px; }
+.profile-menu-toggle-state {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+}
+
+.profile-menu-item-danger { color: var(--color-error); }
+.profile-menu-item-danger:hover { background: var(--color-surface-2); }
