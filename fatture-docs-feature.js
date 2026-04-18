@@ -489,6 +489,32 @@
                 <span>Applica 2,00 € se supera 77,47 €</span>
               </div>
             </label>
+            <div class="fattura-field fattura-field-wide">
+              <span>Ritenuta d'acconto</span>
+              <div class="fattura-bollo-wrap">
+                <input type="checkbox" id="invHasRitenuta" ${Number(draft.ritenuta) > 0 ? 'checked' : ''}>
+                <span>Applica ritenuta d'acconto</span>
+              </div>
+              <div id="invRitenutaFields" style="display:${Number(draft.ritenuta) > 0 ? 'block' : 'none'}; margin-top:8px;">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+                  <label>Aliquota %
+                    <input type="number" id="invAliquotaRitenuta" min="0" max="100" step="0.01" value="${draft.aliquotaRitenuta || 20}" style="width:80px;">
+                  </label>
+                  <label>Tipo ritenuta
+                    <select id="invTipoRitenuta">
+                      <option value="RT01" ${(draft.tipoRitenuta || 'RT02') === 'RT01' ? 'selected' : ''}>RT01 — Persone fisiche</option>
+                      <option value="RT02" ${(draft.tipoRitenuta || 'RT02') === 'RT02' ? 'selected' : ''}>RT02 — Persone giuridiche</option>
+                    </select>
+                  </label>
+                  <label>Causale
+                    <input type="text" id="invCausaleRitenuta" maxlength="2" value="${esc(draft.causaleRitenuta || 'A')}" style="width:60px;">
+                  </label>
+                </div>
+                <div style="margin-top:6px;">
+                  <span>Importo ritenuta calcolato: <strong id="invRitenutaImporto">0,00 €</strong></span>
+                </div>
+              </div>
+            </div>
             <label class="fattura-field fattura-field-wide">
               <span>Nota</span>
               <textarea id="fatturaNota" rows="2" oninput="updateFatturaDraftField('note', this.value)">${esc(draft.note)}</textarea>
@@ -504,7 +530,44 @@
       </div>
     `;
     syncBolloDefault();
+    _bindRitenutaHandlers();
     renderFatturaSummary();
+  }
+
+  function _bindRitenutaHandlers() {
+    const chk = document.getElementById('invHasRitenuta');
+    const fields = document.getElementById('invRitenutaFields');
+    const aliq = document.getElementById('invAliquotaRitenuta');
+    const tipo = document.getElementById('invTipoRitenuta');
+    const caus = document.getElementById('invCausaleRitenuta');
+    const importoEl = document.getElementById('invRitenutaImporto');
+    if (!chk || !fields) return;
+
+    function recalc() {
+      if (!chk.checked) {
+        state.draft.ritenuta = 0;
+        if (importoEl) importoEl.textContent = '0,00 €';
+        return;
+      }
+      const totals = computeDraftTotals(state.draft);
+      const a = Number(aliq ? aliq.value : 0) || 0;
+      const importo = round2((totals.subtotal || 0) * a / 100);
+      state.draft.ritenuta = importo;
+      state.draft.aliquotaRitenuta = a;
+      state.draft.tipoRitenuta = tipo ? tipo.value : 'RT02';
+      state.draft.causaleRitenuta = ((caus ? caus.value : '') || 'A').toUpperCase().slice(0, 2);
+      if (importoEl) importoEl.textContent = formatEur(importo);
+    }
+
+    chk.addEventListener('change', () => {
+      fields.style.display = chk.checked ? 'block' : 'none';
+      recalc();
+    });
+    if (aliq) aliq.addEventListener('input', recalc);
+    if (tipo) tipo.addEventListener('input', recalc);
+    if (caus) caus.addEventListener('input', recalc);
+
+    recalc();
   }
 
   function showFatturaToast(message, tone = 'success') {
