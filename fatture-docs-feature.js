@@ -1033,7 +1033,19 @@
     return { errors };
   }
 
+  function buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale) {
+    if (!fatturaOriginale) {
+      throw new Error('NC: fattura originale richiesta per DatiFattureCollegate');
+    }
+    const draft = { ...noteCredit, tipoDocumento: 'TD04', _isNC: true };
+    return buildFatturaElettronicaXml(draft, { fatturaOriginale });
+  }
+
   function buildFatturaElettronicaXml(draft, opts = {}) {
+    const isNC = draft._isNC === true || draft.tipoDocumento === 'TD04';
+    const tipoDoc = isNC ? 'TD04' : 'TD01';
+    const sign = isNC ? -1 : 1;
+
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
     const totals = computeDraftTotals(draft);
@@ -1083,7 +1095,7 @@
       lineNum++;
       const qta = parseMaybeNumber(line.quantita) || 1;
       const pu = round2(parseMaybeNumber(line.prezzoUnitario));
-      const tot = round2(qta * pu);
+      const tot = round2(qta * pu * sign);
       return `    <DettaglioLinee>
       <NumeroLinea>${lineNum}</NumeroLinea>
       <Descrizione>${xmlEscape(line.descrizione || 'Prestazione professionale')}</Descrizione>
@@ -1102,14 +1114,14 @@
       <Descrizione>Contributo integrativo</Descrizione>
       <Quantita>1.00</Quantita>
       <PrezzoUnitario>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoUnitario>
-      <PrezzoTotale>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoTotale>
+      <PrezzoTotale>${fmtXmlNum(round2(totals.contributoIntegrativo * sign))}</PrezzoTotale>
       <AliquotaIVA>0.00</AliquotaIVA>
       <Natura>N2.2</Natura>
     </DettaglioLinee>`);
     }
 
-    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag
-    const datiBollo = applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo) ? `
+    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6)
+    const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo)) ? `
       <DatiBollo>
         <BolloVirtuale>SI</BolloVirtuale>
         <ImportoBollo>2.00</ImportoBollo>
@@ -1127,6 +1139,18 @@
         <AliquotaRitenuta>${Number(draft.aliquotaRitenuta || 0).toFixed(2)}</AliquotaRitenuta>
         <CausalePagamento>${xmlEscape(caus)}</CausalePagamento>
       </DatiRitenuta>`;
+    }
+
+    // NC — DatiFattureCollegate (XSD: inside DatiGenerali, after DatiGeneraliDocumento)
+    let datiCollegate = '';
+    if (isNC && opts.fatturaOriginale) {
+      const orig = opts.fatturaOriginale;
+      datiCollegate = `
+    <DatiFattureCollegate>
+      <RiferimentoNumeroLinea>1</RiferimentoNumeroLinea>
+      <IdDocumento>${xmlEscape(String(orig.numero || ''))}</IdDocumento>
+      <Data>${xmlEscape(String(orig.data || ''))}</Data>
+    </DatiFattureCollegate>`;
     }
 
     const causale = String(draft.note || '').trim();
@@ -1226,19 +1250,19 @@
   <FatturaElettronicaBody>
     <DatiGenerali>
       <DatiGeneraliDocumento>
-        <TipoDocumento>TD01</TipoDocumento>
+        <TipoDocumento>${tipoDoc}</TipoDocumento>
         <Divisa>EUR</Divisa>
         <Data>${xmlEscape(draft.data)}</Data>
         <Numero>${xmlEscape(draft.numero)}</Numero>${xmlRitenuta}${datiBollo}
-        <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>${causaleXml}
-      </DatiGeneraliDocumento>
+        <ImportoTotaleDocumento>${fmtXmlNum(round2(totals.total * sign))}</ImportoTotaleDocumento>${causaleXml}
+      </DatiGeneraliDocumento>${datiCollegate}
     </DatiGenerali>
     <DatiBeniServizi>
 ${dettaglioLinee.join('\n')}
       <DatiRiepilogo>
         <AliquotaIVA>0.00</AliquotaIVA>
         <Natura>N2.2</Natura>
-        <ImponibileImporto>${fmtXmlNum(imponibile)}</ImponibileImporto>
+        <ImponibileImporto>${fmtXmlNum(round2(imponibile * sign))}</ImponibileImporto>
         <Imposta>0.00</Imposta>
         <RiferimentoNormativo>Art. 1, commi 54-89, L. 190/2014</RiferimentoNormativo>
       </DatiRiepilogo>
@@ -1247,7 +1271,7 @@ ${dettaglioLinee.join('\n')}
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
         <ModalitaPagamento>${modalitaToCodiceMP(draft.modalitaPagamento)}</ModalitaPagamento>${scadenzaXml}
-        <ImportoPagamento>${fmtXmlNum(round2(totals.total - (Number(draft.ritenuta) || 0)))}</ImportoPagamento>${ibanXml}
+        <ImportoPagamento>${fmtXmlNum(round2((totals.total - (Number(draft.ritenuta) || 0)) * sign))}</ImportoPagamento>${ibanXml}
       </DettaglioPagamento>
     </DatiPagamento>
   </FatturaElettronicaBody>
@@ -1403,6 +1427,7 @@ ${dettaglioLinee.join('\n')}
     document.body.classList.add('profile-modal-open');
   }
 
+  window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
   window.closeFatturaModal = closeFatturaModal;
