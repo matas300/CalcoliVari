@@ -39,7 +39,7 @@
   <div class="header-right">
     <div id="syncStatus" class="sync-indicator"></div>
     <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Cambia tema" aria-label="Cambia tema">&#9790;</button>
-    <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
     <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni" aria-label="Impostazioni">&#9881;</button>
     <div class="year-selector">
     <button onclick="changeYear(-1)" title="Anno precedente" aria-label="Anno precedente">&lt;</button>
@@ -83,7 +83,7 @@
     <div class="panel" style="max-width:900px">
       <h3>Fatture</h3>
       <div id="fattureDocsContent"></div>
-      <div id="storico-fatture" class="card" style="margin-top:16px;">
+      <div class="card" style="margin-top:16px;">
         <div class="card-header">
           <h3>Storico fatture</h3>
           <select id="storico-anno-filter"></select>
