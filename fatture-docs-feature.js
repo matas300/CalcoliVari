@@ -1229,8 +1229,8 @@
         <TipoDocumento>TD01</TipoDocumento>
         <Divisa>EUR</Divisa>
         <Data>${xmlEscape(draft.data)}</Data>
-        <Numero>${xmlEscape(draft.numero)}</Numero>${datiBollo}${xmlRitenuta}${causaleXml}
-        <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>
+        <Numero>${xmlEscape(draft.numero)}</Numero>${xmlRitenuta}${datiBollo}
+        <ImportoTotaleDocumento>${fmtXmlNum(totals.total)}</ImportoTotaleDocumento>${causaleXml}
       </DatiGeneraliDocumento>
     </DatiGenerali>
     <DatiBeniServizi>
