@@ -664,104 +664,258 @@
     return loadFattureEmesse().find(i => i.id === id);
   }
 
-  // --- MOTORE PDF (html2pdf) ---
-  function buildInvoiceHtmlNode(invoice) {
-    const profile = getProfileFiscalData();
-    const cliente = invoice.clienteSnapshot || (typeof getClienteById === 'function' ? getClienteById(invoice.clienteId) : null) || {};
+  // --- MOTORE PDF MINIMALISTA (jsPDF) ---
+  function buildInvoicePdfMinimal(invoice) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error('jsPDF non disponibile (verifica caricamento html2pdf bundle)');
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+    const INK     = [18, 26, 36];
+    const MUTED   = [100, 116, 139];
+    const BORDER  = [226, 232, 240];
+    const ACCENT  = [60, 143, 145];
+    const NEGATIVE = [200, 50, 50];
+
+    const PAGE_W = 210;
+    const MARGIN = 20;
+    const CONTENT_W = PAGE_W - MARGIN * 2;
+    let y = MARGIN;
+
+    const isNC = invoice.tipoDocumento === 'TD04';
+    const titolo = isNC ? 'NOTA DI CREDITO' : 'FATTURA';
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor.apply(doc, INK);
+    doc.text(titolo + ' N. ' + (invoice.numero || ''), MARGIN, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('Data: ' + formatDateIt(invoice.data), PAGE_W - MARGIN, y, { align: 'right' });
+    y += 7;
+    if (isNC && invoice.fatturaOriginaleId) {
+      doc.setFontSize(9);
+      doc.text('Storno fattura: ' + (invoice._fatturaOriginaleNumero || invoice.fatturaOriginaleId), MARGIN, y);
+      y += 5;
+    }
+
+    // Linea separatrice
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Due colonne emittente/destinatario
+    const colW = CONTENT_W / 2 - 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('EMITTENTE', MARGIN, y);
+    doc.text('DESTINATARIO', MARGIN + colW + 10, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, INK);
+
+    const emittente = invoice._emittente || {};
+    const cliente = invoice.clienteSnapshot || {};
+    const emLines = [
+      emittente.denominazione || (emittente.nome + ' ' + (emittente.cognome || '')).trim(),
+      emittente.partitaIva ? 'P.IVA ' + emittente.partitaIva : '',
+      emittente.codiceFiscale ? 'CF ' + emittente.codiceFiscale : '',
+      [emittente.indirizzo, emittente.cap, emittente.comune || emittente.citta, emittente.provincia].filter(Boolean).join(' ')
+    ].filter(Boolean);
+    const clLines = [
+      cliente.denominazione || (cliente.nome + ' ' + (cliente.cognome || '')).trim(),
+      cliente.partitaIva ? 'P.IVA ' + cliente.partitaIva : (cliente.codiceFiscale ? 'CF ' + cliente.codiceFiscale : ''),
+      [cliente.indirizzo, cliente.cap, cliente.comune || cliente.citta, cliente.provincia].filter(Boolean).join(' ')
+    ].filter(Boolean);
+
+    let yL = y, yR = y;
+    emLines.forEach(line => { doc.text(line, MARGIN, yL); yL += 5; });
+    clLines.forEach(line => { doc.text(line, MARGIN + colW + 10, yR); yR += 5; });
+    y = Math.max(yL, yR) + 4;
+
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Tabella righe
+    const colDesc = MARGIN;
+    const colQta  = MARGIN + 100;
+    const colUnit = MARGIN + 130;
+    const colTot  = PAGE_W - MARGIN;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text('DESCRIZIONE', colDesc, y);
+    doc.text('Q.tà', colQta, y, { align: 'right' });
+    doc.text('Prezzo', colUnit, y, { align: 'right' });
+    doc.text('Totale', colTot, y, { align: 'right' });
+    y += 3;
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor.apply(doc, INK);
+    const PAGE_H = 297;
+    const FOOTER_RESERVE = 60;
+    (invoice.righe || []).forEach(r => {
+      if (y > PAGE_H - FOOTER_RESERVE) {
+        doc.addPage();
+        y = MARGIN;
+      }
+      const desc   = String(r.descrizione || '');
+      const qta    = Number(r.quantita) || 0;
+      const prezzo = Number(r.prezzoUnitario) || 0;
+      const totRiga = qta * prezzo * (isNC ? -1 : 1);
+      const wrapped = doc.splitTextToSize(desc, 95);
+      wrapped.forEach((line, idx) => {
+        doc.text(line, colDesc, y);
+        if (idx === 0) {
+          doc.text(formatNumIt(qta), colQta, y, { align: 'right' });
+          doc.text(formatEur(prezzo), colUnit, y, { align: 'right' });
+          if (totRiga < 0) doc.setTextColor.apply(doc, NEGATIVE);
+          doc.text(formatEur(totRiga), colTot, y, { align: 'right' });
+          doc.setTextColor.apply(doc, INK);
+        }
+        y += 5;
+      });
+    });
+
+    y += 3;
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+
+    // Riepilogo
+    const totals = invoice._totals || {};
+    const sign = isNC ? -1 : 1;
+    const labelX = PAGE_W - MARGIN - 60;
+    const valX   = PAGE_W - MARGIN;
+    doc.setFontSize(10);
+
+    function row(label, val, opts) {
+      opts = opts || {};
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setTextColor.apply(doc, opts.color || INK);
+      doc.text(label, labelX, y);
+      doc.text(formatEur(val * sign), valX, y, { align: 'right' });
+      y += 5;
+    }
+    // totals.subtotal = imponibile (from computeDraftTotals)
+    row('Imponibile', totals.subtotal || 0);
+    if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
+    if (invoice.marcaDaBollo && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
+    if (Number(invoice.ritenuta) > 0) {
+      doc.setTextColor.apply(doc, NEGATIVE);
+      doc.text('Ritenuta', labelX, y);
+      doc.text('-' + formatEur(Number(invoice.ritenuta)), valX, y, { align: 'right' });
+      doc.setTextColor.apply(doc, INK);
+      y += 5;
+    }
+    // Linea accent teal sopra il totale
+    doc.setDrawColor.apply(doc, ACCENT);
+    doc.setLineWidth(0.4);
+    doc.line(labelX, y, valX, y);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('TOTALE', labelX, y);
+    // totals.total = totale finale (from computeDraftTotals)
+    doc.text(formatEur((totals.total || 0) * sign), valX, y, { align: 'right' });
+    y += 10;
+
+    // Pagamento
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor.apply(doc, MUTED);
+    if (invoice.modalitaPagamento) {
+      doc.text('Pagamento: ' + invoice.modalitaPagamento + (invoice.scadenzaPagamento ? ' \u2014 Scadenza ' + formatDateIt(invoice.scadenzaPagamento) : ''), MARGIN, y);
+      y += 4;
+    }
+    if (invoice.iban) {
+      doc.text('IBAN: ' + invoice.iban, MARGIN, y);
+      y += 4;
+    }
+
+    // Footer legale (forfettario)
+    y += 4;
+    doc.setDrawColor.apply(doc, BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor.apply(doc, MUTED);
+    const note = invoice.note || DEFAULT_FORFETTARIO_NOTE;
+    doc.splitTextToSize(note, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+
+    return doc;
+  }
+
+  function formatDateIt(iso) {
+    const parts = parseDateParts(iso);
+    if (!parts) return String(iso || '');
+    return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + parts.year;
+  }
+  function formatEur(n) {
+    const v = Number(n) || 0;
+    return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
+  }
+  function formatNumIt(n) {
+    return Number(n).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function _enrichInvoiceForPdf(invoice) {
     const totals = computeDraftTotals(invoice);
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'absolute'; wrapper.style.left = '-9999px'; wrapper.style.top = '0'; wrapper.style.width = '800px';
-    wrapper.innerHTML = `
-      <div id="invoice-render-box" style="width: 100%; padding: 40px; font-family: 'Helvetica', sans-serif; color: #121a24; background: #fff; box-sizing: border-box;">
-         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 30px;">
-           <div>
-             <h1 style="margin: 0; color: #1e293b; font-size: 28px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase;">FATTURA</h1>
-             <div style="margin-top: 5px; font-size: 13px; color: #64748b; font-weight: 500;">N. ${esc(invoice.numero)} del ${formatDisplayDate(invoice.data)}</div>
-           </div>
-           <div style="text-align: right; font-size: 11px; color: #1e293b; line-height: 1.5;">
-             <strong style="font-size: 14px;">${esc(profile.nome || currentProfile)}</strong><br>
-             ${esc(profile.indirizzo)}<br>${esc(profile.cap)} ${esc(profile.citta)} ${esc(profile.provincia)}<br>
-             P.IVA ${esc(profile.partitaIva)}<br>${profile.codiceFiscale ? 'C.F. ' + esc(profile.codiceFiscale) : ''}
-           </div>
-         </div>
-         <div style="display: flex; gap: 30px; margin-bottom: 40px;">
-           <div style="flex: 1; border: 1px solid #e2e8f0; padding: 15px; border-radius: 4px;">
-             <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Destinatario</div>
-             <div style="font-size: 13px; font-weight: 700; margin-bottom: 4px; color: #0f172a;">${esc(cliente.nome || 'Cliente non selezionato')}</div>
-             <div style="font-size: 11px; line-height: 1.5; color: #334155;">
-               ${esc(cliente.indirizzo)}<br>${esc(cliente.cap)} ${esc(cliente.citta)} ${esc(cliente.provincia)}<br>
-               ${cliente.partitaIva ? 'P.IVA ' + esc(cliente.partitaIva) + '<br>' : ''}${cliente.codiceFiscale ? 'C.F. ' + esc(cliente.codiceFiscale) + '<br>' : ''}
-               ${cliente.codiceSDI ? 'SDI: ' + esc(cliente.codiceSDI) : ''}
-             </div>
-           </div>
-           <div style="flex: 1; border: 1px solid #e2e8f0; padding: 15px; border-radius: 4px;">
-             <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Dettagli Pagamento</div>
-             <div style="font-size: 11px; line-height: 1.6; color: #334155;">
-               <strong>Scadenza:</strong> ${formatDisplayDate(invoice.scadenzaPagamento) || '-'}<br>
-               <strong>Metodo:</strong> ${esc(invoice.modalitaPagamento)}<br>
-               ${invoice.iban ? '<strong>IBAN:</strong> <span style="font-family: monospace;">' + esc(invoice.iban) + '</span><br>' : ''}
-               <strong>Bollo:</strong> ${invoice.marcaDaBollo ? 'Assolto virtualmente (2,00 €)' : 'Non applicato'}
-             </div>
-           </div>
-         </div>
-         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px;">
-           <thead>
-             <tr style="background: #1e293b; color: white;">
-               <th style="padding: 12px 10px; text-align: left;">Descrizione</th>
-               <th style="padding: 12px 10px; text-align: right; width: 60px;">Q.tà</th>
-               <th style="padding: 12px 10px; text-align: right; width: 100px;">Prezzo Unit.</th>
-               <th style="padding: 12px 10px; text-align: right; width: 100px;">Totale</th>
-             </tr>
-           </thead>
-           <tbody>
-             ${invoice.righe.map((line, idx) => `
-               <tr style="border-bottom: 1px solid #f1f5f9; ${idx % 2 === 0 ? 'background: #ffffff;' : 'background: #f8fafc;'}">
-                 <td style="padding: 12px 10px; color: #0f172a; font-weight: 500;">${esc(line.descrizione)}</td>
-                 <td style="padding: 12px 10px; text-align: right; color: #475569;">${parseMaybeNumber(line.quantita)}</td>
-                 <td style="padding: 12px 10px; text-align: right; color: #475569;">${formatPdfMoney(parseMaybeNumber(line.prezzoUnitario))}</td>
-                 <td style="padding: 12px 10px; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(parseMaybeNumber(line.quantita) * parseMaybeNumber(line.prezzoUnitario))}</td>
-               </tr>
-             `).join('')}
-           </tbody>
-         </table>
-         <div style="display: flex; gap: 40px; align-items: flex-end;">
-           <div style="flex: 1.5; font-size: 10px; color: #64748b; line-height: 1.6; border-top: 1px solid #f1f5f9; padding-top: 15px;">
-             <strong>Informazioni aggiuntive:</strong><br>${esc(invoice.note)}
-           </div>
-           <div style="flex: 1;">
-             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-               <tr><td style="padding: 6px 0; color: #64748b;">Imponibile</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(totals.subtotal)}</td></tr>
-               ${totals.contributoIntegrativo > 0 ? `<tr><td style="padding: 6px 0; color: #64748b;">Contributo integrativo</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${formatPdfMoney(totals.contributoIntegrativo)}</td></tr>` : ''}
-               ${totals.bollo > 0 ? `<tr><td style="padding: 6px 0; color: #64748b;">Marca da bollo</td><td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">2,00 EUR</td></tr>` : ''}
-               <tr style="border-top: 2px solid #1e293b;"><td style="padding: 12px 0; color: #1e293b; font-weight: 700; font-size: 15px;">TOTALE FATTURA</td><td style="padding: 12px 0; text-align: right; font-weight: 700; color: #1e293b; font-size: 15px;">${formatPdfMoney(totals.total)}</td></tr>
-             </table>
-           </div>
-         </div>
-      </div>
-    `;
-    return wrapper;
+    const profileRaw = getProfileFiscalData();
+    // Map profile fields to emittente shape expected by buildInvoicePdfMinimal
+    const emittente = {
+      nome: profileRaw.nome || currentProfile,
+      cognome: '',
+      partitaIva: profileRaw.partitaIva || '',
+      codiceFiscale: profileRaw.codiceFiscale || '',
+      indirizzo: profileRaw.indirizzo || '',
+      cap: profileRaw.cap || '',
+      comune: profileRaw.citta || '',
+      provincia: profileRaw.provincia || ''
+    };
+    return { ...invoice, _totals: totals, _emittente: emittente };
   }
 
   async function downloadFatturaPdf() {
-    const saved = saveFatturaDraft(true); if (!saved) return;
     try {
-      const node = buildInvoiceHtmlNode(saved); document.body.appendChild(node);
-      const opt = { margin: 0, filename: `fattura_${saved.numero.replace(/\//g,'-')}.pdf`, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
-      await window.html2pdf().set(opt).from(node.firstElementChild).save(); node.remove();
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const enriched = _enrichInvoiceForPdf(saved);
+      const doc = buildInvoicePdfMinimal(enriched);
+      const filename = 'fattura_' + String(saved.numero || 'senza-numero').replace(/\//g, '-') + '.pdf';
+      doc.save(filename);
       showFatturaToast('PDF scaricato.');
-    } catch (err) { console.error(err); showFatturaToast('Errore PDF', 'error'); }
+    } catch (err) {
+      console.error('downloadFatturaPdf', err);
+      showFatturaToast('Errore generazione PDF: ' + err.message, 'error');
+    }
   }
 
   async function previewFatturaPdf() {
-    const saved = saveFatturaDraft(true); if (!saved) return;
     try {
-      const node = buildInvoiceHtmlNode(saved); document.body.appendChild(node);
-      const pdfBlob = await window.html2pdf().set({ margin: 0, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4' } }).from(node.firstElementChild).output('blob');
-      node.remove();
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const enriched = _enrichInvoiceForPdf(saved);
+      const doc = buildInvoicePdfMinimal(enriched);
+      const blob = doc.output('blob');
       if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-      state.previewUrl = URL.createObjectURL(pdfBlob);
+      state.previewUrl = URL.createObjectURL(blob);
       window.open(state.previewUrl, '_blank');
-    } catch (err) { console.error(err); showFatturaToast('Errore Anteprima', 'error'); }
+    } catch (err) {
+      console.error('previewFatturaPdf', err);
+      showFatturaToast('Errore anteprima PDF: ' + err.message, 'error');
+    }
   }
 
   // ── XML helpers ─────────────────────────────────────────────
