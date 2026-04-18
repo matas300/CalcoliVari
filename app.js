@@ -115,23 +115,73 @@ let scadenziarioUiState = {
   showEmptyYears: false
 };
 
-function updateProfileBadge() {
-  const trigger = document.getElementById('profileBadge');
-  const nameEl = document.getElementById('profileBadgeName');
-  if (!trigger || !nameEl) return;
+function updateProfileAvatar() {
+  const avatarBtn = document.getElementById('profileAvatar');
+  const initialsEl = document.getElementById('profileAvatarInitials');
+  const nameEl = document.getElementById('profileMenuName');
+  const subEl = document.getElementById('profileMenuSubtitle');
+  if (!avatarBtn || !initialsEl) return;
+
   if (!currentProfile) {
-    nameEl.textContent = '';
-    trigger.disabled = true;
-    trigger.classList.add('is-empty');
-    trigger.setAttribute('title', 'Accedi per aprire il profilo fiscale');
+    initialsEl.textContent = '·';
+    if (nameEl) nameEl.textContent = '';
+    if (subEl) subEl.textContent = '';
+    avatarBtn.disabled = true;
+    avatarBtn.setAttribute('title', 'Accedi per aprire il profilo');
+    closeProfileMenu();
     return;
   }
+
   const profile = profileFiscalState.data || getProfileFiscalDefaults(currentProfile);
-  const displayName = profile && profile.nome ? profile.nome : currentProfile;
-  nameEl.textContent = displayName;
-  trigger.disabled = false;
-  trigger.classList.remove('is-empty');
-  trigger.setAttribute('title', `Apri il profilo fiscale di ${displayName}`);
+  const nome = (profile && profile.nome ? String(profile.nome) : '').trim();
+  const cognome = (profile && profile.cognome ? String(profile.cognome) : '').trim();
+
+  let initials, displayName;
+  if (nome || cognome) {
+    initials = ((nome.charAt(0) || '') + (cognome.charAt(0) || '')).toUpperCase();
+    if (!initials) initials = currentProfile.charAt(0).toUpperCase();
+    displayName = `${nome} ${cognome}`.trim();
+  } else {
+    initials = currentProfile.charAt(0).toUpperCase();
+    displayName = currentProfile;
+  }
+
+  initialsEl.textContent = initials;
+  if (nameEl) nameEl.textContent = displayName;
+  if (subEl) subEl.textContent = `Profilo: ${currentProfile}`;
+  avatarBtn.disabled = false;
+  avatarBtn.setAttribute('title', displayName);
+}
+
+function toggleProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  if (!menu) return;
+  if (menu.hidden) openProfileMenu();
+  else closeProfileMenu();
+}
+
+function openProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || !btn || btn.disabled) return;
+  menu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  updateProfileMenuTheme();
+}
+
+function closeProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || !btn) return;
+  menu.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function updateProfileMenuTheme() {
+  const lbl = document.getElementById('profileMenuThemeLabel');
+  if (!lbl) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  lbl.textContent = isLight ? 'chiaro' : 'scuro';
 }
 
 async function hashPassword(pwd) {
@@ -160,7 +210,7 @@ async function doLogin() {
   if (profile === 'Mattia') seedMattiaData();
   if (profile === 'Peru') seedPeruData();
   loadProfileFiscalData();
-  updateProfileBadge();
+  updateProfileAvatar();
 
   // Init Firebase and sync
   const fbOk = await initFirebase();
@@ -185,6 +235,7 @@ function toggleTheme() {
   localStorage.setItem('theme', next);
   const btn = document.getElementById('themeToggle');
   if (btn) btn.innerHTML = next === 'dark' ? '&#9790;' : '&#9728;';
+  if (typeof updateProfileMenuTheme === 'function') updateProfileMenuTheme();
 }
 (function initThemeIcon() {
   const t = localStorage.getItem('theme') || 'dark';
@@ -216,14 +267,14 @@ function doLogout() {
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginError').textContent = '';
-  updateProfileBadge();
+  updateProfileAvatar();
 }
 
 function checkSession() {
   if (currentProfile) {
     document.getElementById('loginScreen').classList.add('hidden');
     loadProfileFiscalData();
-    updateProfileBadge();
+    updateProfileAvatar();
     // Init Firebase in background, then sync cloud → local → refresh UI
     initFirebase().then(ok => {
       if (ok) {
@@ -850,7 +901,7 @@ function getStoredProfileFiscal(profile = currentProfile) {
 function loadProfileFiscalData() {
   profileFiscalState.data = getStoredProfileFiscal(currentProfile);
   if (!profileFiscalState.editing) profileFiscalState.draft = { ...profileFiscalState.data };
-  updateProfileBadge();
+  updateProfileAvatar();
   return profileFiscalState.data;
 }
 
@@ -859,7 +910,7 @@ function saveProfileFiscalData(nextData) {
   localStorage.setItem(profileStorageKey(currentProfile), JSON.stringify(normalized));
   profileFiscalState.data = normalized;
   profileFiscalState.draft = { ...normalized };
-  updateProfileBadge();
+  updateProfileAvatar();
   return normalized;
 }
 
@@ -2446,6 +2497,7 @@ function closeProfileFiscalModal() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('profile-modal-open');
+  updateProfileAvatar();
 }
 
 window.addEventListener('keydown', e => {
@@ -2462,7 +2514,7 @@ window.addEventListener('keydown', e => {
 function renderProfiloFiscale() {
   const el = document.getElementById('profileFiscalContent');
   if (!el) return;
-  updateProfileBadge();
+  updateProfileAvatar();
   const profile = getProfileFiscalData();
   const history = getProfileRegimeHistory();
   const currentSettings = S();
@@ -6629,10 +6681,22 @@ function seedPeruData() {
 
 // ═══════════════════ Init ═══════════════════
 document.getElementById('yearDisplay').textContent = currentYear;
-updateProfileBadge();
+updateProfileAvatar();
 if (checkSession()) {
   loadProfileFiscalData();
   loadData();
   recalcAll();
   loadProfileExternalFiscalData(currentProfile).then(() => recalcAll());
 }
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || menu.hidden) return;
+  if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+  closeProfileMenu();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeProfileMenu();
+});

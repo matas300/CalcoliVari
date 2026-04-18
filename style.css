@@ -288,36 +288,7 @@ html[data-theme="light"] .pag-mese option {
 html[data-theme="light"] ::selection {
   background: rgba(58,143,145,.2);
 }
-html[data-theme="light"] .logout-btn:hover {
-  background: rgba(192,57,43,.08);
-  border-color: var(--color-error);
-}
-html[data-theme="light"] .settings-header-btn:hover,
-html[data-theme="light"] .settings-header-btn.active {
-  color: #fff;
-}
-/* ── Theme toggle ── */
-.theme-toggle {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  width: 38px; height: 38px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .2s;
-  flex-shrink: 0;
-  padding: 0;
-  line-height: 1;
-}
-.theme-toggle:hover {
-  background: var(--color-surface-3);
-  border-color: rgba(93,170,138,.24);
-  color: var(--color-text);
-}
+
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { color-scheme: dark; }
@@ -397,22 +368,8 @@ a {
   display: inline-block; flex-shrink: 0;
 }
 .sync-text { white-space: nowrap; }
-.logout-btn {
-  background: var(--surface2); border: 1px solid var(--color-border);
-  color: var(--text2); padding: 7px 14px; border-radius: var(--radius-sm);
-  cursor: pointer; font-size: .8rem; transition: all .2s;
-}
-.logout-btn:hover { background: rgba(200,107,116,.14); color: var(--text); border-color: var(--red); }
-.settings-header-btn {
-  display: none; /* visible only on mobile via media query */
-  background: var(--surface2); border: 1px solid var(--color-border);
-  color: var(--text2); width: 38px; height: 38px; border-radius: 50%;
-  cursor: pointer; font-size: 1.1rem; align-items: center; justify-content: center;
-  transition: all .2s; flex-shrink: 0;
-}
-.settings-header-btn:hover, .settings-header-btn.active {
-  background: var(--accent); color: #081217; border-color: var(--accent);
-}
+
+
 
 /* ── Header ── */
 header {
@@ -430,43 +387,7 @@ header h1 { font-size: 1.45rem; font-weight: 700; color: var(--text); }
   gap: 14px;
   min-width: 0;
 }
-.profile-trigger {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--surface2);
-  color: var(--text);
-  cursor: pointer;
-  transition: all .18s ease;
-}
-.profile-trigger:hover {
-  background: var(--surface3);
-  border-color: rgba(93,170,138,.24);
-}
-.profile-trigger:disabled {
-  opacity: .6;
-  cursor: default;
-}
-.profile-trigger.is-empty {
-  display: none;
-}
-.profile-trigger-kicker {
-  font-size: .66rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text3);
-}
-.profile-trigger-name {
-  font-size: .9rem;
-  font-weight: 700;
-  white-space: nowrap;
-  font-family: var(--font-display);
-}
+
 .year-selector { display: flex; align-items: center; gap: 8px; }
 .year-selector button {
   background: var(--surface2); border: 1px solid var(--color-border); color: var(--text);
@@ -3188,18 +3109,6 @@ html[data-theme="light"] .qpay-input {
   header h1 { font-size: 1.1rem; width: 100%; }
   .header-brand { width: 100%; justify-content: space-between; align-items: flex-start; }
   .header-right { width: 100%; justify-content: space-between; }
-  .profile-trigger {
-    max-width: min(54vw, 220px);
-    padding: 7px 10px;
-  }
-  .profile-trigger-name {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* ── Settings button in header (mobile only) ── */
-  .settings-header-btn { display: flex; }
   nav button[data-tab="settings"] { display: none !important; }
 
   /* ── Bottom navbar ── */
@@ -3708,7 +3617,6 @@ html[data-theme="light"] .qpay-input {
   .panel { padding: 10px 8px; }
   nav { grid-auto-columns: minmax(56px, 1fr); }
   nav button { font-size: .55rem; padding: 6px 1px; }
-  .profile-trigger { max-width: 46vw; }
   .profile-meta-strip { grid-template-columns: 1fr; }
   .profile-hero-stats { grid-template-columns: 1fr; }
   .accant-table td, .fatture-table td { font-size: .8rem; }
