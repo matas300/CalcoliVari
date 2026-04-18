@@ -452,6 +452,7 @@
             <button type="button" class="btn-add profile-secondary-btn" onclick="saveFatturaDraft(false)">Salva</button>
             <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaPdf()">Anteprima</button>
             <button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>
+            <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
             <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
           </div>
         </div>
@@ -726,6 +727,15 @@
       state.draft = createDefaultDraft();
       state.editingId = null;
       state.numberAuto = true;
+      // Pre-fill progressivo via FattureStorico per coerenza con storico unificato
+      const annoOggi = new Date().getFullYear();
+      const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+      const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+      const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
+      state.draft.numero = window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001');
+      state.draft.annoProgressivo = annoOggi;
+      state.draft.progressivo = prog;
+      state.draft.data = new Date().toISOString().slice(0, 10);
     }
     renderFatturaModal();
     const m = document.getElementById('fatturaModal');
@@ -1427,6 +1437,144 @@ ${dettaglioLinee.join('\n')}
     document.body.classList.add('profile-modal-open');
   }
 
+  // ─── Task 8: Anteprima XML + Nota di credito da storico ─────────────────────
+
+  function previewFatturaXml() {
+    try {
+      const saved = saveFatturaDraft(true);
+      if (!saved) return;
+      const xml = (saved.tipoDocumento === 'TD04' && saved.fatturaOriginaleId)
+        ? buildFatturaElettronicaXmlNC(saved, _findOriginale(saved.fatturaOriginaleId))
+        : buildFatturaElettronicaXml(saved);
+      showXmlPreviewModal(xml, saved.numero);
+    } catch (err) {
+      console.error('previewFatturaXml', err);
+      showFatturaToast('Errore anteprima XML: ' + err.message, 'error');
+    }
+  }
+
+  function _findOriginale(id) {
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const fatture = loadFattureEmesse(profile);
+    return fatture.find(f => f.id === id);
+  }
+
+  function _formatXml(xml) {
+    // Pretty-print con indent 2 spazi
+    let formatted = '';
+    let pad = 0;
+    xml.replace(/></g, '>\n<').split('\n').forEach(node => {
+      let indent = 0;
+      if (node.match(/^<\/\w/)) pad = Math.max(pad - 1, 0);
+      else if (node.match(/^<\w[^>]*[^/]>$/)) indent = 1;
+      formatted += '  '.repeat(pad) + node + '\n';
+      pad += indent;
+    });
+    return formatted.trim();
+  }
+
+  function showXmlPreviewModal(xml, numero) {
+    // Modal costruito via DOM API (NO innerHTML con XML — security)
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-content';
+    modal.style.cssText = 'background:var(--bg-secondary);border-radius:8px;padding:16px;max-width:90vw;max-height:90vh;width:800px;display:flex;flex-direction:column;gap:12px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+    const h = document.createElement('h3');
+    h.textContent = 'Anteprima XML — ' + (numero || '');
+    h.style.margin = '0';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '\u00d7';
+    closeBtn.style.cssText = 'background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-primary);';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.appendChild(h);
+    header.appendChild(closeBtn);
+
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'flex:1;overflow:auto;background:var(--bg-primary);padding:12px;border-radius:4px;font-size:12px;font-family:monospace;color:var(--text-primary);white-space:pre;';
+    pre.textContent = _formatXml(xml);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-add';
+    copyBtn.textContent = 'Copia negli appunti';
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.textContent);
+        copyBtn.textContent = 'Copiato!';
+        setTimeout(() => { copyBtn.textContent = 'Copia negli appunti'; }, 1500);
+      } catch (err) {
+        showFatturaToast('Errore copia: ' + err.message, 'error');
+      }
+    });
+
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.className = 'btn-add';
+    dlBtn.textContent = 'Scarica XML';
+    dlBtn.addEventListener('click', () => {
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'IT_' + (numero || 'fattura').replace(/\//g, '_') + '.xml';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(dlBtn);
+    modal.appendChild(header);
+    modal.appendChild(pre);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  function openNotaCreditoModal(fatturaOriginaleId) {
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const fatture = loadFattureEmesse(profile);
+    const orig = fatture.find(f => f.id === fatturaOriginaleId);
+    if (!orig) { showFatturaToast('Fattura originale non trovata', 'error'); return; }
+    const annoOggi = new Date().getFullYear();
+    const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+    const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
+    const draft = {
+      ...DRAFT_TEMPLATE,
+      id: 'nc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      numero: window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001'),
+      annoProgressivo: annoOggi,
+      progressivo: prog,
+      data: new Date().toISOString().slice(0, 10),
+      anno: annoOggi,
+      clienteId: orig.clienteId,
+      clienteSnapshot: { ...orig.clienteSnapshot },
+      righe: (orig.righe || []).map(r => ({ ...r, descrizione: 'STORNO \u2014 ' + r.descrizione })),
+      tipoDocumento: 'TD04',
+      fatturaOriginaleId: orig.id,
+      stato: 'bozza',
+      marcaDaBollo: false,
+      contributoIntegrativo: orig.contributoIntegrativo || 0
+    };
+    state.draft = draft;
+    state.editingId = null;
+    state.numberAuto = false;
+    renderFatturaModal();
+    const m = document.getElementById('fatturaModal');
+    if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
+    document.body.classList.add('profile-modal-open');
+  }
+
   window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
@@ -1441,6 +1589,9 @@ ${dettaglioLinee.join('\n')}
   window.previewFatturaPdf = previewFatturaPdf;
   window.downloadFatturaPdf = downloadFatturaPdf;
   window.downloadFatturaXml = downloadFatturaXml;
+  window.previewFatturaXml = previewFatturaXml;
+  window.showXmlPreviewModal = showXmlPreviewModal;
+  window.openNotaCreditoModal = openNotaCreditoModal;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 })();
