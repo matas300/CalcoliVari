@@ -6503,6 +6503,8 @@ function switchToTab(tab) {
   if (tab === 'fatture' && typeof window.renderFattureDocsSection === 'function') {
     window.renderFattureDocsSection();
   }
+  if (tab === 'profilo-personale') renderProfiloPersonale();
+  else if (tab === 'profilo-piva') renderProfiloPiva();
   // Chiudi drawer mobile dopo cambio tab
   if (window.matchMedia('(max-width: 768px)').matches) {
     closeSidebar();
@@ -6837,3 +6839,193 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 });
+
+// ═══════════════════ Profilo (C4) ═══════════════════
+
+function renderProfiloField(label, opts) {
+  const o = opts || {};
+  const ns = o.namespace || 'anagrafica';
+  const key = o.key || '';
+  const mode = o.mode || 'text';
+  const settings = S();
+  const source = ns === 'settings' ? settings : (settings[ns] || {});
+  const rawVal = source[key];
+  const isSelect = mode === 'select';
+  const displayValue = isSelect && Array.isArray(o.options)
+    ? ((o.options.find(op => String(op.value) === String(rawVal ?? ''))?.label) || (rawVal ?? '-'))
+    : (rawVal !== undefined && rawVal !== null && String(rawVal) !== '' ? rawVal : '-');
+  const fieldId = `pf-${ns}-${key}`;
+  const onclick = `enterProfiloEdit('${ns}','${key}','${mode}', this)`;
+  const optsAttr = o.options ? ` data-options='${escapeHtml(JSON.stringify(o.options))}'` : '';
+  return `<div class="profilo-row">
+    <span class="profilo-label">${escapeHtml(label)}</span>
+    <span class="profilo-value" id="${fieldId}" tabindex="0" role="button"
+          data-ns="${ns}" data-key="${key}" data-mode="${mode}"${optsAttr}
+          onclick="${onclick}"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();${onclick}}">${escapeHtml(String(displayValue))}</span>
+  </div>`;
+}
+
+function saveProfiloField(ns, key, value) {
+  if (ns === 'anagrafica') saveAnagraficaField(key, value);
+  else if (ns === 'attivita') saveAttivitaField(key, value);
+  else {
+    const trimmed = String(value ?? '').trim();
+    const isNumeric = trimmed !== '' && /^-?[\d.,]+$/.test(trimmed);
+    if (isNumeric) saveSetting(key, value);
+    else saveTextSetting(key, value);
+  }
+}
+
+function enterProfiloEdit(ns, key, mode, el) {
+  if (!el || el.classList.contains('editing')) return;
+  const settings = S();
+  const source = ns === 'settings' ? settings : (settings[ns] || {});
+  const current = source[key] ?? '';
+  el.classList.add('editing');
+  const finish = (newVal) => {
+    saveProfiloField(ns, key, newVal);
+    if (typeof recalcAll === 'function') recalcAll();
+    rerenderProfiloTabs();
+  };
+  let editorHtml;
+  if (mode === 'select') {
+    const opts = el.dataset.options ? JSON.parse(el.dataset.options) : [];
+    editorHtml = `<select>${opts.map(o =>
+      `<option value="${escapeHtml(String(o.value))}" ${String(o.value)===String(current)?'selected':''}>${escapeHtml(o.label)}</option>`
+    ).join('')}</select>`;
+  } else {
+    const inputType = mode === 'number' ? 'number' : 'text';
+    editorHtml = `<input type="${inputType}" value="${escapeHtml(String(current))}">`;
+  }
+  el.replaceChildren();
+  el.insertAdjacentHTML('afterbegin', editorHtml);
+  const field = el.firstElementChild;
+  field.focus();
+  if (field.tagName === 'INPUT') field.select();
+  if (mode === 'select') {
+    field.addEventListener('change', () => finish(field.value));
+    field.addEventListener('blur', () => finish(field.value));
+  } else {
+    field.addEventListener('blur', () => finish(field.value));
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); field.blur(); }
+      else if (e.key === 'Escape') { rerenderProfiloTabs(); }
+    });
+  }
+}
+
+function rerenderProfiloTabs() {
+  if (document.getElementById('tab-profilo-personale')?.classList.contains('active')) renderProfiloPersonale();
+  if (document.getElementById('tab-profilo-piva')?.classList.contains('active')) renderProfiloPiva();
+}
+
+function renderProfiloPersonale() {
+  const host = document.getElementById('profilo-personale-content');
+  if (!host) return;
+  const html = `
+    <div class="profilo-page">
+      <h2 class="profilo-title">Profilo personale</h2>
+      <p class="profilo-subtitle">Dati anagrafici e di fatturazione. Clicca un valore per modificarlo.</p>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Anagrafica</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Nome', { namespace: 'anagrafica', key: 'nome' })}
+          ${renderProfiloField('Cognome', { namespace: 'anagrafica', key: 'cognome' })}
+          ${renderProfiloField('Codice fiscale', { namespace: 'anagrafica', key: 'codiceFiscale' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Residenza</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Indirizzo', { namespace: 'anagrafica', key: 'residenzaVia' })}
+          ${renderProfiloField('CAP', { namespace: 'anagrafica', key: 'residenzaCap' })}
+          ${renderProfiloField('Citta', { namespace: 'anagrafica', key: 'residenzaComune' })}
+          ${renderProfiloField('Provincia', { namespace: 'anagrafica', key: 'residenzaProv' })}
+          ${renderProfiloField('Nazione', { namespace: 'anagrafica', key: 'nazione' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Fatturazione</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('IBAN', { namespace: 'anagrafica', key: 'iban' })}
+          ${renderProfiloField('Modalita pagamento', { namespace: 'anagrafica', key: 'modalitaPagamento' })}
+        </div>
+      </section>
+    </div>
+  `;
+  host.replaceChildren();
+  host.insertAdjacentHTML('afterbegin', html);
+}
+
+function renderProfiloPiva() {
+  const host = document.getElementById('profilo-piva-content');
+  if (!host) return;
+  const s = S();
+  const inpsMode = s.inpsMode || 'artcom';
+  const inpsModeOptions = [
+    { value: 'artcom', label: 'Artigiani / Commercianti' },
+    { value: 'gestsep', label: 'Gestione Separata' }
+  ];
+  const inpsCategoriaOptions = [
+    { value: 'artigiano', label: 'Artigiano' },
+    { value: 'commerciante', label: 'Commerciante' }
+  ];
+  const tipoGestSepOptions = [
+    { value: 'senza_altra_copertura', label: 'Senza altra copertura previdenziale' },
+    { value: 'con_altra_copertura', label: 'Con altra copertura previdenziale' }
+  ];
+  const agevolazioneOptions = [
+    { value: 0, label: 'No' }, { value: 1, label: 'Si' }
+  ];
+
+  let previdenzaRows = renderProfiloField('Gestione previdenziale', {
+    namespace: 'settings', key: 'inpsMode', mode: 'select', options: inpsModeOptions
+  });
+  if (inpsMode === 'artcom') {
+    previdenzaRows += renderProfiloField('Categoria INPS', {
+      namespace: 'settings', key: 'inpsCategoria', mode: 'select', options: inpsCategoriaOptions
+    });
+  } else if (inpsMode === 'gestsep') {
+    previdenzaRows += renderProfiloField('Tipologia Gestione Separata', {
+      namespace: 'settings', key: 'inpsTipoGestSep', mode: 'select', options: tipoGestSepOptions
+    });
+  }
+
+  const html = `
+    <div class="profilo-page">
+      <h2 class="profilo-title">Profilo P.IVA</h2>
+      <p class="profilo-subtitle">Dati fiscali dell'attivita. Clicca un valore per modificarlo.</p>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Attivita</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Partita IVA', { namespace: 'attivita', key: 'partitaIva' })}
+          ${renderProfiloField('Codice ATECO', { namespace: 'attivita', key: 'codiceAteco' })}
+          ${renderProfiloField('Descrizione attivita', { namespace: 'attivita', key: 'descrizioneAttivita' })}
+          ${renderProfiloField('Note', { namespace: 'attivita', key: 'note' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Previdenza</h3>
+        <div class="profilo-rows">
+          ${previdenzaRows}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Agevolazioni</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Agevolazione start-up', { namespace: 'attivita', key: 'agevolazioneStartUp', mode: 'select', options: agevolazioneOptions })}
+          ${renderProfiloField('Primo anno agevolato', { namespace: 'attivita', key: 'primoAnnoAgevolato', mode: 'select', options: agevolazioneOptions })}
+        </div>
+      </section>
+    </div>
+  `;
+  host.replaceChildren();
+  host.insertAdjacentHTML('afterbegin', html);
+}
