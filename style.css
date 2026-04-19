@@ -4249,6 +4249,27 @@ html[data-theme="light"] .dich-conto-estero {
   flex-wrap: wrap;
   margin-bottom: var(--space-3);
 }
+#archivioAnnoSelect {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color-scheme: dark;
+}
+#archivioAnnoSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(93,170,138,.2);
+}
+
+.fatture-table td[data-label="Stimato"],
+.fatture-table td[data-label="Importo"] {
+  white-space: nowrap;
+}
 
 @media (max-width: 768px) {
   .fatture-row {

@@ -420,7 +420,7 @@
             '<button type="button" class="btn-icon" aria-label="Archivio fatture" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>' +
             '</button>' +
-            '<button type="button" class="btn" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
+            '<button type="button" class="btn btn-ghost" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
           '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
         '</div>' +
