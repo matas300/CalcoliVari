@@ -1257,11 +1257,58 @@ function loadYearData(y) {
   return shaped;
 }
 
+function migrateProfileFiscalToSettings() {
+  if (!currentProfile) return;
+  const flagKey = `calcoliPIVA_${currentProfile}_profileFiscalMigrated`;
+  if (localStorage.getItem(flagKey) === '1') return;
+  const srcKey = `calcoliPIVA_${currentProfile}_profileFiscal`;
+  const raw = localStorage.getItem(srcKey);
+  if (!raw) { localStorage.setItem(flagKey, '1'); return; }
+  let src; try { src = JSON.parse(raw); } catch { src = null; }
+  if (!src || typeof src !== 'object') { localStorage.removeItem(srcKey); localStorage.setItem(flagKey, '1'); return; }
+  const ana = data.settings.anagrafica;
+  const att = data.settings.attivita;
+  const s = data.settings;
+  if (!ana.nome && !ana.cognome && src.nome) {
+    const parts = String(src.nome).trim().split(/\s+/);
+    ana.nome = parts[0] || '';
+    ana.cognome = parts.slice(1).join(' ') || '';
+  }
+  const copyIfEmpty = (obj, key, val) => { if ((obj[key] === '' || obj[key] == null) && val) obj[key] = val; };
+  copyIfEmpty(ana, 'codiceFiscale', src.codiceFiscale);
+  copyIfEmpty(ana, 'residenzaVia', src.indirizzo);
+  copyIfEmpty(ana, 'residenzaCap', src.cap);
+  copyIfEmpty(ana, 'residenzaComune', src.citta);
+  copyIfEmpty(ana, 'residenzaProv', src.provincia);
+  copyIfEmpty(ana, 'nazione', src.nazione);
+  copyIfEmpty(ana, 'iban', src.iban);
+  copyIfEmpty(ana, 'modalitaPagamento', src.modalitaPagamento);
+  copyIfEmpty(att, 'partitaIva', src.partitaIva);
+  copyIfEmpty(att, 'codiceAteco', src.ateco);
+  copyIfEmpty(att, 'descrizioneAttivita', src.atecoDescrizione);
+  copyIfEmpty(att, 'atecoGruppo', src.atecoGruppo);
+  copyIfEmpty(att, 'note', src.note);
+  if (src.agevolazioneStartUp === 1) att.agevolazioneStartUp = 1;
+  if (src.primoAnnoAgevolato === 1) att.primoAnnoAgevolato = 1;
+  if ((s.coefficiente == null || s.coefficiente === '') && src.coefficiente) s.coefficiente = src.coefficiente;
+  if ((s.impostaSostitutiva == null || s.impostaSostitutiva === '') && src.impostaSostitutiva) s.impostaSostitutiva = src.impostaSostitutiva;
+  if ((s.limiteForfettario == null || s.limiteForfettario === '') && src.limiteForfettario) s.limiteForfettario = src.limiteForfettario;
+  if (src.usaInpsUfficiale !== undefined) s.usaInpsUfficiale = src.usaInpsUfficiale;
+  if (src.riduzione35 === 1 && (s.riduzione35 == null || s.riduzione35 === 0)) s.riduzione35 = 1;
+  if (src.inpsMode) s.inpsMode = src.inpsMode;
+  if (src.inpsCategoria) s.inpsCategoria = src.inpsCategoria;
+  if (src.inpsTipoGestSep) s.inpsTipoGestSep = src.inpsTipoGestSep;
+  saveData();
+  localStorage.removeItem(srcKey);
+  localStorage.setItem(flagKey, '1');
+}
+
 function loadData() {
   const raw = localStorage.getItem(storageKey());
   data = ensureDataShape(raw ? JSON.parse(raw) : {}, currentYear);
   syncProfileFieldsToSettings(data.settings, currentYear);
   applySettings();
+  migrateProfileFiscalToSettings();
 }
 
 function migrateFatture() {
