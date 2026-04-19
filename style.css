@@ -3077,6 +3077,7 @@ body.logged-in { padding-left: var(--sidebar-width); }
   flex-direction: column;
   padding: var(--space-3) var(--space-2);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sb-brand {
@@ -3106,14 +3107,23 @@ body.logged-in { padding-left: var(--sidebar-width); }
   line-height: 1.15;
 }
 .sb-brand-sub {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
   font-size: 10.5px;
   color: var(--color-text-muted);
 }
-.sb-brand-sub .year-selector { margin: 0; }
-.sb-brand-sub .year-selector button { padding: 2px 6px; font-size: 11px; }
-.sb-brand-sub .year-selector #yearDisplay { font-size: 11px; font-weight: 600; padding: 0 4px; }
+.sb-brand-sub .year-selector { margin: 0; gap: 4px; }
+.sb-brand-sub .year-selector button {
+  width: 22px; height: 22px; padding: 0;
+  font-size: 12px; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sb-brand-sub .year-selector #yearDisplay {
+  font-size: 12px; font-weight: 700; min-width: auto; padding: 0 4px;
+}
 
 .nav-close { display: none; }
 
