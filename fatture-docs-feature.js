@@ -336,6 +336,36 @@
     `;
   }
 
+  const FATTURE_STATI = ['tutte', 'inviata', 'pagata', 'bozza'];
+  let _fattureFilter = 'tutte';
+
+  function invoicesForYear(year) {
+    const profile = typeof getCurrentProfile === 'function' ? getCurrentProfile() : null;
+    const all = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+    return all.filter(inv => Number(inv.annoProgressivo) === Number(year));
+  }
+
+  function countByStato(list, stato) {
+    if (stato === 'tutte') return list.length;
+    return list.filter(inv => (inv.stato || 'bozza') === stato).length;
+  }
+
+  function filterByStato(list, stato) {
+    if (stato === 'tutte') return list.slice();
+    return list.filter(inv => (inv.stato || 'bozza') === stato);
+  }
+
+  function sumTotali(list) {
+    return list.reduce((acc, inv) => acc + (Number(inv.totaleDocument) || 0), 0);
+  }
+
+  function getFattureFilter() { return _fattureFilter; }
+  function setFattureFilter(stato) {
+    if (!FATTURE_STATI.includes(stato)) return;
+    _fattureFilter = stato;
+    renderFattureDocsSection();
+  }
+
   function renderFattureDocsSection() {
     const el = document.getElementById('fattureDocsContent');
     if (!el) return;
@@ -1592,6 +1622,7 @@ ${dettaglioLinee.join('\n')}
   window.previewFatturaXml = previewFatturaXml;
   window.showXmlPreviewModal = showXmlPreviewModal;
   window.openNotaCreditoModal = openNotaCreditoModal;
+  window.setFattureFilter = setFattureFilter;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 })();
