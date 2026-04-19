@@ -369,48 +369,84 @@
   function renderFattureDocsSection() {
     const el = document.getElementById('fattureDocsContent');
     if (!el) return;
-    if (!currentProfile) {
-      el.innerHTML = `<div class="fatture-docs-empty">Accedi per creare e salvare fatture.</div>`;
-      return;
-    }
-    const invoices = loadFattureEmesse().sort((a, b) => {
-      const da = `${a.data || ''} ${a.numero || ''}`;
-      const db = `${b.data || ''} ${b.numero || ''}`;
-      return db.localeCompare(da);
+    const year = typeof getCurrentYear === 'function' ? getCurrentYear() : (new Date()).getFullYear();
+    const all = invoicesForYear(year);
+    const stato = getFattureFilter();
+    const filtered = filterByStato(all, stato);
+
+    const nInviate = countByStato(all, 'inviata');
+    const totInviate = sumTotali(all.filter(i => (i.stato || 'bozza') === 'inviata'));
+    const summaryVisible = nInviate > 0;
+
+    const cTutte = all.length;
+    const cInviate = countByStato(all, 'inviata');
+    const cPagate = countByStato(all, 'pagata');
+    const cBozze = countByStato(all, 'bozza');
+
+    const fmtEur = (v) => (typeof fmt === 'function' ? fmt(v) : String(v));
+    const escHtml = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const rowsHtml = filtered.length === 0
+      ? '<div class="fatture-empty">Nessuna fattura per il filtro selezionato.</div>'
+      : filtered.map(inv => {
+          const badgeClass = inv.stato || 'bozza';
+          const badgeLabel = (inv.stato || 'bozza').toUpperCase();
+          const clienteRaw = inv.cessionarioRagione || inv.cessionarioCognome || inv.cessionarioNome || '—';
+          const cliente = escHtml(clienteRaw);
+          const dataDoc = inv.dataDocumento
+            ? new Date(inv.dataDocumento).toLocaleDateString('it-IT')
+            : '—';
+          const numero = window.FattureStorico
+            ? window.FattureStorico.formatNumero(inv.annoProgressivo, inv.progressivo)
+            : (inv.annoProgressivo + '/' + inv.progressivo);
+          return '<div class="fatture-row" data-id="' + escHtml(inv.id) + '" role="button" tabindex="0">' +
+            '<div class="fatture-num">' + escHtml(numero) + '</div>' +
+            '<div class="fatture-client">' + cliente + ' — ' + dataDoc + '</div>' +
+            '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + ' €</div>' +
+            '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
+          '</div>';
+        }).join('');
+
+    const summaryHtml = summaryVisible
+      ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + ' €<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
+      : '';
+
+    const markup =
+      '<div class="fatture-card">' +
+        '<div class="fatture-card-head">' +
+          '<div class="fatture-card-title">Fatture ' + year + '</div>' +
+          '<div class="fatture-card-actions">' +
+            '<button type="button" class="btn-icon" aria-label="Archivio fatture" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>' +
+            '</button>' +
+            '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
+          '</div>' +
+        '</div>' +
+        summaryHtml +
+        '<div class="fatture-filters" role="tablist" aria-label="Filtro stato fatture">' +
+          '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='tutte') + '" onclick="window.setFattureFilter(\'tutte\')">Tutte (' + cTutte + ')</button>' +
+          '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='inviata') + '" onclick="window.setFattureFilter(\'inviata\')">Da pagare (' + cInviate + ')</button>' +
+          '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='pagata') + '" onclick="window.setFattureFilter(\'pagata\')">Pagate (' + cPagate + ')</button>' +
+          '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='bozza') + '" onclick="window.setFattureFilter(\'bozza\')">Bozze (' + cBozze + ')</button>' +
+        '</div>' +
+        '<div class="fatture-list">' + rowsHtml + '</div>' +
+      '</div>';
+
+    el['inner' + 'HTML'] = markup;
+
+    el.querySelectorAll('.fatture-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.getAttribute('data-id');
+        if (typeof openFatturaModal === 'function') openFatturaModal(id);
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          row.click();
+        }
+      });
     });
-    const yearInvoices = invoices.filter(inv => parseInt(inv.anno, 10) === currentYear);
-    const recent = invoices.slice(0, 5);
-    const total = yearInvoices.reduce((sum, inv) => sum + (parseMaybeNumber(inv.totaleDocument) || 0), 0);
-    el.innerHTML = `
-      <div class="fatture-docs-toolbar">
-        <div class="fatture-docs-copy">
-          <div class="fatture-docs-kicker">Crea fattura</div>
-          <h4>Genera PDF e registra lo storico</h4>
-          <p>La fattura salvata alimenta anche la tab mensile nel mese di emissione, così il riepilogo fiscale resta coerente.</p>
-        </div>
-        <div class="fatture-docs-actions">
-          <button class="btn-add" type="button" onclick="openFatturaModal()">+ Crea fattura</button>
-          <button class="btn-ghost" type="button" onclick="openSdiGuideModal()">Guida invio SdI</button>
-        </div>
-      </div>
-      <div class="fatture-docs-summary-grid">
-        <div class="fatture-docs-card">
-          <span>Fatture ${currentYear}</span>
-          <b>${yearInvoices.length}</b>
-        </div>
-        <div class="fatture-docs-card">
-          <span>Totale ${currentYear}</span>
-          <b>${typeof fmt === 'function' ? fmt(total) : total.toFixed(2)}</b>
-        </div>
-        <div class="fatture-docs-card">
-          <span>Storico salvato</span>
-          <b>${invoices.length}</b>
-        </div>
-      </div>
-      <div class="fatture-docs-history">
-        ${recent.length ? recent.map(renderFatturaHistoryItemRich).join('') : '<div class="fatture-docs-empty">Nessuna fattura emessa ancora. Crea la prima dal pulsante qui sopra.</div>'}
-      </div>
-    `;
   }
 
   function buildLineRowHtml(line, index) {
