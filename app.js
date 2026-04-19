@@ -3286,8 +3286,7 @@ function renderAccantonamento() {
   }
 
   h += `<table class="accant-table"><thead><tr>
-    <th>Fattura</th><th>Lordo</th><th>Aliq.</th><th>Da accant.</th><th>Accantonato</th>
-    <th>Delta</th><th>Dovuto cum.</th><th>Accant. cum.</th><th>Delta cum.</th>
+    <th>Fattura</th><th>Lordo</th><th>Da accant.</th><th>Accantonato</th><th>Delta cum.</th>
   </tr></thead><tbody>`;
 
   let cD = 0, cM = 0;
@@ -3305,22 +3304,21 @@ function renderAccantonamento() {
     h += `<tr${bgStyle}>
       <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? '<br><span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
       <td data-label="Lordo">${fmt(f.importo)}</td>
-      <td data-label="Aliq." style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
       <td data-label="Da accant." style="color:var(--yellow)">${fmt(dovuto)}</td>
       <td data-label="Accantonato"><input type="number" value="${messo||''}" placeholder="0" step="0.01"
         onchange="data.accantonamento['${accKey}']=ceil2(parseFloat(this.value)||0);saveData();recalcAll()"></td>
-      <td data-label="Delta" class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
-      <td data-label="Dovuto cum." style="color:var(--yellow)">${fmt(cD)}</td>
-      <td data-label="Accant. cum.">${fmt(cM)}</td>
       <td data-label="Delta cum." class="${dc>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${(dc>=0?'+':'')+fmt(dc)}</td></tr>`;
   }
 
   const totLordo = fatture.reduce((s, f) => s + f.importo, 0);
   const fd = ceil2(cM - cD);
-  h += `</tbody><tfoot><tr><td data-label="Fattura" style="text-align:left">Totale</td><td data-label="Lordo">${fmt(totLordo)}</td><td data-label="Aliq."></td>
-    <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td><td data-label="Accantonato">${fmt(cM)}</td>
-    <td data-label="Delta" class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
-    <td data-label="Dovuto cum."></td><td data-label="Accant. cum."></td><td data-label="Delta cum."></td></tr></tfoot></table>`;
+  h += `</tbody><tfoot><tr>
+    <td data-label="Fattura" style="text-align:left">Totale</td>
+    <td data-label="Lordo">${fmt(totLordo)}</td>
+    <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td>
+    <td data-label="Accantonato">${fmt(cM)}</td>
+    <td data-label="Delta cum." class="${fd>=0?'delta-pos':'delta-neg'}" style="font-weight:700">${(fd>=0?'+':'')+fmt(fd)}</td>
+  </tr></tfoot></table>`;
 
   if (cM > 0 || cD > 0) {
     if (fd >= 0) {
