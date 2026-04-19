@@ -153,6 +153,31 @@ function updateProfileAvatar() {
   avatarBtn.setAttribute('title', displayName);
 }
 
+// ═══════════════════ Sidebar drawer (mobile) ═══════════════════
+function toggleSidebar() {
+  const el = document.getElementById('sidebar');
+  if (!el) return;
+  el.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+function openSidebar() {
+  const el = document.getElementById('sidebar');
+  const btn = document.getElementById('navToggle');
+  if (!el) return;
+  el.classList.add('open');
+  btn?.setAttribute('aria-expanded', 'true');
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.body.style.overflow = 'hidden';
+  }
+}
+function closeSidebar() {
+  const el = document.getElementById('sidebar');
+  const btn = document.getElementById('navToggle');
+  if (!el) return;
+  el.classList.remove('open');
+  btn?.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+}
+
 function toggleProfileMenu() {
   const menu = document.getElementById('profileMenu');
   if (!menu) return;
@@ -6383,6 +6408,10 @@ function switchToTab(tab) {
   if (tab === 'fatture' && typeof window.FattureStorico?.renderStorico === 'function') {
     window.FattureStorico.renderAnnoFilter();
     window.FattureStorico.renderStorico();
+  }
+  // Chiudi drawer mobile dopo cambio tab
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    closeSidebar();
   }
   window.scrollTo(0, 0);
 }
