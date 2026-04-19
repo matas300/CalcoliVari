@@ -971,7 +971,7 @@ function getProfileFiscalData() {
     modalitaPagamento: String(ana.modalitaPagamento || 'Bonifico bancario'),
     coefficiente: parseFloat(s.coefficiente) || 67,
     impostaSostitutiva: parseFloat(s.impostaSostitutiva) || 15,
-    inpsMode: s.inpsMode || 'artcom',
+    inpsMode: s.inpsMode || 'artigiani_commercianti',
     inpsCategoria: s.inpsCategoria || 'artigiano',
     inpsTipoGestSep: s.inpsTipoGestSep || '',
     usaInpsUfficiale: parseInt(s.usaInpsUfficiale, 10) === 0 ? 0 : 1,
@@ -1620,6 +1620,44 @@ function backfillAnagraficaAttivitaFromAllYears() {
     if (!doc || !doc.settings) continue;
     fillFrom(doc.settings.anagrafica, mergedAna);
     fillFrom(doc.settings.attivita, mergedAtt);
+  }
+  // Fallback: PROFILE_FISCAL_LIBRARY legacy defaults (Mattia/Peru/Demo) — mappa legacy->nuovo
+  const lib = PROFILE_FISCAL_LIBRARY[currentProfile];
+  if (lib) {
+    const nameParts = String(lib.nome || '').trim().split(/\s+/);
+    const libAna = {
+      nome: nameParts[0] || '',
+      cognome: nameParts.slice(1).join(' ') || '',
+      codiceFiscale: lib.codiceFiscale || '',
+      residenzaVia: lib.indirizzo || '',
+      residenzaCap: lib.cap || '',
+      residenzaComune: lib.citta || '',
+      residenzaProv: lib.provincia || '',
+      nazione: lib.nazione || 'IT',
+      iban: lib.iban || '',
+      modalitaPagamento: lib.modalitaPagamento || ''
+    };
+    const libAtt = {
+      partitaIva: lib.partitaIva || '',
+      codiceAteco: lib.ateco || '',
+      descrizioneAttivita: lib.atecoDescrizione || '',
+      atecoGruppo: lib.atecoGruppo || '',
+      note: lib.note || '',
+      agevolazioneStartUp: lib.agevolazioneStartUp || 0,
+      primoAnnoAgevolato: lib.primoAnnoAgevolato || 0
+    };
+    fillFrom(libAna, mergedAna);
+    fillFrom(libAtt, mergedAtt);
+    // parametri fiscali settings: se vuoti, prendi dal library
+    const libSettings = { coefficiente: lib.coefficiente, impostaSostitutiva: lib.impostaSostitutiva,
+      limiteForfettario: lib.limiteForfettario, inailTasso: lib.inailTasso,
+      inpsMode: lib.inpsMode, inpsCategoria: lib.inpsCategoria, inpsTipoGestSep: lib.inpsTipoGestSep,
+      usaInpsUfficiale: lib.usaInpsUfficiale };
+    for (const [k, v] of Object.entries(libSettings)) {
+      const ex = data.settings[k];
+      const empty = ex === undefined || ex === null || ex === '' || ex === 0;
+      if (empty && v !== undefined && v !== null && v !== '' && v !== 0) data.settings[k] = v;
+    }
   }
   data.settings.anagrafica = mergedAna;
   data.settings.attivita = mergedAtt;
@@ -7081,10 +7119,10 @@ function renderProfiloPiva() {
   const host = document.getElementById('profilo-piva-content');
   if (!host) return;
   const s = S();
-  const inpsMode = s.inpsMode || 'artcom';
+  const inpsMode = s.inpsMode || 'artigiani_commercianti';
   const inpsModeOptions = [
-    { value: 'artcom', label: 'Artigiani / Commercianti' },
-    { value: 'gestsep', label: 'Gestione Separata' }
+    { value: 'artigiani_commercianti', label: 'Artigiani / Commercianti' },
+    { value: 'gestione_separata', label: 'Gestione Separata' }
   ];
   const inpsCategoriaOptions = [
     { value: 'artigiano', label: 'Artigiano' },
@@ -7101,11 +7139,11 @@ function renderProfiloPiva() {
   let previdenzaRows = renderProfiloField('Gestione previdenziale', {
     namespace: 'settings', key: 'inpsMode', mode: 'select', options: inpsModeOptions
   });
-  if (inpsMode === 'artcom') {
+  if (inpsMode === 'artigiani_commercianti') {
     previdenzaRows += renderProfiloField('Categoria INPS', {
       namespace: 'settings', key: 'inpsCategoria', mode: 'select', options: inpsCategoriaOptions
     });
-  } else if (inpsMode === 'gestsep') {
+  } else if (inpsMode === 'gestione_separata') {
     previdenzaRows += renderProfiloField('Tipologia Gestione Separata', {
       namespace: 'settings', key: 'inpsTipoGestSep', mode: 'select', options: tipoGestSepOptions
     });
