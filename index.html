@@ -105,6 +105,16 @@
         <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z M9 12h7M9 16h7M9 8h3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
         <span class="sb-label">Dichiarazione</span>
       </button>
+
+      <div class="sb-section-label">Profilo</div>
+      <button class="sb-item" data-tab="profilo-personale" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M4 21a8 8 0 0116 0" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Profilo personale</span>
+      </button>
+      <button class="sb-item" data-tab="profilo-piva" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+        <span class="sb-label">Profilo P.IVA</span>
+      </button>
     </nav>
 
     <div class="sb-spacer"></div>
@@ -126,12 +136,12 @@
       </button>
       <div id="profileMenu" class="profile-menu profile-menu-sidebar" role="menu" hidden>
         <button class="profile-menu-item" role="menuitem" type="button"
-                onclick="closeProfileMenu(); openProfileFiscalModal();">
-          Profilo fiscale
+                onclick="closeProfileMenu(); switchToTab('profilo-personale');">
+          Profilo personale
         </button>
         <button class="profile-menu-item" role="menuitem" type="button"
-                onclick="closeProfileMenu(); switchToTab('settings');">
-          Impostazioni
+                onclick="closeProfileMenu(); switchToTab('profilo-piva');">
+          Profilo P.IVA
         </button>
         <div class="profile-menu-divider"></div>
         <button class="profile-menu-item profile-menu-item-toggle" role="menuitem" type="button"
@@ -447,6 +457,13 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="tab-profilo-personale" class="tab-content">
+    <div id="profilo-personale-content"></div>
+  </div>
+  <div id="tab-profilo-piva" class="tab-content">
+    <div id="profilo-piva-content"></div>
   </div>
 </div>
 
