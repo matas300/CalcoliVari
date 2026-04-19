@@ -6419,9 +6419,10 @@ function switchToTab(tab) {
 function openDichiarazione() {
   switchToTab('dichiarazione');
 }
-document.getElementById('nav').addEventListener('click', e => {
-  if (e.target.tagName !== 'BUTTON') return;
-  switchToTab(e.target.dataset.tab);
+document.querySelector('.sidebar')?.addEventListener('click', e => {
+  const btn = e.target.closest('.sb-item[data-tab]');
+  if (!btn) return;
+  switchToTab(btn.dataset.tab);
 });
 
 // ═══════════════════ Mobile nav labels ═══════════════════
