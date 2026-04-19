@@ -141,12 +141,29 @@ async function hashPassword(pwd) {
 }
 
 async function doLogin() {
+  const pwdInput = document.getElementById('loginPassword');
+  const errorDiv = document.getElementById('loginError');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginBtnText = document.getElementById('loginBtnText');
+  const loginSpinner = document.getElementById('loginSpinner');
+
+  if (!pwdInput.value) return;
+  if (loginBtn && loginBtn.disabled) return;
+
+  if (loginBtn) loginBtn.disabled = true;
+  if (loginBtnText) loginBtnText.textContent = 'Accesso in corso...';
+  if (loginSpinner) loginSpinner.style.display = 'inline-block';
+  errorDiv.textContent = '';
+
   clearYearDataCache();
-  const pwd = document.getElementById('loginPassword').value;
+  const pwd = pwdInput.value;
   const hash = await hashPassword(pwd);
   const profile = PROFILE_HASHES[hash];
   if (!profile) {
-    document.getElementById('loginError').textContent = 'Password errata';
+    errorDiv.textContent = 'Password errata';
+    if (loginBtn) loginBtn.disabled = false;
+    if (loginBtnText) loginBtnText.textContent = 'Entra';
+    if (loginSpinner) loginSpinner.style.display = 'none';
     return;
   }
   currentProfile = profile;

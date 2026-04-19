@@ -22,8 +22,11 @@
   <div class="login-box">
     <h2>Calcoli P.IVA</h2>
     <p>Inserisci la password per accedere</p>
-    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
-    <button onclick="doLogin()">Entra</button>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" aria-label="Password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button id="loginBtn" onclick="doLogin()">
+      <span id="loginBtnText">Entra</span>
+      <span id="loginSpinner" class="btn-spinner" style="display:none"></span>
+    </button>
     <div id="loginError" class="login-error"></div>
   </div>
 </div>
