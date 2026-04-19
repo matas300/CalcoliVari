@@ -158,9 +158,6 @@ html[data-theme="light"] .scad-table td {
 html[data-theme="light"] .progress-bar {
   background: rgba(0,0,0,.06);
 }
-html[data-theme="light"] .bar-track {
-  background: rgba(0,0,0,.05);
-}
 html[data-theme="light"] .cal-day.act-WE {
   background: rgba(0,0,0,.05);
   color: var(--color-text-muted);
@@ -683,24 +680,6 @@ input:disabled, select:disabled { opacity: .4; cursor: not-allowed; }
 .status-icon { font-size: 2rem; }
 .status-text h4 { font-size: .95rem; margin-bottom: 4px; }
 .status-text p { font-size: .82rem; color: var(--text2); }
-
-.bar-chart { margin-top: 20px; }
-.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: .8rem; }
-.bar-label { width: 70px; color: var(--text2); text-align: right; flex-shrink: 0; }
-.bar-track {
-  flex: 1; height: 20px; background: rgba(255,255,255,.06);
-  border-radius: var(--radius-sm); position: relative;
-  border: 1px solid rgba(255,255,255,.04);
-}
-.bar-fill-dovuto {
-  height: 100%; background: rgba(200,107,116,.4);
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm); position: absolute; top: 0; left: 0;
-}
-.bar-fill-messo {
-  height: 100%; border-radius: var(--radius-sm); position: absolute; top: 0; left: 0; z-index: 1;
-}
-.bar-fill-messo.over { background: var(--green); }
-.bar-fill-messo.under { background: var(--yellow); }
 
 /* ── Settings ── */
 .settings-group { margin-bottom: 20px; }
@@ -3795,10 +3774,6 @@ body.logged-in { padding-left: var(--sidebar-width); }
   /* ── Status boxes ── */
   .status-box { flex-direction: column; text-align: center; padding: 12px; }
   .status-icon { font-size: 1.5rem; }
-
-  /* ── Bar chart ── */
-  .bar-row { font-size: .7rem; }
-  .bar-label { width: 40px; font-size: .65rem; }
 
   /* ── Tap targets & iOS zoom fix ── */
   .btn-add-fatt, .btn-del-fatt { width: auto; height: auto; padding: 8px 14px; font-size: 13px; }
