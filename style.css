@@ -3281,40 +3281,91 @@ body.logged-in { padding-left: var(--sidebar-width); }
 
 /* ═══════════════════ Mobile ═══════════════════ */
 @media (max-width: 768px) {
-  /* ── Header ── */
-  header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
-  header h1 { font-size: 1.1rem; width: 100%; }
-  .header-brand { width: 100%; justify-content: space-between; align-items: flex-start; }
-  .header-right { width: 100%; justify-content: space-between; }
-  nav button[data-tab="settings"] { display: none !important; }
+  /* ── Topbar + drawer mobile ── */
+  body.logged-in {
+    padding-left: 0;
+    padding-top: var(--topbar-height-mobile);
+  }
 
-  /* ── Bottom navbar ── */
-  body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); overflow-x: hidden; }
-  nav {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(72px, 1fr);
-    background: var(--surface);
-    border-top: 1px solid var(--color-border);
-    border-bottom: none;
-    box-shadow: 0 -8px 24px rgba(0,0,0,.28);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--topbar-height-mobile);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    z-index: 45;
+    padding: 0 var(--space-3);
+    padding-top: env(safe-area-inset-top, 0px);
   }
-  nav::-webkit-scrollbar { display: none; }
-  nav button {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 1px; padding: 8px 2px; font-size: .62rem;
-    border-bottom: none; white-space: normal; text-align: center; line-height: 1.15;
-    min-height: 52px;
+  .nav-toggle {
+    background: transparent;
+    border: none;
+    color: var(--color-text);
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    padding: 0;
   }
-  nav button.active {
-    border-bottom: none;
-    color: var(--text);
-    background: rgba(93,170,138,.14);
+  .nav-toggle:hover { background: var(--color-surface-2); }
+  .nav-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .nav-toggle svg { width: 22px; height: 22px; }
+  .mobile-topbar-title {
+    flex: 1;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--color-text);
   }
+  .sync-indicator-mobile { font-size: 10px; }
+
+  /* Drawer */
+  .sidebar {
+    pointer-events: none;
+    width: 100%;
+    z-index: 60;
+  }
+  .sidebar-panel {
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    width: min(84vw, 320px);
+    transform: translateX(-100%);
+    transition: transform .22s ease-out;
+    box-shadow: 2px 0 24px rgba(0,0,0,.45);
+    pointer-events: auto;
+    z-index: 61;
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease-out;
+    z-index: 60;
+  }
+  .sidebar.open { pointer-events: auto; }
+  .sidebar.open .sidebar-panel { transform: translateX(0); }
+  .sidebar.open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
+
+  .nav-close {
+    display: inline-flex !important;
+    align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: 0;
+    margin-left: auto;
+  }
+  .nav-close:hover { background: var(--color-surface-2); color: var(--color-text); }
+  .nav-close svg { width: 18px; height: 18px; }
 
   .container { padding: 12px 8px; }
   .calc-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -3785,6 +3836,11 @@ body.logged-in { padding-left: var(--sidebar-width); }
     min-height: 38px; font-size: 16px;
   }
   .year-selector button { width: 38px; height: 38px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-panel,
+  .sidebar-backdrop { transition: none !important; }
 }
 
 /* ── Extra small screens ── */
