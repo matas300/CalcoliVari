@@ -130,15 +130,6 @@ html[data-theme="light"] .regime-btn.active,
 html[data-theme="light"] .btn-add-fatt {
   color: #fff;
 }
-html[data-theme="light"] header {
-  background: rgba(255,255,255,.96);
-}
-html[data-theme="light"] nav button:hover {
-  background: rgba(0,0,0,.04);
-}
-html[data-theme="light"] nav button.active {
-  background: rgba(0,0,0,.06);
-}
 html[data-theme="light"] .row {
   border-bottom-color: rgba(0,0,0,.06);
 }
@@ -358,8 +349,6 @@ a {
 .login-error {
   color: var(--red); font-size: .85rem; margin-top: 12px; min-height: 1.2em;
 }
-.header-right { display: flex; align-items: center; gap: 12px; }
-
 /* ── Sync indicator ── */
 .sync-indicator {
   display: flex; align-items: center; gap: 5px;
@@ -372,24 +361,6 @@ a {
 .sync-text { white-space: nowrap; }
 
 
-
-/* ── Header ── */
-header {
-  background: rgba(19,28,36,.96);
-  padding: 14px 24px;
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(12px);
-}
-header h1 { font-size: 1.45rem; font-weight: 700; color: var(--text); }
-.header-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
 .year-selector { display: flex; align-items: center; gap: 8px; }
 .year-selector button {
   background: var(--surface2); border: 1px solid var(--color-border); color: var(--text);
@@ -397,25 +368,6 @@ header h1 { font-size: 1.45rem; font-weight: 700; color: var(--text); }
 }
 .year-selector button:hover { background: var(--surface3); border-color: rgba(93,170,138,.24); }
 .year-selector span { font-size: 1.1rem; font-weight: 700; min-width: 50px; text-align: center; font-family: var(--font-display); }
-
-/* ── Nav ── */
-nav {
-  background: var(--surface);
-  display: flex; border-bottom: 1px solid var(--color-border);
-  overflow-x: auto;
-}
-nav button {
-  background: none; border: none; color: var(--text2);
-  padding: 14px 20px; cursor: pointer; font-size: .88rem; font-weight: 600;
-  border-bottom: 2px solid transparent; white-space: nowrap; transition: all .2s;
-}
-nav button:hover { color: var(--text); background: rgba(34,49,61,.55); }
-nav button.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-  background: rgba(34,49,61,.7);
-  box-shadow: inset 0 -1px 0 rgba(93,170,138,.18);
-}
 
 .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 .tab-content { display: none; }
@@ -3845,11 +3797,8 @@ body.logged-in { padding-left: var(--sidebar-width); }
 
 /* ── Extra small screens ── */
 @media (max-width: 480px) {
-  header h1 { font-size: .95rem; }
   .container { padding: 8px 4px; }
   .panel { padding: 10px 8px; }
-  nav { grid-auto-columns: minmax(56px, 1fr); }
-  nav button { font-size: .55rem; padding: 6px 1px; }
   .profile-meta-strip { grid-template-columns: 1fr; }
   .profile-hero-stats { grid-template-columns: 1fr; }
   .accant-table td, .fatture-table td { font-size: .8rem; }
@@ -4151,43 +4100,6 @@ html[data-theme="light"] .dich-conto-estero {
 .storico-actions button { padding: 4px 8px; font-size: 11px; }
 
 /* === C1 — Header avatar + dropdown menu === */
-.profile-avatar-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-.profile-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-primary);
-  color: var(--color-text);
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .02em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  transition: background-color .12s ease, border-color .12s ease;
-}
-.profile-avatar:hover,
-.profile-avatar[aria-expanded="true"] {
-  background: var(--color-surface-3);
-  border-color: var(--color-primary-hover);
-}
-.profile-avatar:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
-.profile-avatar:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(93,170,138,.28);
-}
-
 .profile-menu {
   position: absolute;
   top: calc(100% + 6px);
