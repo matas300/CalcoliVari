@@ -195,8 +195,8 @@ html[data-theme="light"] .scad-note,
 html[data-theme="light"] .scad-empty,
 html[data-theme="light"] .scad-advanced-block,
 html[data-theme="light"] .profile-history-item {
-  background: rgba(0,0,0,.03);
-  border-color: rgba(0,0,0,.08);
+  background: var(--color-surface);
+  border-color: rgba(0,0,0,.12);
 }
 html[data-theme="light"] .scad-toolbar-panel {
   background: linear-gradient(180deg, rgba(58,143,145,.08), rgba(0,0,0,.02));
@@ -217,7 +217,6 @@ html[data-theme="light"] .payment-date-day {
 html[data-theme="light"] .payment-date-empty {
   background: rgba(0,0,0,.02);
 }
-html[data-theme="light"] .scad-inline-meta span,
 html[data-theme="light"] .scad-payment-tag,
 html[data-theme="light"] .scad-view-switch {
   background: rgba(0,0,0,.04);
@@ -258,9 +257,36 @@ html[data-theme="light"] .fatture-docs-kicker,
 html[data-theme="light"] .fattura-summary-note {
   color: var(--color-text-muted);
 }
+html[data-theme="light"] .scad-filter-btn,
+html[data-theme="light"] .scad-link-btn {
+  background: rgba(0,0,0,.04);
+  border-color: rgba(0,0,0,.1);
+  color: var(--color-text);
+}
 html[data-theme="light"] .scad-view-switch button.active,
 html[data-theme="light"] .scad-filter-btn.active {
   background: rgba(58,143,145,.14);
+  color: var(--color-primary);
+  border-color: rgba(58,143,145,.24);
+}
+html[data-theme="light"] .scad-pay-btn {
+  color: var(--color-primary);
+  background: rgba(58,143,145,.1);
+  border: 1px solid rgba(58,143,145,.24);
+}
+html[data-theme="light"] .f24-btn {
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.1);
+  color: var(--color-text);
+}
+html[data-theme="light"] .scad-stat {
+  background: rgba(0,0,0,.03);
+  border-color: rgba(0,0,0,.08);
+}
+html[data-theme="light"] .scad-empty,
+html[data-theme="light"] .scad-method-box {
+  background: rgba(0,0,0,.03);
+  border-color: rgba(0,0,0,.08);
 }
 html[data-theme="light"] .settings-group select,
 html[data-theme="light"] .budget-base-selector select,
@@ -2417,7 +2443,7 @@ html[data-theme="light"] .qpay-input {
   min-width: 0;
 }
 .scad-year-table {
-  table-layout: fixed;
+  table-layout: auto;
 }
 .scad-table th {
   padding: 8px 10px;
@@ -2437,45 +2463,29 @@ html[data-theme="light"] .qpay-input {
   text-align: right;
   border-bottom: 1px solid rgba(255,255,255,.05);
   vertical-align: top;
-  min-width: 0;
-  overflow-wrap: anywhere;
+}
+.scad-year-table td[data-label="Data"],
+.scad-year-table td[data-label="Importo"],
+.scad-year-table td[data-label="Stato"],
+.scad-year-table td[data-label="Timing"] {
+  white-space: nowrap;
 }
 .scad-table tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
 .scad-table td:first-child,
 .scad-table td:nth-child(2) {
   text-align: left;
 }
-.scad-year-table th:nth-child(1),
-.scad-year-table td[data-label="Data"] {
-  width: 12%;
-}
-.scad-year-table th:nth-child(2),
 .scad-year-table td[data-label="Voce"] {
-  width: 30%;
-}
-.scad-year-table th:nth-child(3),
-.scad-year-table td[data-label="Importo"] {
-  width: 12%;
-}
-.scad-year-table th:nth-child(4),
-.scad-year-table td[data-label="Versamenti"] {
-  width: 24%;
-}
-.scad-year-table th:nth-child(5),
-.scad-year-table td[data-label="Stato"] {
-  width: 10%;
-}
-.scad-year-table th:nth-child(6),
-.scad-year-table td[data-label="Timing"] {
-  width: 12%;
+  min-width: 260px;
+  max-width: 420px;
 }
 .scad-year-table td[data-label="Versamenti"] {
-  min-width: 0;
-  text-align: left;
+  min-width: 160px;
+  width: 1%;
+  text-align: right;
+  vertical-align: top;
 }
-.scad-year-table td[data-label="Versamenti"] > * {
-  min-width: 0;
-}
+.scad-year-table th:last-child { text-align: right; }
 .scad-table tfoot td {
   font-weight: 700;
   border-top: 1px solid var(--color-border);
@@ -2490,6 +2500,15 @@ html[data-theme="light"] .qpay-input {
   font-size: .73rem;
   color: var(--text2);
   overflow-wrap: anywhere;
+}
+.scad-voce-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.scad-voce-chips + .scad-sub {
+  margin-top: 6px;
 }
 .scad-chip {
   display: inline-flex;
@@ -2538,7 +2557,7 @@ html[data-theme="light"] .qpay-input {
 .scad-inline-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 .scad-inline-meta span {
@@ -2551,6 +2570,9 @@ html[data-theme="light"] .qpay-input {
 }
 .scad-collapsible {
   width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.02);
 }
 .scad-collapsible summary {
   list-style: none;
@@ -2560,11 +2582,31 @@ html[data-theme="light"] .qpay-input {
   flex-wrap: wrap;
   gap: 12px;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
+  padding: 10px 14px;
+  transition: background .15s ease;
+}
+.scad-collapsible summary:hover {
+  background: rgba(255,255,255,.04);
+}
+.scad-collapsible > summary > span:first-child::before {
+  content: '\25B6';
+  display: inline-block;
+  font-size: .65em;
+  margin-right: 8px;
+  color: var(--color-text-muted);
+  transition: transform .2s;
+  vertical-align: middle;
+}
+.scad-collapsible[open] > summary > span:first-child::before {
+  transform: rotate(90deg);
 }
 .scad-collapsible summary::-webkit-details-marker {
   display: none;
+}
+.scad-collapsible > .scad-collapsible-body {
+  padding: 0 14px 14px;
 }
 .scad-collapsible-meta {
   font-size: .76rem;
@@ -2636,8 +2678,9 @@ html[data-theme="light"] .qpay-input {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 .scad-toolbar-main {
   display: grid;
@@ -2658,7 +2701,7 @@ html[data-theme="light"] .qpay-input {
 }
 .scad-toolbar-actions {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -2705,9 +2748,22 @@ html[data-theme="light"] .qpay-input {
   display: grid;
   gap: 18px;
 }
+/* Compact closed card: kill the 20px panel padding when collapsed */
+.scad-year-card:has(> .scad-year-collapse:not([open])) {
+  padding: 10px 16px;
+}
 .scad-year-collapse {
   display: grid;
   gap: 18px;
+}
+.scad-year-collapse:not([open]) {
+  gap: 0;
+}
+.scad-year-header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .scad-year-collapse > summary {
   list-style: none;
@@ -2758,7 +2814,8 @@ html[data-theme="light"] .qpay-input {
 .scad-year-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  gap: 14px;
+  margin-bottom: 8px;
 }
 .scad-stat {
   padding: 12px 14px;
@@ -2811,6 +2868,10 @@ html[data-theme="light"] .qpay-input {
   border-radius: var(--radius-md);
   background: rgba(255,255,255,.03);
   border: 1px solid rgba(255,255,255,.06);
+  margin-bottom: 6px;
+}
+.scad-method-manual {
+  margin-top: 4px;
 }
 .scad-method-head {
   display: flex;
@@ -2846,13 +2907,29 @@ html[data-theme="light"] .qpay-input {
 }
 .scad-row-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
   margin-bottom: 8px;
-  align-items: center;
 }
-.scad-f24-inline {
-  margin-top: 8px;
+.scad-row-actions > * {
+  width: 100%;
+  max-width: 140px;
+  text-align: center;
+}
+.scad-method-controls select {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: .85rem;
+  font-family: var(--font-body);
+}
+.scad-method-controls select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(93,170,138,.2);
 }
 .scad-payment-events,
 .scad-payment-history,
@@ -2860,10 +2937,17 @@ html[data-theme="light"] .qpay-input {
   display: grid;
   gap: 8px;
 }
-.scad-payment-event,
+.scad-payment-event {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.scad-payment-event .payment-date-btn { flex: 1 1 130px; min-width: 130px; }
+.scad-payment-event input { flex: 0 1 100px; min-width: 80px; }
 .scad-credit-item {
   display: grid;
-  grid-template-columns: minmax(0,1fr) minmax(92px, 120px) 36px;
+  grid-template-columns: minmax(0,1fr) auto;
   gap: 8px;
   align-items: center;
 }
@@ -2898,18 +2982,23 @@ html[data-theme="light"] .qpay-input {
   color: var(--green);
   font-weight: 800;
 }
-.scad-year-table td[data-label="Versamenti"] {
-  min-width: 220px;
-}
 .scad-inline-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 18px;
   margin-bottom: 12px;
+  font-size: .78rem;
+  color: var(--color-text-muted);
 }
 .scad-inline-meta span {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+.scad-pagamenti-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
 }
 
 /* ── F24 Guide ── */
@@ -3107,6 +3196,78 @@ body.logged-in { padding-left: var(--sidebar-width); }
 }
 
 .nav-close { display: none; }
+
+.sb-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sb-profile-row .sb-profile { flex: 1; min-width: 0; }
+.sb-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.sb-collapse-btn:hover { background: var(--color-surface-2); color: var(--color-text); }
+.sb-collapse-btn svg { width: 14px; height: 14px; flex-shrink: 0; transition: transform .2s ease; }
+body.sidebar-collapsed .sb-collapse-btn svg { transform: rotate(180deg); }
+body.sidebar-collapsed .sb-profile-row { flex-direction: column; gap: 4px; }
+
+/* ── Collapsed rail (desktop) ── */
+@media (min-width: 769px) {
+  body.sidebar-collapsed { padding-left: 60px; }
+  body.sidebar-collapsed .sidebar { width: 60px; }
+  body.sidebar-collapsed .sidebar-panel { padding: var(--space-3) 6px; }
+  body.sidebar-collapsed .sb-brand {
+    flex-direction: column;
+    gap: 8px;
+    padding: var(--space-1) 0 var(--space-2);
+  }
+  body.sidebar-collapsed .sb-brand-text,
+  body.sidebar-collapsed .sb-brand .sb-year,
+  body.sidebar-collapsed .sb-label,
+  body.sidebar-collapsed .sb-section-label,
+  body.sidebar-collapsed .sb-profile-info { display: none; }
+  body.sidebar-collapsed .sb-logo { width: 34px; height: 34px; font-size: 17px; }
+  body.sidebar-collapsed .sb-item {
+    justify-content: center;
+    padding: 9px 0;
+  }
+  body.sidebar-collapsed .sb-ico { margin: 0; }
+  body.sidebar-collapsed .sb-profile { justify-content: center; padding: 6px 0; }
+  body.sidebar-collapsed .sb-avatar { width: 28px; height: 28px; font-size: 12px; }
+  /* Tooltip on hover (title attribute does the rest) */
+  body.sidebar-collapsed .sb-item { position: relative; }
+  body.sidebar-collapsed .sb-item:hover::after {
+    content: attr(data-tab-label);
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--color-text);
+    white-space: nowrap;
+    z-index: 50;
+    pointer-events: none;
+  }
+}
+@media (max-width: 768px) {
+  .sb-collapse-btn { display: none; }
+}
 
 .sb-section-label {
   font-size: 10px;

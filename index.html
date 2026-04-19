@@ -120,15 +120,20 @@
     <div class="sb-spacer"></div>
 
     <div class="sb-profile-wrap">
-      <button id="profileAvatar" class="sb-profile" type="button"
-              aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu"
-              onclick="toggleProfileMenu()" title="">
-        <span id="profileAvatarInitials" class="sb-avatar">·</span>
-        <span class="sb-profile-info">
-          <span id="profileMenuName" class="sb-profile-name"></span>
-          <span id="profileMenuSubtitle" class="sb-profile-sub"></span>
-        </span>
-      </button>
+      <div class="sb-profile-row">
+        <button id="profileAvatar" class="sb-profile" type="button"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu"
+                onclick="toggleProfileMenu()" title="">
+          <span id="profileAvatarInitials" class="sb-avatar">·</span>
+          <span class="sb-profile-info">
+            <span id="profileMenuName" class="sb-profile-name"></span>
+            <span id="profileMenuSubtitle" class="sb-profile-sub"></span>
+          </span>
+        </button>
+        <button class="sb-collapse-btn" type="button" aria-label="Comprimi/espandi barra laterale" title="Comprimi barra laterale" onclick="toggleSidebarCollapsed()">
+          <svg class="sb-collapse-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        </button>
+      </div>
       <div id="profileMenu" class="profile-menu profile-menu-sidebar" role="menu" hidden>
         <button class="profile-menu-item" role="menuitem" type="button"
                 onclick="closeProfileMenu(); switchToTab('riepilogo');">

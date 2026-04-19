@@ -110,7 +110,9 @@ let externalFiscalState = {
 let scadenziarioUiState = {
   view: 'competence',
   showHistoricalYears: false,
-  showEmptyYears: false
+  showEmptyYears: false,
+  openYears: new Set(),
+  openArchived: new Set()
 };
 
 function updateProfileAvatar() {
@@ -175,6 +177,34 @@ function closeSidebar() {
   btn?.setAttribute('aria-expanded', 'false');
   document.body.style.overflow = '';
 }
+
+const SIDEBAR_COLLAPSED_KEY = 'calcoliPIVA_sidebarCollapsed';
+function applySidebarCollapsed(collapsed) {
+  document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+  const btn = document.querySelector('.sb-collapse-btn');
+  if (btn) {
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    btn.title = collapsed ? 'Espandi barra laterale' : 'Comprimi barra laterale';
+  }
+}
+function toggleSidebarCollapsed() {
+  const next = !document.body.classList.contains('sidebar-collapsed');
+  applySidebarCollapsed(next);
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch (e) {}
+}
+function initSidebarCollapsed() {
+  let stored = '0';
+  try { stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) || '0'; } catch (e) {}
+  applySidebarCollapsed(stored === '1');
+  // Mirror each sb-item label into data-tab-label so the collapsed-rail tooltip can show it
+  document.querySelectorAll('.sb-item').forEach(btn => {
+    const label = btn.querySelector('.sb-label');
+    if (label && !btn.getAttribute('data-tab-label')) {
+      btn.setAttribute('data-tab-label', label.textContent.trim());
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', initSidebarCollapsed);
 
 function toggleProfileMenu() {
   const menu = document.getElementById('profileMenu');
@@ -4721,16 +4751,16 @@ function getScadenziarioExplanation(row) {
   return '';
 }
 
-function renderScadenziarioPaymentEvents(row) {
+function renderScadenziarioPaymentEvents(row, extraActions) {
   if (!row) return '';
   const dueIso = row.dueDate || '';
   if (row.source !== 'calculated' || !row.scheduleKey) {
-    if (!row.paymentEvents || row.paymentEvents.length === 0) return `<div class="scad-sub">Nessun versamento registrato.</div>`;
+    if (!row.paymentEvents || row.paymentEvents.length === 0) return `<div class="scad-sub">Nessun versamento registrato.</div>${extraActions ? `<div class="scad-row-actions">${extraActions}</div>` : ''}`;
     return `<div class="scad-payment-history">${row.paymentEvents.map(event => `
       <div class="scad-payment-tag">
         <span>${event.paymentDate ? formatPaymentDateDisplay(event.paymentDate) : 'Storico'}</span>
         <b>${fmt(event.amount)}</b>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}</div>${extraActions ? `<div class="scad-row-actions">${extraActions}</div>` : ''}`;
   }
 
   const residual = row.paymentStatus ? Math.max(0, row.paymentStatus.residualAmount) : row.amountDue;
@@ -4739,6 +4769,7 @@ function renderScadenziarioPaymentEvents(row) {
       ${(row.paymentEvents || []).length > 0 ? 'Aggiungi quota' : 'Segna pagato'}
     </button>
     ${row.paymentEvents && row.paymentEvents.length > 0 ? `<button class="scad-link-btn" onclick="reopenPaidScheduleItem('${row.scheduleKey.replace(/'/g, "\\'")}')">Annulla tutto</button>` : ''}
+    ${extraActions || ''}
   </div>`;
 
   if (row.paymentEvents && row.paymentEvents.length > 0) {
@@ -4770,8 +4801,6 @@ function renderScadenziarioRowsTable(rows, options) {
     <th style="text-align:left">Voce</th>
     <th>Importo</th>
     <th>Versamenti</th>
-    <th>Stato</th>
-    <th>Timing</th>
   </tr></thead><tbody>`;
   for (const row of rows) {
     const timing = getScadenziarioTimingChip(row);
@@ -4783,10 +4812,15 @@ function renderScadenziarioRowsTable(rows, options) {
     const f24Key = row && row.source === 'calculated' ? getF24GuideKey(row) : null;
     const f24SafeId = 'f24guide_' + String(row && (row.scheduleKey || row.id || '')).replace(/[^a-zA-Z0-9_]/g, '_');
     const f24GuideHtml = f24Key ? renderF24Guide(f24Key, row) : '';
+    const f24Button = f24Key ? `<button class="f24-btn" onclick="toggleF24Guide('${String(row.scheduleKey || row.id || '').replace(/'/g, "\\'")}')">F24?</button>` : '';
     h += `<tr>
       <td data-label="Data">${row.due && row.due.label ? row.due.label : (row.dueDate ? formatPaymentDateDisplay(row.dueDate) : `Anno ${row.dueYear}`)}</td>
       <td data-label="Voce">
         <div class="scad-main">${row.title}</div>
+        <div class="scad-voce-chips">
+          <span class="scad-chip ${row.paymentStatus.tone}">${row.paymentStatus.label}</span>
+          <span class="scad-chip ${timing.cls}">${timing.label}</span>
+        </div>
         <div class="scad-sub">${row.competenceLabel || row.competence || `Competenza ${row.competenceYear}`}</div>
         ${explanation ? `<div class="scad-sub">${explanation}</div>` : ''}
         ${crossYearMeta}
@@ -4795,21 +4829,17 @@ function renderScadenziarioRowsTable(rows, options) {
         <div>${fmt(row.amountDue)}</div>
         ${rangeHtml}
       </td>
-      <td data-label="Versamenti">${renderScadenziarioPaymentEvents(row)}${f24Key ? `<div class="scad-f24-inline"><button class="f24-btn" onclick="toggleF24Guide('${String(row.scheduleKey || row.id || '').replace(/'/g, "\\'")}')">F24?</button></div>` : ''}</td>
-      <td data-label="Stato"><span class="scad-chip ${row.paymentStatus.tone}">${row.paymentStatus.label}</span></td>
-      <td data-label="Timing"><span class="scad-chip ${timing.cls}">${timing.label}</span></td>
+      <td data-label="Versamenti">${renderScadenziarioPaymentEvents(row, f24Button)}</td>
     </tr>`;
     if (f24GuideHtml) {
-      h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="6">${f24GuideHtml}</td></tr>`;
+      h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="4">${f24GuideHtml}</td></tr>`;
     }
   }
   h += `</tbody><tfoot><tr>
     <td data-label="Data">Totale</td>
-    <td data-label="Voce">${opts.totalLabel || 'Totale sezione'}</td>
+    <td data-label="Voce">${opts.totalLabel || 'Totale sezione'}${totals.residualAmount > 0 ? '' : ' <span class="scad-chip ok">In pari</span>'}</td>
     <td data-label="Importo">${fmt(totals.amountDue)}</td>
-    <td data-label="Versamenti">${totals.amountPaid > 0 ? fmt(totals.amountPaid) : ''}</td>
-    <td data-label="Stato">${totals.residualAmount > 0 ? fmt(totals.residualAmount) : '<span class="scad-chip ok">In pari</span>'}</td>
-    <td data-label="Timing"></td>
+    <td data-label="Versamenti">${totals.amountPaid > 0 ? fmt(totals.amountPaid) : ''}${totals.residualAmount > 0 ? ` <span class="scad-sub">Residuo ${fmt(totals.residualAmount)}</span>` : ''}</td>
   </tr></tfoot></table>`;
   return h;
 }
@@ -4935,20 +4965,25 @@ function renderScadenziarioYearCard(meta) {
   };
   const badgeTone = meta.classification === 'forfettario' ? 'ok' : (meta.classification === 'misto' ? 'warn' : 'info');
   const isFullyPaid = split.open.length === 0 && split.archived.length > 0;
-  const defaultOpen = meta.isSelectedYear || (!isFullyPaid && split.open.length > 0);
+  const residuo = meta.totals.residualAmount || 0;
+  const residuoChip = isFullyPaid
+    ? '<span class="scad-chip ok">Tutto pagato</span>'
+    : (residuo > 0
+      ? `<span class="scad-chip warn">Residuo ${fmt(residuo)}</span>`
+      : `<span class="scad-chip info">Dovuto ${fmt(meta.totals.amountDue || 0)}</span>`);
+  const yearOpen = scadenziarioUiState.openYears && scadenziarioUiState.openYears.has(meta.year);
+  const archivedOpen = scadenziarioUiState.openArchived && scadenziarioUiState.openArchived.has(meta.year);
   let h = `<section class="panel scad-year-card ${meta.isSelectedYear ? 'is-current' : ''}">
-    <details class="scad-year-collapse" ${defaultOpen ? 'open' : ''}>
+    <details class="scad-year-collapse" data-year="${meta.year}"${yearOpen ? ' open' : ''} ontoggle="onScadenziarioYearToggle(this)">
       <summary class="scad-year-header" style="cursor:pointer;list-style:none">
-        <div>
-          <div class="scad-year-title">Anno ${meta.year}${isFullyPaid ? ' <span style="font-size:.7rem;color:var(--color-success);font-weight:500">— tutto pagato</span>' : ''}</div>
-          <div class="scad-year-sub">${meta.isTrailingSettlementYear
-            ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
-            : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
+        <div class="scad-year-header-main">
+          <div class="scad-year-title">Anno ${meta.year}</div>
+          <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
+          ${meta.isSelectedYear ? '<span class="scad-chip info">Selezionato</span>' : ''}
+          ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
         </div>
         <div class="scad-year-badges">
-          <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
-          ${meta.isSelectedYear ? '<span class="scad-chip info">Anno selezionato</span>' : ''}
-          ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
+          ${residuoChip}
         </div>
       </summary>
       <div class="scad-year-stats">
@@ -4963,7 +4998,7 @@ function renderScadenziarioYearCard(meta) {
         ${renderScadenziarioRowsTable(split.open, { totalLabel: `Aperte ${meta.year}`, emptyLabel: 'Nessuna voce aperta per questo anno.' })}
       </div>
       <div class="scad-section">
-        <details class="scad-collapsible">
+        <details class="scad-collapsible" data-archived-year="${meta.year}"${archivedOpen ? ' open' : ''} ontoggle="onScadenziarioArchivedToggle(this)">
           <summary><span>Pagate / archiviate</span><span class="scad-collapsible-meta">${split.archived.length} voci</span></summary>
           <div class="scad-collapsible-body">
             ${renderScadenziarioRowsTable(split.archived, { totalLabel: `Pagate ${meta.year}`, emptyLabel: 'Nessuna voce completamente chiusa.' })}
@@ -4971,14 +5006,27 @@ function renderScadenziarioYearCard(meta) {
         </details>
       </div>`;
   if (meta.bundle && Array.isArray(meta.bundle.credits) && meta.bundle.credits.length > 0) {
-    h += `<div class="scad-section"><div class="scad-section-head"><h3>Crediti / eccedenze</h3><span>${meta.bundle.credits.length} voci</span></div>
-      <div class="scad-credit-list">${meta.bundle.credits.map(credit => `<div class="scad-credit-item">
-        <div><b>${credit.title}</b><div class="scad-sub">${credit.competence}</div></div>
-        <div class="scad-credit-value">${fmt(credit.amount)}</div>
-      </div>`).join('')}</div>
+    h += `<div class="scad-section">
+      <details class="scad-collapsible" open>
+        <summary><span>Crediti / eccedenze</span><span class="scad-collapsible-meta">${meta.bundle.credits.length} voci</span></summary>
+        <div class="scad-collapsible-body">
+          <div class="scad-credit-list">${meta.bundle.credits.map(credit => `<div class="scad-credit-item">
+            <div><b>${credit.title}</b><div class="scad-sub">${credit.competence}</div></div>
+            <div class="scad-credit-value">${fmt(credit.amount)}</div>
+          </div>`).join('')}</div>
+        </div>
+      </details>
     </div>`;
   }
-  h += `<div class="scad-section"><div class="scad-section-head"><h3>Note e warning</h3><span>${meta.classification}</span></div>${renderScadenziarioNotes(meta)}</div>`;
+  const notesHtml = renderScadenziarioNotes(meta);
+  if (notesHtml) {
+    h += `<div class="scad-section">
+      <details class="scad-collapsible" open>
+        <summary><span>Note e warning</span><span class="scad-collapsible-meta">${meta.classification}</span></summary>
+        <div class="scad-collapsible-body">${notesHtml}</div>
+      </details>
+    </div>`;
+  }
   h += `</details></section>`;
   return h;
 }
@@ -5083,9 +5131,33 @@ function renderScadenziarioCashView(metas) {
   return h;
 }
 
+function onScadenziarioYearToggle(el) {
+  if (!el) return;
+  const year = parseInt(el.getAttribute('data-year'), 10);
+  if (!Number.isFinite(year)) return;
+  if (!scadenziarioUiState.openYears) scadenziarioUiState.openYears = new Set();
+  if (el.open) scadenziarioUiState.openYears.add(year);
+  else scadenziarioUiState.openYears.delete(year);
+}
+function onScadenziarioArchivedToggle(el) {
+  if (!el) return;
+  const year = parseInt(el.getAttribute('data-archived-year'), 10);
+  if (!Number.isFinite(year)) return;
+  if (!scadenziarioUiState.openArchived) scadenziarioUiState.openArchived = new Set();
+  if (el.open) scadenziarioUiState.openArchived.add(year);
+  else scadenziarioUiState.openArchived.delete(year);
+}
+
 function renderScadenziario() {
   const el = document.getElementById('scadenziarioGrid');
   if (!el) return;
+  if (!scadenziarioUiState.openYears) scadenziarioUiState.openYears = new Set();
+  if (!scadenziarioUiState.openArchived) scadenziarioUiState.openArchived = new Set();
+  // First render: default-open the currently selected year so the user isn't greeted by fully-collapsed cards
+  if (!scadenziarioUiState._initialized) {
+    scadenziarioUiState.openYears.add(currentYear);
+    scadenziarioUiState._initialized = true;
+  }
   const allMetas = collectRelevantFiscalYears({
     includeHistoricalYears: true,
     includeEmptyYears: scadenziarioUiState.showEmptyYears
@@ -5107,7 +5179,7 @@ function renderScadenziario() {
   } else {
     nextHtml += displayedMetas.map(meta => renderScadenziarioYearCard(meta)).join('');
   }
-  nextHtml += `<div style="grid-column:1/-1">${buildPagamentiSection({ embedded: true, compact: true })}</div>`;
+  nextHtml += `<div class="scad-pagamenti-wrap" style="grid-column:1/-1">${buildPagamentiSection({ embedded: true, compact: true })}</div>`;
   el.innerHTML = nextHtml;
 }
 
