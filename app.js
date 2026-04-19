@@ -205,6 +205,7 @@ async function doLogin() {
   clientiUiState.search = '';
   sessionStorage.setItem('currentProfile', profile);
   document.getElementById('loginScreen').classList.add('hidden');
+  document.body.classList.add('logged-in');
 
   // Seed historical data (once per profile)
   if (profile === 'Mattia') seedMattiaData();
@@ -255,6 +256,7 @@ function doLogout() {
     summaries: {},
     comparisonMatrix: []
   };
+  document.body.classList.remove('logged-in');
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginError').textContent = '';
@@ -264,6 +266,7 @@ function doLogout() {
 function checkSession() {
   if (currentProfile) {
     document.getElementById('loginScreen').classList.add('hidden');
+    document.body.classList.add('logged-in');
     loadProfileFiscalData();
     updateProfileAvatar();
     // Init Firebase in background, then sync cloud → local → refresh UI
