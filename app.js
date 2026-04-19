@@ -1193,12 +1193,23 @@ function ensureDataShape(target, year = currentYear) {
     comuneNascita: '', provNascita: '',
     residenzaVia: '', residenzaComune: '', residenzaProv: '', residenzaCap: '',
     domicilioFiscaleVia: '', domicilioFiscaleComune: '', domicilioFiscaleProv: '', domicilioFiscaleCap: '',
-    telefono: '', email: '', statoCivile: ''
+    telefono: '', email: '', statoCivile: '',
+    nazione: 'IT', iban: '', modalitaPagamento: 'Bonifico bancario'
   };
+  const anaDefaults = { nazione: 'IT', iban: '', modalitaPagamento: 'Bonifico bancario' };
+  for (const [k, v] of Object.entries(anaDefaults)) {
+    if (out.settings.anagrafica[k] === undefined) out.settings.anagrafica[k] = v;
+  }
   if (!out.settings.attivita) out.settings.attivita = {
     codiceAteco: '', descrizioneAttivita: '', dataInizioAttivita: '',
-    sedeVia: '', sedeComune: '', sedeProv: '', sedeCap: ''
+    sedeVia: '', sedeComune: '', sedeProv: '', sedeCap: '',
+    partitaIva: '', atecoGruppo: '', note: '',
+    agevolazioneStartUp: 0, primoAnnoAgevolato: 0
   };
+  const attDefaults = { partitaIva: '', atecoGruppo: '', note: '', agevolazioneStartUp: 0, primoAnnoAgevolato: 0 };
+  for (const [k, v] of Object.entries(attDefaults)) {
+    if (out.settings.attivita[k] === undefined) out.settings.attivita[k] = v;
+  }
   // Dichiarazione Redditi PF
   if (!out.dichiarazione || typeof out.dichiarazione !== 'object') {
     out.dichiarazione = {
