@@ -20,7 +20,11 @@
   }
 
   function ceil2(value) {
-    return Math.ceil((toNumber(value) + Number.EPSILON) * 100) / 100;
+    const num = toNumber(value);
+    if (!num) return 0;
+    const scaled = Math.abs(num) * 100;
+    const rounded = Math.ceil(scaled - 1e-9) / 100;
+    return num < 0 ? -rounded : rounded;
   }
 
   function euroToCents(amount) {
