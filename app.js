@@ -3503,7 +3503,7 @@ function renderAccantonamento() {
 
     const bgStyle = f.isCrossYear ? ' style="background:rgba(245,166,35,.06)"' : '';
     h += `<tr${bgStyle}>
-      <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? ' <span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
+      <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? '<br><span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
       <td data-label="Lordo">${fmt(f.importo)}</td>
       <td data-label="Aliq." style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
       <td data-label="Da accant." style="color:var(--yellow)">${fmt(dovuto)}</td>
