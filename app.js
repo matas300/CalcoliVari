@@ -1512,6 +1512,37 @@ function applySettings() {
     const el = document.getElementById(id);
     if (el) el.value = att[key] || '';
   }
+  // C4: parametri fiscali
+  const coefI = document.getElementById('settCoefficiente'); if (coefI) coefI.value = s.coefficiente ?? '';
+  const aliqI = document.getElementById('settAliquotaSost'); if (aliqI) aliqI.value = s.impostaSostitutiva ?? '';
+  const limI = document.getElementById('settLimiteForfettario'); if (limI) limI.value = s.limiteForfettario ?? '';
+  const inailI = document.getElementById('settTassoInail'); if (inailI) inailI.value = s.inailTasso ?? '';
+  const uffI = document.getElementById('settUsaInpsUfficiale'); if (uffI) uffI.value = String(s.usaInpsUfficiale ?? 1);
+  populateAtecoGruppoSelect();
+}
+
+function populateAtecoGruppoSelect() {
+  const sel = document.getElementById('settAtecoGruppo');
+  if (!sel || !window.ATECO_COEFFICIENTI) return;
+  const current = (S().attivita && S().attivita.atecoGruppo) || '';
+  const options = ['<option value="">— scegli —</option>'];
+  for (const [k, v] of Object.entries(window.ATECO_COEFFICIENTI)) {
+    const label = `${k} — ${v.descrizione} (${v.coefficiente}%)`;
+    options.push(`<option value="${escapeHtml(k)}" ${k===current?'selected':''}>${escapeHtml(label)}</option>`);
+  }
+  sel.replaceChildren();
+  sel.insertAdjacentHTML('afterbegin', options.join(''));
+}
+
+function applyAtecoGruppo(value) {
+  saveAttivitaField('atecoGruppo', value);
+  if (value && window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI[value]) {
+    const coeff = window.ATECO_COEFFICIENTI[value].coefficiente;
+    saveSetting('coefficiente', coeff);
+    const coefInput = document.getElementById('settCoefficiente');
+    if (coefInput) coefInput.value = coeff;
+  }
+  if (typeof recalcAll === 'function') recalcAll();
 }
 
 function saveSetting(key, val) {

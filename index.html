@@ -223,6 +223,42 @@
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
         Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome (avatar in fondo alla sidebar) → <b>Profilo fiscale</b>.
       </div>
+      <div class="settings-subsection-title">Parametri fiscali (anno corrente)</div>
+      <div class="settings-group">
+        <label>Gruppo ATECO</label>
+        <select id="settAtecoGruppo" onchange="applyAtecoGruppo(this.value)"></select>
+      </div>
+      <div class="settings-grid-2">
+        <div class="settings-group">
+          <label>Coefficiente redditivita (%)</label>
+          <input type="number" id="settCoefficiente" step="0.01" min="0" max="100"
+            onchange="saveSetting('coefficiente', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Aliquota imposta sostitutiva (%)</label>
+          <input type="number" id="settAliquotaSost" step="0.01" min="0" max="100"
+            onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Limite forfettario (EUR)</label>
+          <input type="number" id="settLimiteForfettario" step="1" min="0"
+            onchange="saveSetting('limiteForfettario', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Tasso INAIL (%)</label>
+          <input type="number" id="settTassoInail" step="0.01" min="0"
+            onchange="saveSetting('inailTasso', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Usa parametri INPS ufficiali</label>
+          <select id="settUsaInpsUfficiale" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
+            <option value="1">Si (auto da anno)</option>
+            <option value="0">No (manuale)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-subsection-title">Impostazioni operative</div>
       <div class="settings-group">
         <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
         <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
