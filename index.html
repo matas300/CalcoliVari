@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Calcoli P.IVA</title>
+<title>Lira — Partita IVA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%235DAA8A'/><text x='50%25' y='54%25' font-family='Satoshi,Inter,sans-serif' font-size='20' font-weight='700' fill='%2315110D' text-anchor='middle' dominant-baseline='middle'>%E2%82%AC</text></svg>">
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +21,8 @@
 
 <div id="loginScreen" class="login-overlay">
   <div class="login-box">
-    <h2>Calcoli P.IVA</h2>
+    <h2>Lira</h2>
+    <p class="login-tagline">Per la tua Partita IVA</p>
     <p>Inserisci la password per accedere</p>
     <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">Entra</button>
@@ -35,7 +37,7 @@
           onclick="toggleSidebar()">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
   </button>
-  <div class="mobile-topbar-title">Calcoli P.IVA</div>
+  <div class="mobile-topbar-title">Lira</div>
   <span id="syncStatusMobile" class="sync-indicator sync-indicator-mobile"></span>
 </div>
 
@@ -47,7 +49,7 @@
     <div class="sb-brand">
       <div class="sb-logo" aria-hidden="true">€</div>
       <div class="sb-brand-text">
-        <div class="sb-brand-name">Calcoli P.IVA</div>
+        <div class="sb-brand-name">Lira</div>
         <div class="sb-brand-sub">
           <span id="syncStatus" class="sync-indicator"></span>
           <span class="year-selector">
@@ -210,7 +212,7 @@
     <div class="panel" style="max-width:560px">
       <h3>Impostazioni Annuali</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
-        Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome accanto a <b>Calcoli Partita IVA</b>.
+        Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome (avatar in fondo alla sidebar) → <b>Profilo fiscale</b>.
       </div>
       <div class="settings-group">
         <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
