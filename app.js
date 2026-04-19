@@ -250,7 +250,17 @@ async function doLogin() {
 
   loadData();
   recalcAll();
+  restoreActiveTab();
   loadProfileExternalFiscalData(profile).then(() => recalcAll());
+}
+
+function restoreActiveTab() {
+  let saved = null;
+  try { saved = localStorage.getItem('calcoliPIVA_activeTab'); } catch (_) {}
+  if (!saved) return;
+  const navBtn = document.querySelector('.sb-item[data-tab="' + saved + '"]');
+  const tabEl = document.getElementById('tab-' + saved);
+  if (navBtn && tabEl) switchToTab(saved);
 }
 
 function toggleTheme() {
@@ -300,10 +310,13 @@ function checkSession() {
         syncAllFromCloud(currentProfile).then(count => {
           loadData();
           recalcAll();
+          restoreActiveTab();
           loadProfileExternalFiscalData(currentProfile).then(() => recalcAll());
           // Also push any local-only changes to cloud
           if (typeof syncAllToCloud === 'function') syncAllToCloud(currentProfile);
         });
+      } else {
+        restoreActiveTab();
       }
     });
     return true;
@@ -6422,6 +6435,7 @@ function switchToTab(tab) {
   if (navBtn) navBtn.classList.add('active');
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.classList.add('active');
+  try { localStorage.setItem('calcoliPIVA_activeTab', tab); } catch (_) {}
   // mount Dichiarazione wizard when switching to that tab
   if (tab === 'dichiarazione' && window.DichiarazioneUI) {
     window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
