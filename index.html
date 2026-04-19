@@ -500,5 +500,23 @@
 <script src="fatture-docs-feature.js"></script>
 <script src="fatture-storico.js"></script>
 <script src="ocr-pagamenti-feature.js"></script>
+
+<div id="archivioFattureModal" class="archivio-modal" role="dialog" aria-modal="true" aria-labelledby="archivioFattureTitle">
+  <div class="archivio-modal-body">
+    <div class="archivio-modal-head">
+      <h3 id="archivioFattureTitle" style="margin:0">Archivio fatture</h3>
+      <button type="button" class="btn-icon" aria-label="Chiudi" onclick="window.FattureStorico.closeArchivioModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="archivio-modal-content">
+      <div class="archivio-modal-filters">
+        <select id="archivioAnnoSelect" class="input" aria-label="Filtro anno"></select>
+        <div id="archivioStatoFilter" class="fatture-filters" role="tablist" aria-label="Filtro stato archivio"></div>
+      </div>
+      <div id="archivioFattureList"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

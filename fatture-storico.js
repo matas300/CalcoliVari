@@ -3,6 +3,8 @@
   const STORAGE_PREFIX = 'calcoliPIVA_';
   const STORAGE_SUFFIX = '_fattureEmesse';
 
+  let _archivioStato = 'tutte';
+
   function storageKey(profile) {
     if (!profile) throw new Error('FattureStorico: profile richiesto');
     return STORAGE_PREFIX + profile + STORAGE_SUFFIX;
@@ -51,40 +53,42 @@
   }
 
   function renderAnnoFilter(selectedAnno) {
-    const sel = document.getElementById('storico-anno-filter');
+    const sel = document.getElementById('archivioAnnoSelect');
     if (!sel) return;
     const fatture = load(getCurrentProfile());
     const anni = Array.from(new Set(fatture.map(f => f.annoProgressivo).filter(Boolean))).sort((a, b) => b - a);
     const annoCorrente = new Date().getFullYear();
     if (!anni.includes(annoCorrente)) anni.unshift(annoCorrente);
-    const sel2 = selectedAnno || annoCorrente;
-    // Build options usando DOM API (no innerHTML literal)
+    const sel2 = Number(selectedAnno) || annoCorrente;
     while (sel.firstChild) sel.removeChild(sel.firstChild);
     anni.forEach(a => {
       const opt = document.createElement('option');
       opt.value = a;
       opt.textContent = a;
-      if (a === sel2) opt.selected = true;
+      if (Number(a) === Number(sel2)) opt.selected = true;
       sel.appendChild(opt);
     });
     sel.onchange = () => renderStorico(Number(sel.value));
   }
 
   function renderStorico(annoFiltro) {
-    const container = document.getElementById('storico-fatture-list');
+    const container = document.getElementById('archivioFattureList');
     if (!container) return;
     const profile = getCurrentProfile();
     const fatture = load(profile);
-    const anno = annoFiltro || new Date().getFullYear();
-    const filtered = fatture
+    const anno = Number(annoFiltro) || new Date().getFullYear();
+    let filtered = fatture
       .filter(f => Number(f.annoProgressivo) === anno)
       .sort((a, b) => (b.progressivo || 0) - (a.progressivo || 0));
+    if (_archivioStato !== 'tutte') {
+      filtered = filtered.filter(f => (f.stato || 'bozza') === _archivioStato);
+    }
 
     while (container.firstChild) container.removeChild(container.firstChild);
     if (!filtered.length) {
-      const p = document.createElement('p');
-      p.className = 'muted';
-      p.textContent = 'Nessuna fattura per l\u2019anno ' + anno;
+      const p = document.createElement('div');
+      p.className = 'fatture-empty';
+      p.textContent = 'Nessuna fattura nell\u2019archivio per il filtro selezionato.';
       container.appendChild(p);
       return;
     }
@@ -169,7 +173,8 @@
     if (idx < 0) return;
     fatture[idx].stato = nuovoStato;
     save(profile, fatture);
-    renderStorico(Number(document.getElementById('storico-anno-filter') && document.getElementById('storico-anno-filter').value) || new Date().getFullYear());
+    const sel = document.getElementById('archivioAnnoSelect');
+    renderStorico(Number(sel && sel.value) || new Date().getFullYear());
   }
 
   function _markInviata(id, profile) {
@@ -181,7 +186,8 @@
     fatture[idx].stato = 'inviata';
     fatture[idx].dataInvioSdi = data;
     save(profile, fatture);
-    renderStorico(Number(document.getElementById('storico-anno-filter') && document.getElementById('storico-anno-filter').value) || new Date().getFullYear());
+    const sel = document.getElementById('archivioAnnoSelect');
+    renderStorico(Number(sel && sel.value) || new Date().getFullYear());
   }
 
   function _markPagata(id, profile) {
@@ -193,7 +199,8 @@
     fatture[idx].stato = 'pagata';
     fatture[idx].dataPagamento = data;
     save(profile, fatture);
-    renderStorico(Number(document.getElementById('storico-anno-filter') && document.getElementById('storico-anno-filter').value) || new Date().getFullYear());
+    const sel = document.getElementById('archivioAnnoSelect');
+    renderStorico(Number(sel && sel.value) || new Date().getFullYear());
   }
 
   function _duplicate(f, profile) {
@@ -231,6 +238,52 @@
     return imp + bollo + (Number(f.contributoIntegrativo) || 0) - (Number(f.ritenuta) || 0);
   }
 
+  function renderArchivioStatoFilter() {
+    const host = document.getElementById('archivioStatoFilter');
+    if (!host) return;
+    const stati = [
+      ['tutte', 'Tutte'],
+      ['bozza', 'Bozze'],
+      ['inviata', 'Da pagare'],
+      ['pagata', 'Pagate'],
+      ['annullata', 'Annullate']
+    ];
+    while (host.firstChild) host.removeChild(host.firstChild);
+    stati.forEach(([key, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.className = 'fatture-filter-btn';
+      b.setAttribute('aria-selected', String(_archivioStato === key));
+      b.textContent = label;
+      b.addEventListener('click', () => setArchivioStato(key));
+      host.appendChild(b);
+    });
+  }
+
+  function setArchivioStato(stato) {
+    _archivioStato = stato;
+    const sel = document.getElementById('archivioAnnoSelect');
+    renderStorico(Number(sel && sel.value) || new Date().getFullYear());
+    renderArchivioStatoFilter();
+  }
+
+  function openArchivioModal() {
+    const modal = document.getElementById('archivioFattureModal');
+    if (!modal) return;
+    _archivioStato = 'tutte';
+    modal.classList.add('open');
+    const annoCorrente = new Date().getFullYear();
+    renderAnnoFilter(annoCorrente);
+    renderArchivioStatoFilter();
+    renderStorico(annoCorrente);
+  }
+
+  function closeArchivioModal() {
+    const modal = document.getElementById('archivioFattureModal');
+    if (modal) modal.classList.remove('open');
+  }
+
   window.FattureStorico = {
     load,
     save,
@@ -238,6 +291,10 @@
     formatNumero,
     storageKey,
     renderStorico,
-    renderAnnoFilter
+    renderAnnoFilter,
+    openArchivioModal,
+    closeArchivioModal,
+    setArchivioStato
   };
+  window.openArchivioFatture = openArchivioModal;
 })();
