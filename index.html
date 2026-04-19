@@ -131,6 +131,10 @@
       </button>
       <div id="profileMenu" class="profile-menu profile-menu-sidebar" role="menu" hidden>
         <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('riepilogo');">
+          Riepilogo
+        </button>
+        <button class="profile-menu-item" role="menuitem" type="button"
                 onclick="closeProfileMenu(); switchToTab('profilo-personale');">
           Profilo personale
         </button>
@@ -162,6 +166,10 @@
 <div class="container">
   <div id="tab-calcolo" class="tab-content active">
     <div class="calc-grid" id="calcoloGrid"></div>
+  </div>
+
+  <div id="tab-riepilogo" class="tab-content">
+    <div class="calc-grid" id="riepilogoGrid"></div>
   </div>
 
   <div id="tab-accantonamento" class="tab-content">

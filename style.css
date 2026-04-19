@@ -4426,3 +4426,50 @@ html[data-theme="light"] .dich-conto-estero {
     padding: 0;
   }
 }
+
+/* Forfettario limit progress bar (homepage) */
+.forfettario-limit-panel .limit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: .9rem;
+}
+.forfettario-limit-panel .limit-label {
+  color: var(--color-text-muted);
+}
+.forfettario-limit-panel .limit-value {
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: var(--font-display);
+}
+.forfettario-limit-panel .limit-value.over {
+  color: var(--color-error);
+}
+.forfettario-limit-panel .limit-bar-track {
+  position: relative;
+  margin-top: 10px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+.forfettario-limit-panel .limit-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-info, var(--color-primary-hover)));
+  transition: width .4s ease;
+}
+.forfettario-limit-panel .limit-bar-track.over .limit-bar-fill {
+  background: linear-gradient(90deg, var(--color-warning), var(--color-error));
+}
+.forfettario-limit-panel .limit-bar-pct {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: .02em;
+}

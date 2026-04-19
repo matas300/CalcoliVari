@@ -2555,18 +2555,28 @@ document.addEventListener('click', e => {
 });
 
 
+function buildForfettarioLimitBar(totale, limite, year) {
+  const safeLimit = limite > 0 ? limite : 85000;
+  const pct = Math.min(100, (totale / safeLimit) * 100);
+  const remaining = Math.max(0, safeLimit - totale);
+  const over = totale > safeLimit;
+  return `<div class="panel forfettario-limit-panel" style="grid-column:1/-1">
+    <div class="limit-row"><span class="limit-label">Fatturato ${year}</span><span class="limit-value">${fmt(totale)}</span></div>
+    <div class="limit-row"><span class="limit-label">${over ? 'Oltre il limite' : 'Mancante al limite'} (${fmt(safeLimit)})</span><span class="limit-value ${over ? 'over' : ''}">${fmt(over ? totale - safeLimit : remaining)}</span></div>
+    <div class="limit-bar-track${over ? ' over' : ''}">
+      <div class="limit-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+      <span class="limit-bar-pct">${pct.toFixed(1)}%</span>
+    </div>
+  </div>`;
+}
+
 function renderCalcoloForfettario(h, el) {
   const c = getForfettarioSourceOfTruthForYear(currentYear, { includeEstimates: true }) || getAppliedForfettarioForYear(currentYear, { includeEstimates: true });
   const s = S();
   const contrib = c.contribTotali;
-  const comparison = c.comparison || null;
-  const selectedScenario = c.selectedScenario || null;
   const tasse = c.competenceTax || c.tasse;
   const netto = c.competenceNetto || c.netto;
   const perc = c.competenceRate || c.percEffettiva;
-  const cashPerspective = getForfettarioCashPerspectiveForYear(currentYear);
-  const crossYear = getCrossYearInvoices();
-  const contribLabel = getContribLabel(c.inpsMode);
 
   const profileFiscal = getProfileFiscalData();
   const aliquotaEff = Number(s.impostaSostitutiva);
@@ -2580,6 +2590,35 @@ function renderCalcoloForfettario(h, el) {
   h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo${c.useRiduzione ? ' (riduzione 35%)' : ''}</h3>`;
   h += drawDonut(netto, tasse, contrib);
   h += `</div>`;
+
+  h += buildForfettarioLimitBar(c.totale, s.limiteForfettario, currentYear);
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>In sintesi</h3>`;
+  h += row('Totale annuo lordo', fmt(c.totale), 'highlight');
+  h += row('Imposta sostitutiva', fmt(tasse), '', 'negative');
+  h += row(getContribLabel(c.inpsMode), fmt(contrib), '', 'negative');
+  h += row('Netto annuo', fmt(netto), 'highlight', 'positive');
+  h += row('Netto mensile', fmt(netto / 12), '', 'positive');
+  h += `<div class="scad-note" style="margin-top:10px">Vuoi capire come arriviamo a questi numeri? Apri <a href="#" onclick="switchToTab('riepilogo');return false;">Riepilogo</a> dal menu profilo.</div>`;
+  h += `</div>`;
+
+  h += buildMonthlyTable(perc);
+
+  el.innerHTML = h;
+}
+
+function renderRiepilogoForfettario(h, el) {
+  const c = getForfettarioSourceOfTruthForYear(currentYear, { includeEstimates: true }) || getAppliedForfettarioForYear(currentYear, { includeEstimates: true });
+  const s = S();
+  const contrib = c.contribTotali;
+  const comparison = c.comparison || null;
+  const selectedScenario = c.selectedScenario || null;
+  const tasse = c.competenceTax || c.tasse;
+  const netto = c.competenceNetto || c.netto;
+  const perc = c.competenceRate || c.percEffettiva;
+  const cashPerspective = getForfettarioCashPerspectiveForYear(currentYear);
+  const crossYear = getCrossYearInvoices();
+  const contribLabel = getContribLabel(c.inpsMode);
 
   h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="openDichiarazione()">Apri Dichiarazione</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
@@ -2662,12 +2701,34 @@ function renderCalcoloForfettario(h, el) {
   }
   h += `</div></div>`;
 
+  el.innerHTML = h;
+}
+
+function renderCalcoloOrdinario(h, el) {
+  const c = calcOrdinario(), s = S();
+  const perc = c.perc;
+  const contribLabel = getContribLabel(c.inpsMode);
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>${c.spese > 0 ? "Ripartizione dell'Imponibile (Ordinario)" : 'Ripartizione del Lordo (Ordinario)'}</h3>`;
+  h += drawDonut(c.netto, c.con.tasse, c.cT, c.spese > 0 ? 'Imponibile' : 'Totale lordo');
+  h += `</div>`;
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>In sintesi</h3>`;
+  h += row('Totale annuo lordo', fmt(c.tot), 'highlight');
+  if (c.spese > 0) h += row('Imponibile', fmt(c.totSp), 'highlight');
+  h += row('IRPEF', fmt(c.con.tasse), '', 'negative');
+  h += row(contribLabel, fmt(c.cT), '', 'negative');
+  h += row('Netto annuo', fmt(c.netto), 'highlight', 'positive');
+  h += row('Netto mensile', fmt(c.netto / 12), '', 'positive');
+  h += `<div class="scad-note" style="margin-top:10px">Vuoi capire come arriviamo a questi numeri? Apri <a href="#" onclick="switchToTab('riepilogo');return false;">Riepilogo</a> dal menu profilo.</div>`;
+  h += `</div>`;
+
   h += buildMonthlyTable(perc);
 
   el.innerHTML = h;
 }
 
-function renderCalcoloOrdinario(h, el) {
+function renderRiepilogoOrdinario(h, el) {
   const c = calcOrdinario(), s = S();
   const perc = c.perc;
   const labels = getIrpefBracketLabelsForYear(currentYear);
@@ -2675,11 +2736,7 @@ function renderCalcoloOrdinario(h, el) {
   const contribLabel = getContribLabel(c.inpsMode);
   const speseStoriche = calcSpeseCarryoverTotalForYear(currentYear);
 
-  h += `<div class="panel" style="grid-column:1/-1"><h3>${c.spese > 0 ? "Ripartizione dell'Imponibile (Ordinario)" : 'Ripartizione del Lordo (Ordinario)'}</h3>`;
-  h += drawDonut(c.netto, c.con.tasse, c.cT, c.spese > 0 ? 'Imponibile' : 'Totale lordo');
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Riepilogo Annuale</h3>`;
+  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="openDichiarazione()">Apri Dichiarazione</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
   h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
@@ -2710,7 +2767,7 @@ function renderCalcoloOrdinario(h, el) {
 
   h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
-  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-border)">`;
   h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">${contribLabel}</div>`;
   if (c.inpsMode === 'gestione_separata') {
     h += row('Su imponibile', fmt(c.cT), 'highlight');
@@ -2722,9 +2779,16 @@ function renderCalcoloOrdinario(h, el) {
   h += row('Totale mensile', fmt(c.cT / 12));
   h += `</div></div>`;
 
-  h += buildMonthlyTable(perc);
-
   el.innerHTML = h;
+}
+
+function renderRiepilogo() {
+  const el = document.getElementById('riepilogoGrid');
+  if (!el) return;
+  const regime = S().regime;
+  let h = '';
+  if (regime === 'forfettario') renderRiepilogoForfettario(h, el);
+  else renderRiepilogoOrdinario(h, el);
 }
 
 function buildMonthlyTable(perc) {
@@ -6066,6 +6130,7 @@ function renderSpese() {
 // ═══════════════════ Recalc All ═══════════════════
 function recalcAll() {
   renderCalcolo();
+  renderRiepilogo();
   renderCalendar();
   renderFatture();
   renderAccantonamento();
@@ -6095,6 +6160,7 @@ function switchToTab(tab) {
   }
   if (tab === 'profilo-personale') renderProfiloPersonale();
   else if (tab === 'profilo-piva') renderProfiloPiva();
+  else if (tab === 'riepilogo') renderRiepilogo();
   // Chiudi drawer mobile dopo cambio tab
   if (window.matchMedia('(max-width: 768px)').matches) {
     closeSidebar();
