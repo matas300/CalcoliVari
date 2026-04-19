@@ -221,7 +221,7 @@
     <div class="panel">
       <h3>Impostazioni Annuali</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
-        Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome (avatar in fondo alla sidebar) → <b>Profilo fiscale</b>.
+        Qui restano le impostazioni operative dell'anno selezionato. I dati stabili si gestiscono nelle tab <b>Profilo personale</b> e <b>Profilo P.IVA</b>.
       </div>
       <div class="settings-subsection-title">Parametri fiscali (anno corrente)</div>
       <div class="settings-group">
@@ -315,8 +315,8 @@
       </div>
     </div>
 
-    <!-- Anagrafica dichiarante -->
-    <div class="panel" style="max-width:560px;margin-top:20px">
+    <!-- Anagrafica dichiarante (HIDDEN — C4: sostituito dalle tab Profilo) -->
+    <div class="panel" style="max-width:560px;margin-top:20px;display:none">
       <h3>Anagrafica dichiarante</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:14px">
         Dati personali del dichiarante. Usati per precompilare il frontespizio della dichiarazione.
@@ -444,8 +444,8 @@
       </div>
     </div>
 
-    <!-- Attività -->
-    <div class="panel" style="max-width:560px;margin-top:20px">
+    <!-- Attivita (HIDDEN — C4: sostituito dalle tab Profilo) -->
+    <div class="panel" style="max-width:560px;margin-top:20px;display:none">
       <h3>Attivita</h3>
       <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:14px">
         Dati dell'attivita professionale. Usati per il frontespizio e i quadri della dichiarazione.
@@ -508,11 +508,6 @@
 <div id="pickerPopup" class="picker-popup"></div>
 <div id="paymentDateOverlay" class="picker-overlay" onclick="closePaymentDatePicker()"></div>
 <div id="paymentDatePopup" class="payment-date-popup"></div>
-<div id="profileFiscalModal" class="profile-modal" aria-hidden="true" onclick="if(event.target===this) closeProfileFiscalModal()">
-  <div class="profile-modal-panel" role="dialog" aria-modal="true" aria-labelledby="profileFiscalTitle">
-    <div id="profileFiscalContent"></div>
-  </div>
-</div>
 <div id="fatturaModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeFatturaModal==='function') closeFatturaModal()">
   <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="fatturaModalTitle">
     <div id="fatturaModalContent"></div>
