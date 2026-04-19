@@ -4376,3 +4376,78 @@ html[data-theme="light"] .dich-conto-estero {
 
 .profile-menu-item-danger { color: var(--color-error); }
 .profile-menu-item-danger:hover { background: var(--color-surface-2); }
+
+/* ═══ Profilo tabs (C4) ═══ */
+.profilo-page {
+  max-width: 900px;
+  margin: 0;
+  padding: var(--space-4);
+}
+.profilo-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin: 0 0 var(--space-1);
+}
+.profilo-subtitle {
+  color: var(--color-text-muted);
+  font-size: .9rem;
+  margin: 0 0 var(--space-5);
+}
+.profilo-group + .profilo-group { margin-top: var(--space-5); }
+.profilo-group-head {
+  color: var(--color-primary);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-3);
+}
+.profilo-rows {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--space-2) var(--space-4);
+  align-items: start;
+}
+.profilo-row { display: contents; }
+.profilo-label {
+  color: var(--color-text-muted);
+  font-size: .82rem;
+  padding: 6px 0;
+}
+.profilo-value {
+  padding: 6px 0;
+  font-size: .9rem;
+  cursor: text;
+  border-radius: var(--radius-xs);
+  min-height: 1.4em;
+}
+.profilo-value:hover { background: var(--color-surface-2); }
+.profilo-value.editing { background: var(--color-surface-2); }
+.profilo-value input,
+.profilo-value select,
+.profilo-value textarea {
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: 4px 8px;
+  font-size: .9rem;
+  font-family: inherit;
+}
+.profilo-value input:focus,
+.profilo-value select:focus,
+.profilo-value textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+@media (max-width: 768px) {
+  .profilo-rows { grid-template-columns: 1fr; gap: var(--space-1); }
+  .profilo-label {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 0;
+  }
+}
