@@ -132,9 +132,9 @@ function updateProfileAvatar() {
     return;
   }
 
-  const profile = profileFiscalState.data || getProfileFiscalDefaults(currentProfile);
-  const nome = (profile && profile.nome ? String(profile.nome) : '').trim();
-  const cognome = (profile && profile.cognome ? String(profile.cognome) : '').trim();
+  const ana = (data && data.settings && data.settings.anagrafica) || {};
+  const nome = String(ana.nome || '').trim();
+  const cognome = String(ana.cognome || '').trim();
 
   let initials, displayName;
   if (nome || cognome) {
@@ -947,8 +947,41 @@ function saveProfileFiscalData(nextData) {
 }
 
 function getProfileFiscalData() {
-  if (!profileFiscalState.data) loadProfileFiscalData();
-  return profileFiscalState.data || normalizeProfileFiscalData({}, currentProfile);
+  // C4: compat shim — legacy shape synthesized from settings.anagrafica/attivita/settings
+  const ana = (data && data.settings && data.settings.anagrafica) || {};
+  const att = (data && data.settings && data.settings.attivita) || {};
+  const s = (data && data.settings) || {};
+  const nome = String(ana.nome || '').trim();
+  const cognome = String(ana.cognome || '').trim();
+  const displayName = [nome, cognome].filter(Boolean).join(' ') || (currentProfile || '');
+  return {
+    nome: displayName,
+    cognome: cognome,
+    codiceFiscale: String(ana.codiceFiscale || ''),
+    partitaIva: String(att.partitaIva || ''),
+    indirizzo: String(ana.residenzaVia || ''),
+    cap: String(ana.residenzaCap || ''),
+    citta: String(ana.residenzaComune || ''),
+    provincia: String(ana.residenzaProv || '').toUpperCase(),
+    nazione: String(ana.nazione || 'IT').toUpperCase(),
+    ateco: String(att.codiceAteco || ''),
+    atecoDescrizione: String(att.descrizioneAttivita || ''),
+    atecoGruppo: String(att.atecoGruppo || ''),
+    iban: String(ana.iban || ''),
+    modalitaPagamento: String(ana.modalitaPagamento || 'Bonifico bancario'),
+    coefficiente: parseFloat(s.coefficiente) || 67,
+    impostaSostitutiva: parseFloat(s.impostaSostitutiva) || 15,
+    inpsMode: s.inpsMode || 'artcom',
+    inpsCategoria: s.inpsCategoria || 'artigiano',
+    inpsTipoGestSep: s.inpsTipoGestSep || '',
+    usaInpsUfficiale: parseInt(s.usaInpsUfficiale, 10) === 0 ? 0 : 1,
+    riduzione35: parseInt(s.riduzione35, 10) === 1 ? 1 : 0,
+    limiteForfettario: parseFloat(s.limiteForfettario) || 85000,
+    agevolazioneStartUp: parseInt(att.agevolazioneStartUp, 10) === 1 ? 1 : 0,
+    primoAnnoAgevolato: parseInt(att.primoAnnoAgevolato, 10) === 1 ? 1 : 0,
+    note: String(att.note || ''),
+    inailTasso: parseFloat(s.inailTasso) || 0
+  };
 }
 
 function syncProfileFieldsToSettings(settings, year) {
