@@ -6394,9 +6394,9 @@ function recalcAll() {
 
 // ═══════════════════ Tab navigation ═══════════════════
 function switchToTab(tab) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sb-item[data-tab]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  const navBtn = document.querySelector(`nav button[data-tab="${tab}"]`);
+  const navBtn = document.querySelector(`.sb-item[data-tab="${tab}"]`);
   if (navBtn) navBtn.classList.add('active');
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.classList.add('active');
@@ -6438,16 +6438,18 @@ const NAV_LABELS = {
   settings:       { full: 'Impostazioni', short: 'Impost.' }
 };
 function updateNavLabels() {
-  const mobile = window.innerWidth <= 768;
-  document.querySelectorAll('nav button[data-tab]').forEach(btn => {
+  // Con la sidebar, l'etichetta sta dentro .sb-label (mantiene l'icona accanto)
+  document.querySelectorAll('.sb-item[data-tab]').forEach(btn => {
     const tab = btn.dataset.tab;
     const lbl = NAV_LABELS[tab];
     if (!lbl) return;
+    const labelEl = btn.querySelector('.sb-label');
+    if (!labelEl) return;
     if (tab === 'calcolo') {
       const regime = S().regime === 'forfettario' ? 'Forfettario' : 'Ordinario';
-      btn.textContent = mobile ? 'Regime' : 'Regime ' + regime;
+      labelEl.textContent = 'Regime ' + regime;
     } else {
-      btn.textContent = mobile ? lbl.short : lbl.full;
+      labelEl.textContent = lbl.full;
     }
   });
 }
