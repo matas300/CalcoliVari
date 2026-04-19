@@ -1342,6 +1342,8 @@ function loadData() {
   syncProfileFieldsToSettings(data.settings, currentYear);
   applySettings();
   migrateProfileFiscalToSettings();
+  backfillAnagraficaAttivitaFromAllYears();
+  applySettings();
 }
 
 function migrateFatture() {
@@ -1565,12 +1567,64 @@ function saveAnagraficaField(key, val) {
   if (!data.settings.anagrafica) data.settings.anagrafica = {};
   data.settings.anagrafica[key] = val;
   saveData();
+  propagateAnagraficaAttivitaAcrossYears();
 }
 
 function saveAttivitaField(key, val) {
   if (!data.settings.attivita) data.settings.attivita = {};
   data.settings.attivita[key] = val;
   saveData();
+  propagateAnagraficaAttivitaAcrossYears();
+}
+
+// C4: anagrafica e attivita sono stabili fra anni — propaga da currentYear a tutti gli altri anni salvati del profilo
+function propagateAnagraficaAttivitaAcrossYears() {
+  if (!currentProfile || !data || !data.settings) return;
+  const ana = data.settings.anagrafica || {};
+  const att = data.settings.attivita || {};
+  const prefix = `calcoliPIVA_${currentProfile}_`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const yearStr = key.slice(prefix.length);
+    const year = parseInt(yearStr, 10);
+    if (!Number.isFinite(year) || year === currentYear) continue;
+    let doc; try { doc = JSON.parse(localStorage.getItem(key)); } catch { continue; }
+    if (!doc || typeof doc !== 'object' || !doc.settings) continue;
+    doc.settings.anagrafica = { ...(doc.settings.anagrafica || {}), ...ana };
+    doc.settings.attivita = { ...(doc.settings.attivita || {}), ...att };
+    localStorage.setItem(key, JSON.stringify(doc));
+  }
+}
+
+// C4: al login, raccogli anagrafica/attivita da ogni anno (first-non-empty-wins) e propaga
+function backfillAnagraficaAttivitaFromAllYears() {
+  if (!currentProfile) return;
+  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const mergedAna = { ...(data.settings.anagrafica || {}) };
+  const mergedAtt = { ...(data.settings.attivita || {}) };
+  const fillFrom = (src, target) => {
+    if (!src || typeof src !== 'object') return;
+    for (const [k, v] of Object.entries(src)) {
+      const existing = target[k];
+      const empty = existing === undefined || existing === null || existing === '' || existing === 0;
+      if (empty && v !== undefined && v !== null && v !== '' && v !== 0) target[k] = v;
+    }
+  };
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const yearStr = key.slice(prefix.length);
+    if (!/^\d{4}$/.test(yearStr)) continue;
+    let doc; try { doc = JSON.parse(localStorage.getItem(key)); } catch { continue; }
+    if (!doc || !doc.settings) continue;
+    fillFrom(doc.settings.anagrafica, mergedAna);
+    fillFrom(doc.settings.attivita, mergedAtt);
+  }
+  data.settings.anagrafica = mergedAna;
+  data.settings.attivita = mergedAtt;
+  saveData();
+  propagateAnagraficaAttivitaAcrossYears();
 }
 
 function updateCfStatus(val) {

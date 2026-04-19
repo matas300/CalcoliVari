@@ -106,23 +106,18 @@
         <span class="sb-label">Dichiarazione</span>
       </button>
 
-      <div class="sb-section-label">Profilo</div>
-      <button class="sb-item" data-tab="profilo-personale" type="button">
-        <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M4 21a8 8 0 0116 0" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+      <button class="sb-item" data-tab="profilo-personale" type="button" style="display:none">
         <span class="sb-label">Profilo personale</span>
       </button>
-      <button class="sb-item" data-tab="profilo-piva" type="button">
-        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+      <button class="sb-item" data-tab="profilo-piva" type="button" style="display:none">
         <span class="sb-label">Profilo P.IVA</span>
+      </button>
+      <button class="sb-item" data-tab="settings" type="button" style="display:none">
+        <span class="sb-label">Impostazioni</span>
       </button>
     </nav>
 
     <div class="sb-spacer"></div>
-
-    <button class="sb-item sb-item-muted" data-tab="settings" type="button">
-      <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      <span class="sb-label">Impostazioni</span>
-    </button>
 
     <div class="sb-profile-wrap">
       <button id="profileAvatar" class="sb-profile" type="button"
@@ -142,6 +137,10 @@
         <button class="profile-menu-item" role="menuitem" type="button"
                 onclick="closeProfileMenu(); switchToTab('profilo-piva');">
           Profilo P.IVA
+        </button>
+        <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('settings');">
+          Impostazioni
         </button>
         <div class="profile-menu-divider"></div>
         <button class="profile-menu-item profile-menu-item-toggle" role="menuitem" type="button"
