@@ -2521,6 +2521,13 @@ function closeProfileFiscalModal() {
 
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  const archivio = document.getElementById('archivioFattureModal');
+  if (archivio && archivio.classList.contains('open')) {
+    if (window.FattureStorico && typeof window.FattureStorico.closeArchivioModal === 'function') {
+      window.FattureStorico.closeArchivioModal();
+    }
+    return;
+  }
   const modal = document.getElementById('profileFiscalModal');
   const ocrModal = document.getElementById('ocrPagamentoModal');
   if (ocrModal && ocrModal.classList.contains('open')) {
@@ -2528,6 +2535,16 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (modal && modal.classList.contains('open')) closeProfileFiscalModal();
+});
+
+// Backdrop click per chiudere modale archivio
+document.addEventListener('click', e => {
+  const target = e.target;
+  if (target && target.id === 'archivioFattureModal') {
+    if (window.FattureStorico && typeof window.FattureStorico.closeArchivioModal === 'function') {
+      window.FattureStorico.closeArchivioModal();
+    }
+  }
 });
 
 function renderProfiloFiscale() {
@@ -6404,10 +6421,10 @@ function switchToTab(tab) {
   if (tab === 'dichiarazione' && window.DichiarazioneUI) {
     window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
   }
-  // render storico fatture when switching to fatture tab
-  if (tab === 'fatture' && typeof window.FattureStorico?.renderStorico === 'function') {
-    window.FattureStorico.renderAnnoFilter();
-    window.FattureStorico.renderStorico();
+  // render card A (fatture emesse) when switching to fatture tab
+  // (lo storico ora vive nel modale, aperto on-demand)
+  if (tab === 'fatture' && typeof window.renderFattureDocsSection === 'function') {
+    window.renderFattureDocsSection();
   }
   // Chiudi drawer mobile dopo cambio tab
   if (window.matchMedia('(max-width: 768px)').matches) {
