@@ -2521,6 +2521,11 @@ function closeProfileFiscalModal() {
 
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  const calPicker = document.getElementById('calFatturaPicker');
+  if (calPicker && calPicker.classList.contains('open')) {
+    calPicker.classList.remove('open');
+    return;
+  }
   const archivio = document.getElementById('archivioFattureModal');
   if (archivio && archivio.classList.contains('open')) {
     if (window.FattureStorico && typeof window.FattureStorico.closeArchivioModal === 'function') {

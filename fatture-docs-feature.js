@@ -420,7 +420,8 @@
             '<button type="button" class="btn-icon" aria-label="Archivio fatture" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>' +
             '</button>' +
-            '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
+            '<button type="button" class="btn" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
+          '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
         '</div>' +
         summaryHtml +
@@ -1641,6 +1642,151 @@ ${dettaglioLinee.join('\n')}
     document.body.classList.add('profile-modal-open');
   }
 
+  const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+  function openFatturaDaCalendarioPicker() {
+    if (typeof getMonthStats !== 'function' || typeof S !== 'function') {
+      alert('Calendario non disponibile in questo contesto.');
+      return;
+    }
+    let modal = document.getElementById('calFatturaPicker');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'calFatturaPicker';
+      modal.className = 'archivio-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      const body = document.createElement('div');
+      body.className = 'archivio-modal-body';
+      body.style.width = 'min(520px, 92vw)';
+      const head = document.createElement('div');
+      head.className = 'archivio-modal-head';
+      const h3 = document.createElement('h3');
+      h3.style.margin = '0';
+      h3.textContent = 'Fattura da calendario';
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'btn-icon';
+      closeBtn.setAttribute('aria-label', 'Chiudi');
+      closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+      closeBtn.appendChild(_svgClose());
+      head.appendChild(h3);
+      head.appendChild(closeBtn);
+      const content = document.createElement('div');
+      content.className = 'archivio-modal-content';
+      content.id = 'calFatturaPickerContent';
+      body.appendChild(head);
+      body.appendChild(content);
+      modal.appendChild(body);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('open');
+      });
+      document.body.appendChild(modal);
+    }
+    _renderCalFatturaPickerContent();
+    modal.classList.add('open');
+  }
+
+  function _svgClose() {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', '16'); svg.setAttribute('height', '16');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '1.6');
+    const p = document.createElementNS(svgNS, 'path');
+    p.setAttribute('d', 'M18 6L6 18M6 6l12 12');
+    svg.appendChild(p);
+    return svg;
+  }
+
+  function _renderCalFatturaPickerContent() {
+    const host = document.getElementById('calFatturaPickerContent');
+    if (!host) return;
+    while (host.firstChild) host.removeChild(host.firstChild);
+    const year = (typeof currentYear !== 'undefined') ? currentYear : new Date().getFullYear();
+    const rate = Number(S().dailyRate) || 0;
+
+    const note = document.createElement('p');
+    note.className = 'manuali-note';
+    note.style.marginBottom = '12px';
+    note.textContent = 'Seleziona il mese: verranno precompilate due righe (giornate intere + mezze giornate) usando la tariffa giornaliera di ' + rate.toLocaleString('it-IT') + ' € per l\'anno ' + year + '.';
+    host.appendChild(note);
+
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    grid.style.gap = '8px';
+
+    for (let m = 1; m <= 12; m++) {
+      const stats = getMonthStats(m);
+      const gg = stats.worked || 0;
+      const mm = stats.M || 0;
+      const tot = gg * rate + mm * rate / 2;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fatture-filter-btn';
+      btn.style.padding = '10px 8px';
+      btn.style.textAlign = 'left';
+      btn.style.background = 'var(--color-surface-2)';
+      btn.style.color = 'var(--color-text)';
+      btn.style.fontSize = '12px';
+      btn.style.lineHeight = '1.35';
+      btn.disabled = (gg === 0 && mm === 0);
+      if (btn.disabled) btn.style.opacity = '0.4';
+      const label = MESI_IT[m - 1];
+      const detail = (gg > 0 ? gg + ' gg' : '') + (gg > 0 && mm > 0 ? ' + ' : '') + (mm > 0 ? mm + ' mezze' : '');
+      const line1 = document.createElement('div');
+      line1.style.fontWeight = '700';
+      line1.textContent = label;
+      const line2 = document.createElement('div');
+      line2.style.color = 'var(--color-text-muted)';
+      line2.style.fontSize = '11px';
+      line2.textContent = detail ? (detail + ' · ' + tot.toLocaleString('it-IT') + ' €') : 'nessuna giornata';
+      btn.appendChild(line1);
+      btn.appendChild(line2);
+      btn.addEventListener('click', () => {
+        document.getElementById('calFatturaPicker').classList.remove('open');
+        openFatturaDaCalendario(m, year);
+      });
+      grid.appendChild(btn);
+    }
+    host.appendChild(grid);
+  }
+
+  function openFatturaDaCalendario(month, year) {
+    if (typeof getMonthStats !== 'function' || typeof S !== 'function') return;
+    const stats = getMonthStats(month);
+    const rate = Number(S().dailyRate) || 0;
+    const gg = stats.worked || 0;
+    const mm = stats.M || 0;
+    if (gg === 0 && mm === 0) { alert('Nessuna giornata lavorata per ' + MESI_IT[month - 1] + ' ' + year + '.'); return; }
+
+    openFatturaModal();
+    if (!state.draft) return;
+    const mese = MESI_IT[month - 1];
+    const righe = [];
+    if (gg > 0) {
+      righe.push(cloneLine({
+        descrizione: 'Consulenza ' + mese + ' ' + year + ' — giornate intere',
+        quantita: gg,
+        prezzoUnitario: rate,
+        iva: 0
+      }));
+    }
+    if (mm > 0) {
+      righe.push(cloneLine({
+        descrizione: 'Consulenza ' + mese + ' ' + year + ' — mezze giornate',
+        quantita: mm,
+        prezzoUnitario: rate / 2,
+        iva: 0
+      }));
+    }
+    state.draft.righe = righe;
+    renderFatturaModal();
+  }
+
+  window.openFatturaDaCalendarioPicker = openFatturaDaCalendarioPicker;
+  window.openFatturaDaCalendario = openFatturaDaCalendario;
   window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
