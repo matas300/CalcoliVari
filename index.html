@@ -28,29 +28,101 @@
   </div>
 </div>
 
-<header>
-  <div class="header-brand">
-    <h1>Calcoli Partita IVA</h1>
-  </div>
-  <div class="header-right">
-    <div id="syncStatus" class="sync-indicator"></div>
-    <div class="year-selector">
-    <button onclick="changeYear(-1)" title="Anno precedente" aria-label="Anno precedente">&lt;</button>
-    <span id="yearDisplay" aria-live="polite">2026</span>
-    <button onclick="changeYear(1)" title="Anno successivo" aria-label="Anno successivo">&gt;</button>
+<!-- ═══ Topbar mobile (visibile solo ≤768px) ═══ -->
+<div class="mobile-topbar" role="banner">
+  <button id="navToggle" class="nav-toggle" type="button"
+          aria-label="Apri menu" aria-controls="sidebar" aria-expanded="false"
+          onclick="toggleSidebar()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+  </button>
+  <div class="mobile-topbar-title">Calcoli P.IVA</div>
+  <span id="syncStatusMobile" class="sync-indicator sync-indicator-mobile"></span>
+</div>
+
+<!-- ═══ Sidebar (permanente su desktop, drawer su mobile) ═══ -->
+<aside id="sidebar" class="sidebar" aria-label="Navigazione principale">
+  <div class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+  <div class="sidebar-panel">
+
+    <div class="sb-brand">
+      <div class="sb-logo" aria-hidden="true">€</div>
+      <div class="sb-brand-text">
+        <div class="sb-brand-name">Calcoli P.IVA</div>
+        <div class="sb-brand-sub">
+          <span id="syncStatus" class="sync-indicator"></span>
+          <span class="year-selector">
+            <button onclick="changeYear(-1)" title="Anno precedente" aria-label="Anno precedente">&lt;</button>
+            <span id="yearDisplay" aria-live="polite">2026</span>
+            <button onclick="changeYear(1)" title="Anno successivo" aria-label="Anno successivo">&gt;</button>
+          </span>
+        </div>
+      </div>
+      <button class="nav-close" type="button" aria-label="Chiudi menu" onclick="closeSidebar()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+      </button>
     </div>
-    <div class="profile-avatar-wrap">
-      <button id="profileAvatar" class="profile-avatar" type="button"
+
+    <nav class="sb-nav" id="nav" role="navigation">
+      <div class="sb-section-label">Principale</div>
+      <button class="sb-item active" data-tab="calcolo" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sb-label">Regime Forfettario</span>
+      </button>
+      <button class="sb-item" data-tab="accantonamento" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 11h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Tasse Accantonate</span>
+      </button>
+      <button class="sb-item" data-tab="scadenziario" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 3v4M16 3v4M3 11h18M9 16l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Scadenziario</span>
+      </button>
+      <button class="sb-item" data-tab="calendar" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 3v4M16 3v4M3 11h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Calendario</span>
+      </button>
+
+      <div class="sb-section-label">Documenti</div>
+      <button class="sb-item" data-tab="fatture" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z M14 3v5h5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+        <span class="sb-label">Fatture</span>
+      </button>
+      <button class="sb-item" data-tab="budget" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3 3 0 100 6h5a3 3 0 110 6H6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Budget</span>
+      </button>
+      <button class="sb-item" data-tab="clienti" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M2 21a7 7 0 0114 0M17 11a3 3 0 100-6M22 21a6 6 0 00-4-5.7" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Clienti</span>
+      </button>
+      <button class="sb-item" data-tab="spese" type="button" style="display:none">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z M4 9h16" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></span>
+        <span class="sb-label">Spese</span>
+      </button>
+      <button class="sb-item" data-tab="dichiarazione" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z M9 12h7M9 16h7M9 8h3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Dichiarazione</span>
+      </button>
+    </nav>
+
+    <div class="sb-spacer"></div>
+
+    <button class="sb-item sb-item-muted" data-tab="settings" type="button">
+      <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="sb-label">Impostazioni</span>
+    </button>
+
+    <div class="sb-profile-wrap">
+      <button id="profileAvatar" class="sb-profile" type="button"
               aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu"
               onclick="toggleProfileMenu()" title="">
-        <span id="profileAvatarInitials" class="profile-avatar-initials">·</span>
+        <span id="profileAvatarInitials" class="sb-avatar">·</span>
+        <span class="sb-profile-info">
+          <span id="profileMenuName" class="sb-profile-name"></span>
+          <span id="profileMenuSubtitle" class="sb-profile-sub"></span>
+        </span>
+        <span class="sb-profile-chev" aria-hidden="true">⌄</span>
       </button>
-      <div id="profileMenu" class="profile-menu" role="menu" hidden>
-        <div class="profile-menu-header">
-          <div id="profileMenuName" class="profile-menu-name"></div>
-          <div id="profileMenuSubtitle" class="profile-menu-subtitle"></div>
-        </div>
-        <div class="profile-menu-divider"></div>
+      <div id="profileMenu" class="profile-menu profile-menu-sidebar" role="menu" hidden>
         <button class="profile-menu-item" role="menuitem" type="button"
                 onclick="closeProfileMenu(); openProfileFiscalModal();">
           Profilo fiscale
@@ -72,21 +144,9 @@
         </button>
       </div>
     </div>
-  </div>
-</header>
 
-<nav id="nav">
-  <button class="active" data-tab="calcolo">Regime Forfettario</button>
-  <button data-tab="accantonamento">Tasse Accantonate</button>
-  <button data-tab="scadenziario">Scadenziario</button>
-  <button data-tab="calendar">Calendario</button>
-  <button data-tab="fatture">Fatture</button>
-  <button data-tab="budget">Budget</button>
-  <button data-tab="clienti">Clienti</button>
-  <button data-tab="spese" style="display:none">Spese</button>
-  <button data-tab="dichiarazione">Dichiarazione</button>
-  <button data-tab="settings">Impostazioni</button>
-</nav>
+  </div>
+</aside>
 
 <div class="container">
   <div id="tab-calcolo" class="tab-content active">
