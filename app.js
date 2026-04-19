@@ -6726,5 +6726,19 @@ document.addEventListener('keydown', (e) => {
   const ocrModal = document.getElementById('ocrPagamentoModal');
   if (profileModal && profileModal.classList.contains('open')) return;
   if (ocrModal && ocrModal.classList.contains('open')) return;
-  closeProfileMenu();
+
+  // 1) Profile menu dropdown aperto → chiudilo
+  const profileMenu = document.getElementById('profileMenu');
+  if (profileMenu && !profileMenu.hidden) {
+    closeProfileMenu();
+    return;
+  }
+
+  // 2) Drawer mobile aperto → chiudilo + restituisci focus a ☰
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    closeSidebar();
+    document.getElementById('navToggle')?.focus();
+    return;
+  }
 });
