@@ -24,8 +24,30 @@
     }
   }
 
+  function _calcImporto(fattura) {
+    var righe = (fattura && fattura.righe) || [];
+    var imp = 0;
+    for (var i = 0; i < righe.length; i++) {
+      imp += (Number(righe[i].quantita) || 0) * (Number(righe[i].prezzoUnitario) || 0);
+    }
+    return imp;
+  }
+
+  function getImportoSigned(fattura) {
+    var imp = _calcImporto(fattura);
+    return (fattura && fattura.tipoDocumento === 'TD04') ? -imp : imp;
+  }
+
+  function getNettoEffettivo(fattura) {
+    var imp = _calcImporto(fattura);
+    var nc = Number(fattura && fattura.ncTotaleImporto) || 0;
+    return imp - nc;
+  }
+
   window.FattureSelectors = {
     all: all,
-    storageKey: storageKey
+    storageKey: storageKey,
+    getImportoSigned: getImportoSigned,
+    getNettoEffettivo: getNettoEffettivo
   };
 })();

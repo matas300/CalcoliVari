@@ -21,6 +21,28 @@ function seed(profile, arr) {
   storage['calcoliPIVA_' + profile + '_fattureEmesse'] = JSON.stringify(arr);
 }
 
+describe('FattureSelectors.getImportoSigned — segno per NC', function () {
+  test('TD01 ritorna importo positivo', function () {
+    var f = { tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 100 }] };
+    expect(Sel.getImportoSigned(f)).toBe(100);
+  });
+  test('TD04 ritorna importo negativo', function () {
+    var f = { tipoDocumento: 'TD04', righe: [{ quantita: 1, prezzoUnitario: 50 }] };
+    expect(Sel.getImportoSigned(f)).toBe(-50);
+  });
+});
+
+describe('FattureSelectors.getNettoEffettivo — importo meno NC collegate', function () {
+  test('fattura senza NC ritorna importo pieno', function () {
+    var f = { tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 200 }], ncTotaleImporto: 0 };
+    expect(Sel.getNettoEffettivo(f)).toBe(200);
+  });
+  test('fattura con NC parziale sottrae ncTotaleImporto', function () {
+    var f = { tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 200 }], ncTotaleImporto: 80 };
+    expect(Sel.getNettoEffettivo(f)).toBe(120);
+  });
+});
+
 describe('FattureSelectors.all — carica fatture per profilo', function () {
   test('ritorna array vuoto se nessun dato', function () {
     reset();
