@@ -5810,8 +5810,24 @@ function switchToTab(tab) {
   }
   // render card A (fatture emesse) when switching to fatture tab
   // (lo storico ora vive nel modale, aperto on-demand)
-  if (tab === 'fatture' && typeof window.renderFattureDocsSection === 'function') {
-    window.renderFattureDocsSection();
+  if (tab === 'fatture') {
+    // Migrazione legacy one-shot per-anno (unificazione store)
+    if (window.FattureMigration && typeof window.FattureMigration.migrateLegacyYear === 'function') {
+      try {
+        for (let y = 2020; y <= new Date().getFullYear() + 1; y++) {
+          const yd = loadYearData(y);
+          if (yd && yd.fatture && !yd._fattureMigratedAt) {
+            const res = window.FattureMigration.migrateLegacyYear(currentProfile, y, yd);
+            if (res.migrated > 0) console.log('[fatture-migration] anno', y, '→', res.migrated, 'righe migrate');
+            yd._fattureMigratedAt = new Date().toISOString();
+            saveYearData(y, yd);
+          }
+        }
+      } catch (err) { console.warn('[fatture-migration] errore', err); }
+    }
+    if (typeof window.renderFattureDocsSection === 'function') {
+      window.renderFattureDocsSection();
+    }
   }
   if (tab === 'profilo-personale') renderProfiloPersonale();
   else if (tab === 'profilo-piva') renderProfiloPiva();
