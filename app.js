@@ -1783,7 +1783,6 @@ function applySettings() {
   // C4: parametri fiscali
   const coefI = document.getElementById('settCoefficiente'); if (coefI) coefI.value = s.coefficiente ?? '';
   const aliqI = document.getElementById('settAliquotaSost'); if (aliqI) aliqI.value = s.impostaSostitutiva ?? '';
-  const limI = document.getElementById('settLimiteForfettario'); if (limI) limI.value = s.limiteForfettario ?? '';
   const uffI = document.getElementById('settUsaInpsUfficiale'); if (uffI) uffI.value = String(s.usaInpsUfficiale ?? 1);
   const devHD = document.getElementById('settDevHardDelete'); if (devHD) devHD.checked = (parseInt(s.devHardDelete, 10) || 0) === 1;
   populateAtecoGruppoSelect();
