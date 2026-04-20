@@ -887,6 +887,13 @@ function addCliente() {
   });
   saveClienti([next, ...list]);
   renderClienti();
+  openClienteModal(next.id);
+}
+
+// Stub: will be implemented in Task 5 (modal cliente)
+function openClienteModal(id) {
+  console.warn('[clienti] openClienteModal stub', id);
+  if (typeof showAppToast === 'function') showAppToast('Modal cliente in arrivo');
 }
 
 function updateClienteField(id, key, value) {
@@ -6007,6 +6014,19 @@ function renderClienteCard(cliente) {
   </details>`;
 }
 
+function renderClienteTableRow(cliente) {
+  const id = escapeHtml(cliente.id);
+  const nome = escapeHtml(cliente.nome || 'Senza nome');
+  const piva = escapeHtml(cliente.partitaIva || '—');
+  const citta = escapeHtml(cliente.citta || '—');
+  return `<div class="clienti-table-row" data-client-id="${id}" onclick="openClienteModal('${id}')">
+    <div class="nome">${nome}</div>
+    <div class="piva">${piva}</div>
+    <div class="citta">${citta}</div>
+    <div class="chevron" aria-hidden="true">&rsaquo;</div>
+  </div>`;
+}
+
 function renderClienti() {
   const el = document.getElementById('clientiContent');
   if (!el) return;
@@ -6032,11 +6052,17 @@ function renderClienti() {
     </div>
   </div>`;
   if (filtered.length === 0) {
-    h += `<div class="cliente-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
+    h += `<div class="clienti-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
   } else {
-    h += `<div class="clienti-grid">`;
+    h += `<div class="clienti-table">`;
+    h += `<div class="clienti-table-header">
+      <div>Nome</div>
+      <div>P.IVA</div>
+      <div>Citta</div>
+      <div></div>
+    </div>`;
     for (const cliente of filtered) {
-      h += renderClienteCard(cliente);
+      h += renderClienteTableRow(cliente);
     }
     h += `</div>`;
   }
