@@ -477,6 +477,7 @@
           '<div class="fatture-card-actions">' +
             '<button type="button" class="btn btn-ghost" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">Archivio</button>' +
             '<button type="button" class="btn btn-ghost" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
+            '<button type="button" class="btn btn-ghost" onclick="window.triggerImportFatturaPdf && window.triggerImportFatturaPdf()" title="Importa fattura da PDF (OCR — in arrivo)">📄 Importa da PDF (OCR)</button>' +
           '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
         '</div>' +
@@ -2145,6 +2146,42 @@ ${dettaglioLinee.join('\n')}
   window.switchFatturaToEdit = switchFatturaToEdit;
   window.createNCFromCurrentInvoice = createNCFromCurrentInvoice;
   window.viewFatturaModal = (id) => openFatturaModal(id, { mode: 'view' });
+
+  // ─── Import da PDF (OCR stub) ─────────────────────────────────────────────
+  // Hook UI: apre file picker e delega a window.FattureOCR.parsePdfFile.
+  // Attualmente OCR è uno stub — la promise viene rigettata con messaggio
+  // "FattureOCR non ancora implementato" e mostrata via toast.
+  function triggerImportFatturaPdf() {
+    const input = document.getElementById('inputImportPdf');
+    if (!input) return;
+    input.click();
+  }
+  function bindImportFatturaPdf() {
+    const input = document.getElementById('inputImportPdf');
+    if (!input || input.__ocrBound) return;
+    input.__ocrBound = true;
+    input.addEventListener('change', function (e) {
+      const file = e.target.files && e.target.files[0];
+      input.value = '';
+      if (!file) return;
+      const ocr = window.FattureOCR;
+      if (!ocr || typeof ocr.parsePdfFile !== 'function') {
+        if (typeof showToast === 'function') showToast('Modulo OCR non disponibile');
+        return;
+      }
+      ocr.parsePdfFile(file).catch(function (err) {
+        const msg = (err && err.message) ? err.message : 'Errore OCR';
+        if (typeof showToast === 'function') showToast(msg);
+        else console.warn('[FattureOCR]', msg);
+      });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindImportFatturaPdf);
+  } else {
+    bindImportFatturaPdf();
+  }
+  window.triggerImportFatturaPdf = triggerImportFatturaPdf;
 
   // ─── Hard-delete dev toggle (T13) ─────────────────────────────────────────
   function hardDeleteFattura(id) {
