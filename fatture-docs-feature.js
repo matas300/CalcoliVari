@@ -450,22 +450,37 @@
       : filtered.map(inv => {
           const badgeClass = inv.stato || 'bozza';
           const badgeLabel = (inv.stato || 'bozza').toUpperCase();
-          const clienteRaw = inv.cessionarioRagione || inv.cessionarioCognome || inv.cessionarioNome || '—';
-          const cliente = escHtml(clienteRaw);
-          const dataDoc = inv.dataDocumento
-            ? new Date(inv.dataDocumento).toLocaleDateString('it-IT')
-            : '—';
+          const snap = inv.clienteSnapshot || {};
+          const clienteRaw = snap.denominazione
+            || [snap.nome, snap.cognome].filter(Boolean).join(' ')
+            || snap.nome
+            || inv.cessionarioRagione
+            || '';
+          const cliente = clienteRaw ? escHtml(clienteRaw) : '';
+          const dataDoc = inv.data
+            ? new Date(inv.data).toLocaleDateString('it-IT')
+            : (inv.dataDocumento ? new Date(inv.dataDocumento).toLocaleDateString('it-IT') : '');
+          let clienteDataLine;
+          if (cliente && dataDoc) clienteDataLine = cliente + ' — ' + dataDoc;
+          else if (cliente) clienteDataLine = cliente;
+          else if (dataDoc) clienteDataLine = dataDoc;
+          else clienteDataLine = '—';
           const numero = window.FattureStorico
             ? window.FattureStorico.formatNumero(inv.annoProgressivo, inv.progressivo)
             : (inv.annoProgressivo + '/' + inv.progressivo);
-          const isBozza = (inv.stato || 'bozza') === 'bozza';
-          const rowActions = isBozza
-            ? '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come inviata">✉</button>' +
-              '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Elimina bozza">×</button>'
-            : '';
+          const statoCorrente = inv.stato || 'bozza';
+          const isBozza = statoCorrente === 'bozza';
+          const isInviata = statoCorrente === 'inviata';
+          let rowActions = '';
+          if (isBozza) {
+            rowActions = '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come inviata">✉</button>' +
+              '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Elimina bozza">×</button>';
+          } else if (isInviata) {
+            rowActions = '<button type="button" class="fatture-row-action" title="Segna come pagata" onclick="event.stopPropagation(); window.quickMarkPagataFromCard && window.quickMarkPagataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come pagata">€</button>';
+          }
           return '<div class="fatture-row" data-id="' + escHtml(inv.id) + '" role="button" tabindex="0">' +
             '<div class="fatture-num">' + escHtml(numero) + '</div>' +
-            '<div class="fatture-client">' + cliente + ' — ' + dataDoc + '</div>' +
+            '<div class="fatture-client">' + clienteDataLine + '</div>' +
             '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + '</div>' +
             '<div class="fatture-row-end">' +
               '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
@@ -588,7 +603,7 @@
           </div>
           <div class="fattura-sheet-actions">
             <button type="button" class="btn-add profile-secondary-btn" onclick="closeFatturaModal()">Chiudi</button>
-            <button type="button" class="btn-add" onclick="saveFatturaDraft(false)">Salva</button>
+            <button type="button" class="btn-add profile-secondary-btn" onclick="saveFatturaDraft(true)">Salva bozza</button>
           </div>
         </div>
         <div id="fatturaModalToast" class="fattura-modal-toast"></div>
@@ -597,7 +612,7 @@
           <div id="fatturaStepContent"></div>
           <div class="fattura-wiz-actions">
             <button type="button" class="btn-add profile-secondary-btn" onclick="prevFatturaStep()" ${step === 1 ? 'disabled' : ''}>← Indietro</button>
-            ${step < 3 ? '<button type="button" class="btn-add" onclick="nextFatturaStep()">Avanti →</button>' : '<button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>'}
+            ${step < 3 ? '<button type="button" class="btn-add" onclick="nextFatturaStep()">Avanti →</button>' : '<button type="button" class="btn-add" onclick="saveFatturaDraft(false)">✓ Salva e invia</button>'}
           </div>
         </form>
       </div>
@@ -760,7 +775,7 @@
           </div>
           <div class="fattura-sheet-actions">
             <button type="button" class="btn-add profile-secondary-btn" onclick="closeFatturaModal()">Chiudi</button>
-            <button type="button" class="btn-add profile-secondary-btn" onclick="switchFatturaToEdit()">Modifica</button>
+            ${(draft.stato || 'bozza') === 'bozza' ? '<button type="button" class="btn-add profile-secondary-btn" onclick="switchFatturaToEdit()">Modifica</button>' : ''}
             <button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>
           </div>
         </div>
@@ -959,11 +974,54 @@
     return draft;
   }
 
-  function saveFatturaDraft(silent = false) {
+  function validateDraftForInvio(draft) {
+    const errors = [];
+    const snap = draft.clienteSnapshot || {};
+    const hasCliente = !!draft.clienteId || !!snap.denominazione || !!(snap.nome || snap.cognome);
+    if (!hasCliente) errors.push('Seleziona un cliente.');
+    const righeValid = (draft.righe || []).some(r => {
+      const desc = String(r.descrizione || '').trim();
+      const tot = (parseFloat(r.quantita) || 0) * (parseFloat(r.prezzoUnitario) || 0);
+      return desc && tot > 0;
+    });
+    if (!righeValid) errors.push('Aggiungi almeno una riga con descrizione e importo > 0.');
+    if (!draft.modalitaPagamento) errors.push('Specifica la modalità di pagamento.');
+    // IBAN check se bonifico (MP05)
+    const mpCode = (typeof modalitaToCodiceMP === 'function') ? modalitaToCodiceMP(draft.modalitaPagamento) : '';
+    if (mpCode === 'MP05') {
+      const profileFiscal = (typeof getProfileFiscalData === 'function') ? getProfileFiscalData() : {};
+      const ibanEffettivo = (draft.iban && String(draft.iban).trim()) || (profileFiscal.iban || '');
+      if (!ibanEffettivo) errors.push('IBAN mancante (richiesto per bonifico).');
+    }
+    if (!draft.scadenzaPagamento) errors.push('Imposta la scadenza di pagamento.');
+    if (!draft.numero) errors.push('Numero fattura mancante.');
+    return errors;
+  }
+
+  function saveFatturaDraft(asDraft = false) {
     const draft = collectDraftFromState();
-    if (!draft.clienteId) {
-      if (!silent) showFatturaToast('Seleziona un cliente.', 'warn');
-      return null;
+
+    // asDraft=false → promuove bozza→inviata, validazione obbligatoria
+    // asDraft=true → salva qualsiasi stato senza validare e senza promuovere, no switch view
+    if (!asDraft) {
+      const errors = validateDraftForInvio(draft);
+      if (errors.length) {
+        showFatturaToast(errors.join(' · '), 'error');
+        return null;
+      }
+      const statoCorrente = draft.stato || 'bozza';
+      if (statoCorrente === 'bozza') {
+        draft.stato = 'inviata';
+        if (!draft.dataInvioSdi) {
+          draft.dataInvioSdi = new Date().toISOString().slice(0, 10);
+        }
+      }
+    } else {
+      // Save as draft: solo un minimo di sanità (cliente) — ma non blocca
+      if (!draft.clienteId && !(draft.clienteSnapshot && (draft.clienteSnapshot.denominazione || draft.clienteSnapshot.nome))) {
+        showFatturaToast('Seleziona un cliente.', 'warn');
+        return null;
+      }
     }
 
     // Set pagMese/pagAnno on the fattura object (no monthly-store write needed)
@@ -981,11 +1039,12 @@
     saveFattureEmesse(history);
 
     state.editingId = draft.id;
+    state.draft = draft;
     renderFattureDocsSection();
-    if (!silent) {
+    if (!asDraft) {
       state.mode = 'view';
       renderFatturaModal();
-      showFatturaToast('Fattura salvata.');
+      showFatturaToast('Fattura salvata e segnata come inviata.');
     }
     if (typeof recalcAll === 'function') recalcAll();
     return draft;
@@ -999,7 +1058,6 @@
   }
 
   function openFatturaModal(id = null, opts = {}) {
-    state.mode = opts.mode === 'view' ? 'view' : 'edit';
     state.step = 1;
     if (id) {
       const inv = getSavedInvoiceById(id);
@@ -1007,8 +1065,15 @@
         state.draft = normalizeFatturaEmessa(inv);
         state.editingId = inv.id;
         state.numberAuto = false;
+        const statoInv = inv.stato || 'bozza';
+        if (opts.mode === 'view') state.mode = 'view';
+        else if (opts.mode === 'edit') state.mode = 'edit';
+        else state.mode = (statoInv === 'bozza') ? 'edit' : 'view';
+      } else {
+        state.mode = opts.mode === 'view' ? 'view' : 'edit';
       }
     } else {
+      state.mode = 'edit';
       state.draft = createDefaultDraft();
       state.editingId = null;
       state.numberAuto = true;
@@ -2160,8 +2225,29 @@ ${dettaglioLinee.join('\n')}
       if (typeof recalcAll === 'function') recalcAll();
     });
   }
+  function quickMarkPagataFromCard(id) {
+    const profile = (typeof window.getProfile === 'function')
+      ? window.getProfile()
+      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    if (!profile) return;
+    const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
+    const all = store.load(profile);
+    const idx = all.findIndex(f => f.id === id);
+    if (idx < 0) return;
+    if ((all[idx].stato || 'bozza') !== 'inviata') return;
+    const today = new Date();
+    const iso = today.toISOString().slice(0, 10);
+    all[idx].stato = 'pagata';
+    all[idx].dataPagamento = iso;
+    all[idx].pagMese = today.getMonth() + 1;
+    all[idx].pagAnno = today.getFullYear();
+    store.save(profile, all);
+    if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+    if (typeof recalcAll === 'function') recalcAll();
+  }
   window.quickMarkInviataFromCard = quickMarkInviataFromCard;
   window.quickDeleteBozzaFromCard = quickDeleteBozzaFromCard;
+  window.quickMarkPagataFromCard = quickMarkPagataFromCard;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 
