@@ -460,17 +460,17 @@
             : (inv.annoProgressivo + '/' + inv.progressivo);
           const isBozza = (inv.stato || 'bozza') === 'bozza';
           const rowActions = isBozza
-            ? '<span class="fatture-row-actions">' +
-                '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')">✉ Inviata</button>' +
-                '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')">×</button>' +
-              '</span>'
+            ? '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come inviata">✉</button>' +
+              '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Elimina bozza">×</button>'
             : '';
           return '<div class="fatture-row" data-id="' + escHtml(inv.id) + '" role="button" tabindex="0">' +
             '<div class="fatture-num">' + escHtml(numero) + '</div>' +
             '<div class="fatture-client">' + cliente + ' — ' + dataDoc + '</div>' +
             '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + '</div>' +
-            '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
-            rowActions +
+            '<div class="fatture-row-end">' +
+              '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
+              rowActions +
+            '</div>' +
           '</div>';
         }).join('');
 
