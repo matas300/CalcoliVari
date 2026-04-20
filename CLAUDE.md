@@ -243,6 +243,22 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`
 - No automated SdI submission — upload is always manual via the AdE portal
 
+### Fatture: single source of truth (workflow redesign 2026-04-20)
+- **`fattureEmesse` è UNICA fonte della verità** per tutte le feature (dashboard, bollo trimestrale, budget, tasse accantonate, scadenziario, forfettario engine, cross-year). La vecchia struttura `data.fatture[m]` è considerata **legacy** e viene mantenuta solo come backup per la migrazione (read-only, non cancellata per permettere rollback).
+- **`FattureSelectors` è l'API canonica** per leggere le fatture. Mai più accesso diretto a `data.fatture[m]` dai consumer. API:
+  - `FattureSelectors.all(profile)` — tutte le fatture del profilo
+  - `FattureSelectors.getByMonth(profile, year, month)` — filtrate per mese di pagamento, esclude bozza
+  - `FattureSelectors.getByQuarter(profile, year, quarter)` — trimestre, include NC (segno negativo nei consumer)
+  - `FattureSelectors.getByPagAnno(profile, year)` — per forfettario per-cassa
+  - `FattureSelectors.getCrossYearPaidIn(profile, year)` — emesse in anno precedente ma incassate nell'anno corrente
+  - `FattureSelectors.getImportoSigned(f)` — importo con segno (NC negativi)
+  - `FattureSelectors.getNettoEffettivo(f)` — `importo − ncTotaleImporto` (per stornate parziali)
+- **Workflow stati**: `bozza → inviata → pagata`; ortogonale NC TD04 → `stornata` (se `tipoStorno='totale'` + NC `inviata`, oppure se somma NC parziali collegate ≥ totale originale → `ncTotaleImporto` traccia la somma). Fatture `inviata`/`pagata` NON si cancellano mai — solo tramite NC. `×` solo su `bozza`.
+- **`origine`** sul record fattura: `'wizard'` (creata dal wizard 3-step), `'legacy-migrated'` (promossa dalla vecchia struttura monthly), `'manuale'` (arricchita post-"completa dati" su una legacy), `'ocr-import'` (riservato al sub-progetto OCR futuro).
+- **Migrazione automatica**: al primo `switchToTab('fatture')` di un anno con `data.fatture[M]` popolato e senza `data._fattureMigratedAt`, ogni riga senza `invoiceId` viene promossa a fattura sintetica `origine='legacy-migrated'` stato `pagata`. Operazione **idempotente**: l'ID è deterministico `legacy_{year}_{M}_{idx}_{cents}` (dove `cents = Math.round(importo*100)`), quindi re-run non duplica. `data.fatture[M]` NON viene cancellato (rollback safety).
+- **Hard-delete dev toggle**: `settings.devHardDelete` (default false). Quando attivo, abilita un pulsante `🗑 Hard delete` in view-mode/archivio per bypassare il workflow (solo test). Banner giallo in cima al tab Fatture come warning. NON sincronizzato su Firebase (dev-only, resta locale). Tenere SEMPRE off in produzione.
+- **Bollo trimestrale**: la regola "operazione > 77,47 € richiede bollo" viene applicata **per-fattura** con `Math.abs(FattureSelectors.getImportoSigned(f)) > 77.47`. NC contate separatamente con segno negativo nell'imponibile di trimestre. `calcBolloPerQuarter` legge da `getByQuarter`, non più da `data.fatture[M]`.
+
 ### Storico fatture e numerazione (sub-project 3)
 - **File**: `fatture-storico.js` (IIFE, espone `window.FattureStorico`)
 - **Storage key**: `calcoliPIVA_{profile}_fattureEmesse` (array di fatture); sync via `syncProfileMetaToCloud(profile, 'fattureEmesse')` (`PROFILE_META_KEYS` in `firebase-sync.js` già include `'fattureEmesse'`)
