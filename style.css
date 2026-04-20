@@ -1523,10 +1523,30 @@ body.profile-modal-open {
   font-size: .9rem;
 }
 
+#fatturaModal .profile-modal-panel {
+  overflow: hidden;
+}
+#fatturaModalContent {
+  height: 100%;
+}
 .fattura-sheet {
-  padding: 28px;
+  padding: 20px 24px;
   display: grid;
-  gap: 18px;
+  gap: 12px;
+  height: 100%;
+  grid-template-rows: auto auto auto 1fr auto;
+}
+.fattura-sheet .fattura-builder {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+#fatturaStepContent {
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
 }
 .fattura-sheet-header {
   display: flex;
@@ -1618,6 +1638,7 @@ body.profile-modal-open {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 12px;
 }
 .fattura-lines-head h3 {
   font-size: 1rem;
@@ -1649,11 +1670,51 @@ body.profile-modal-open {
   justify-content: flex-end;
 }
 .fattura-remove-line {
-  width: 42px;
-  height: 42px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border-radius: 50%;
-  font-size: 1.1rem;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fattura-remove-line:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+}
+.fattura-line-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.fattura-line-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.fattura-line-total {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text);
+  margin-left: auto;
+  margin-right: 8px;
+}
+.fattura-line-amounts {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  gap: 10px;
+  margin-top: 8px;
 }
 .fattura-summary {
   display: grid;
@@ -4234,10 +4295,10 @@ html[data-theme="light"] .dich-conto-estero {
 
 /* ===== Fatture redesign (E) ===== */
 .fatture-card {
-  background: var(--color-surface);
+  background: var(--surface2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  padding: 20px;
   margin-bottom: var(--space-3);
 }
 .fatture-card-head {
@@ -4633,4 +4694,147 @@ html[data-theme="light"] .dich-conto-estero {
   font-weight: 600;
   color: var(--color-text);
   letter-spacing: .02em;
+}
+
+/* === Fattura wizard (Opzione C) === */
+.fattura-wiz-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+  flex-wrap: wrap;
+}
+.fattura-wiz-dot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all .15s ease;
+}
+.fattura-wiz-dot .fattura-wiz-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: 11px;
+}
+.fattura-wiz-dot.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.fattura-wiz-dot.active .fattura-wiz-num {
+  background: var(--color-primary);
+  color: var(--color-bg);
+}
+.fattura-wiz-dot.done {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+.fattura-wiz-dot.done .fattura-wiz-num {
+  background: var(--color-primary);
+  color: var(--color-bg);
+}
+.fattura-wiz-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+  min-width: 12px;
+}
+.fattura-wiz-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  margin-top: 16px;
+}
+.fattura-export-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border);
+}
+.fattura-view .fattura-view-body {
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+  padding-right: 4px;
+  min-height: 0;
+}
+.fattura-view-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+.fattura-view-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fattura-view-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-text-faint);
+  font-weight: 600;
+}
+.fattura-view-grid b { font-size: 13px; color: var(--color-text); font-weight: 600; }
+.fattura-view-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.fattura-view-table th, .fattura-view-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.fattura-view-table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--color-text-faint);
+  font-weight: 600;
+}
+.fattura-view-totals {
+  display: grid;
+  gap: 4px;
+  margin-left: auto;
+  width: max-content;
+  min-width: 240px;
+}
+.fattura-view-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 13px;
+}
+.fattura-view-totals-grand {
+  border-top: 2px solid var(--color-primary);
+  padding-top: 6px;
+  margin-top: 4px;
+  font-size: 15px !important;
+  font-weight: 700;
+}
+.fattura-view-note {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--color-text-muted);
 }

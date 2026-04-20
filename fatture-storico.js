@@ -150,8 +150,9 @@
       b.addEventListener('click', fn);
       return b;
     }
+    btns.push(mk('Visualizza', () => window.viewFatturaModal && window.viewFatturaModal(f.id)));
     if (f.stato === 'bozza') {
-      btns.push(mk('Riapri', () => window.openFatturaModal && window.openFatturaModal(f.id)));
+      btns.push(mk('Modifica', () => window.openFatturaModal && window.openFatturaModal(f.id)));
       btns.push(mk('Annulla', () => _changeStato(f.id, 'annullata', profile)));
     }
     btns.push(mk('Duplica', () => _duplicate(f, profile)));

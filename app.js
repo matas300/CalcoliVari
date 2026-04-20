@@ -5407,8 +5407,12 @@ function setPagAnno(month, idx, val) {
 }
 
 function setPagOggi(month, idx) {
-  const today = new Date();
-  setFatturaPagamento(month, idx, today.getMonth() + 1, today.getFullYear());
+  // "Oggi" = data emissione oggi; l'incasso stimato = oggi + giorniIncasso.
+  // Imposta pagMese/pagAnno sul mese/anno dell'incasso stimato.
+  const giorni = parseFloat(S().giorniIncasso) || 30;
+  const expected = new Date();
+  expected.setDate(expected.getDate() + giorni);
+  setFatturaPagamento(month, idx, expected.getMonth() + 1, expected.getFullYear());
   recalcAll();
 }
 

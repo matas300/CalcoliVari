@@ -216,8 +216,10 @@
     const subtotal = righe.reduce((sum, r) => sum + (parseMaybeNumber(r.quantita) * parseMaybeNumber(r.prezzoUnitario)), 0);
     const contributoIntegrativo = round2(raw.contributoIntegrativo || 0);
     const marcaDaBollo = !!raw.marcaDaBollo;
+    const bolloAddebitato = !!raw.bolloAddebitato;
     const bollo = marcaDaBollo ? 2 : 0;
-    const totale = round2(subtotal + contributoIntegrativo + bollo);
+    const bolloInTotal = marcaDaBollo && bolloAddebitato ? 2 : 0;
+    const totale = round2(subtotal + contributoIntegrativo + bolloInTotal);
     return {
       id: String(raw.id || `fatt_${Date.now().toString(36)}`),
       numero: String(raw.numero || ''),
@@ -228,6 +230,7 @@
       righe,
       contributoIntegrativo,
       marcaDaBollo,
+      bolloAddebitato,
       bolloImporto: bollo,
       note: String(raw.note || DEFAULT_FORFETTARIO_NOTE),
       modalitaPagamento: String(raw.modalitaPagamento || DEFAULT_BONIFICO),
@@ -277,6 +280,7 @@
       contributoIntegrativo: 0,
       marcaDaBollo: false,
       bolloAuto: true,
+      bolloAddebitato: false,
       note: DEFAULT_FORFETTARIO_NOTE,
       modalitaPagamento: profile.modalitaPagamento || DEFAULT_BONIFICO,
       iban: profile.iban || '',
@@ -298,9 +302,14 @@
     const lines = Array.isArray(draft.righe) ? draft.righe.map(cloneLine) : [];
     const subtotal = round2(lines.reduce((sum, line) => sum + parseMaybeNumber(line.quantita) * parseMaybeNumber(line.prezzoUnitario), 0));
     const contributoIntegrativo = round2(draft.contributoIntegrativo || 0);
-    const bollo = draft.marcaDaBollo ? 2 : 0;
-    const total = round2(subtotal + contributoIntegrativo + bollo);
-    return { subtotal, contributoIntegrativo, bollo, total, lineCount: lines.length };
+    // Marca da bollo: l'importo (2 €) rientra nel totale fattura solo se
+    // viene addebitato al cliente. Se il pro lo paga di tasca sua (caso
+    // più comune per il forfettario) resta in DatiBollo ma non incrementa
+    // il totale né compare come riga a carico del cliente.
+    const bolloAmount = draft.marcaDaBollo ? 2 : 0;
+    const bolloInTotal = draft.marcaDaBollo && draft.bolloAddebitato ? 2 : 0;
+    const total = round2(subtotal + contributoIntegrativo + bolloInTotal);
+    return { subtotal, contributoIntegrativo, bollo: bolloAmount, bolloInTotal, total, lineCount: lines.length };
   }
 
   function syncBolloDefault() {
@@ -340,8 +349,8 @@
   let _fattureFilter = 'tutte';
 
   function invoicesForYear(year) {
-    const profile = typeof getCurrentProfile === 'function' ? getCurrentProfile() : null;
-    const all = window.FattureStorico ? window.FattureStorico.load(profile) : [];
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const all = window.FattureStorico ? window.FattureStorico.load(profile) : loadFattureEmesse(profile);
     return all.filter(inv => Number(inv.annoProgressivo) === Number(year));
   }
 
@@ -452,29 +461,30 @@
     const descrizione = esc(line.descrizione || '');
     const quantita = esc(line.quantita ?? 1);
     const prezzo = esc(line.prezzoUnitario ?? 0);
-    const iva = esc(line.iva ?? 0);
+    const totale = (parseMaybeNumber(line.quantita) || 0) * (parseMaybeNumber(line.prezzoUnitario) || 0);
     return `
       <div class="fattura-line" data-line-index="${index}">
-        <div class="fattura-line-grid">
-          <label class="fattura-field fattura-field-wide">
-            <span>Descrizione</span>
-            <input type="text" value="${descrizione}" placeholder="Descrizione servizio o attività" oninput="updateFatturaLineField(${index}, 'descrizione', this.value)">
+        <div class="fattura-line-head">
+          <span class="fattura-line-title">Prestazione ${index + 1}</span>
+          <span class="fattura-line-total">${typeof fmt === 'function' ? fmt(totale) : totale.toFixed(2)}</span>
+          <button type="button" class="fattura-remove-line" onclick="removeFatturaLine(${index})" aria-label="Rimuovi riga">&times;</button>
+        </div>
+        <label class="fattura-field fattura-field-wide">
+          <span>Descrizione</span>
+          <textarea rows="2" placeholder="Inserisci una descrizione della prestazione…"
+            oninput="updateFatturaLineField(${index}, 'descrizione', this.value)">${descrizione}</textarea>
+        </label>
+        <div class="fattura-line-amounts">
+          <label class="fattura-field">
+            <span>Importo (€)</span>
+            <input type="number" min="0" step="0.01" value="${prezzo}" placeholder="0.00"
+              oninput="updateFatturaLineField(${index}, 'prezzoUnitario', this.value)">
           </label>
           <label class="fattura-field">
             <span>Quantità</span>
-            <input type="number" min="0" step="0.01" value="${quantita}" oninput="updateFatturaLineField(${index}, 'quantita', this.value)">
+            <input type="number" min="0" step="0.01" value="${quantita}" placeholder="1"
+              oninput="updateFatturaLineField(${index}, 'quantita', this.value)">
           </label>
-          <label class="fattura-field">
-            <span>Prezzo unitario</span>
-            <input type="number" min="0" step="0.01" value="${prezzo}" oninput="updateFatturaLineField(${index}, 'prezzoUnitario', this.value)">
-          </label>
-          <label class="fattura-field">
-            <span>IVA %</span>
-            <input type="number" min="0" step="0.01" value="${iva}" oninput="updateFatturaLineField(${index}, 'iva', this.value)">
-          </label>
-          <div class="fattura-line-actions">
-            <button type="button" class="profile-secondary-btn fattura-remove-line" onclick="removeFatturaLine(${index})" aria-label="Rimuovi riga">&times;</button>
-          </div>
         </div>
       </div>
     `;
@@ -499,6 +509,242 @@
   }
 
   function renderFatturaModal() {
+    const el = document.getElementById('fatturaModalContent');
+    if (!el) return;
+    if (state.mode === 'view') { renderFatturaViewMode(el); return; }
+    if (!state.step) state.step = 1;
+    const draft = currentDraft();
+    const step = state.step;
+    const stepLabels = ['Cliente & Date', 'Righe', 'Opzioni & Riepilogo'];
+    const dotsHtml = stepLabels.map((label, i) => {
+      const n = i + 1;
+      const cls = n === step ? 'active' : (n < step ? 'done' : '');
+      return `<button type="button" class="fattura-wiz-dot ${cls}" onclick="goToFatturaStep(${n})"><span class="fattura-wiz-num">${n}</span><span class="fattura-wiz-label">${label}</span></button>`;
+    }).join('<span class="fattura-wiz-line"></span>');
+    el.innerHTML = `
+      <div class="fattura-sheet">
+        <div class="fattura-sheet-header">
+          <div class="fattura-sheet-copy">
+            <h2 id="fatturaModalTitle">${esc(state.editingId ? 'Modifica fattura' : 'Nuova fattura')}</h2>
+            <p>Numero <b>${esc(draft.numero)}</b> · ${esc(draft.data)}</p>
+          </div>
+          <div class="fattura-sheet-actions">
+            <button type="button" class="btn-add profile-secondary-btn" onclick="closeFatturaModal()">Chiudi</button>
+            <button type="button" class="btn-add" onclick="saveFatturaDraft(false)">Salva</button>
+          </div>
+        </div>
+        <div id="fatturaModalToast" class="fattura-modal-toast"></div>
+        <div class="fattura-wiz-progress">${dotsHtml}</div>
+        <form class="fattura-builder" onsubmit="return false;">
+          <div id="fatturaStepContent"></div>
+          <div class="fattura-wiz-actions">
+            <button type="button" class="btn-add profile-secondary-btn" onclick="prevFatturaStep()" ${step === 1 ? 'disabled' : ''}>← Indietro</button>
+            ${step < 3 ? '<button type="button" class="btn-add" onclick="nextFatturaStep()">Avanti →</button>' : '<button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>'}
+          </div>
+        </form>
+      </div>
+    `;
+    renderFatturaStepContent();
+    syncBolloDefault();
+  }
+
+  function renderFatturaStepContent() {
+    const host = document.getElementById('fatturaStepContent');
+    if (!host) return;
+    const step = state.step || 1;
+    if (step === 1) host.innerHTML = renderStep1Html();
+    else if (step === 2) host.innerHTML = renderStep2Html();
+    else host.innerHTML = renderStep3Html();
+    if (step === 3) {
+      _bindRitenutaHandlers();
+      renderFatturaSummary();
+    }
+  }
+
+  function goToFatturaStep(n) { state.step = Math.max(1, Math.min(3, n)); renderFatturaModal(); }
+  function nextFatturaStep() { goToFatturaStep((state.step || 1) + 1); }
+  function prevFatturaStep() { goToFatturaStep((state.step || 1) - 1); }
+
+  function renderStep1Html() {
+    const draft = currentDraft();
+    const clienteOptions = typeof getClientiOptionsHtml === 'function' ? getClientiOptionsHtml(draft.clienteId) : '<option value="">Nessun cliente</option>';
+    return `
+      <div class="fattura-form-grid">
+        <label class="fattura-field fattura-field-wide">
+          <span>Cliente</span>
+          <select id="fatturaCliente" onchange="updateFatturaDraftField('clienteId', this.value)">
+            <option value="">Seleziona cliente...</option>
+            ${clienteOptions}
+          </select>
+        </label>
+        <label class="fattura-field">
+          <span>Data emissione</span>
+          <input id="fatturaData" type="date" value="${esc(draft.data)}" oninput="updateFatturaDraftField('data', this.value)">
+        </label>
+        <label class="fattura-field">
+          <span>Scadenza pagamento</span>
+          <input id="fatturaScadenza" type="date" value="${esc(draft.scadenzaPagamento)}" oninput="updateFatturaDraftField('scadenzaPagamento', this.value)">
+        </label>
+        <label class="fattura-field">
+          <span>Stato pagamento</span>
+          <div class="fattura-bollo-wrap">
+            <input id="fatturaIncassata" type="checkbox" ${draft.incassata ? 'checked' : ''} onchange="updateFatturaDraftField('incassata', this.checked)">
+            <span>Già incassata</span>
+          </div>
+        </label>
+        <label class="fattura-field">
+          <span>Data incasso</span>
+          <input id="fatturaDataIncasso" type="date" value="${esc(draft.dataIncasso)}" oninput="updateFatturaDraftField('dataIncasso', this.value)" ${!draft.incassata ? 'disabled' : ''}>
+        </label>
+      </div>
+    `;
+  }
+
+  function renderStep2Html() {
+    const draft = currentDraft();
+    const rowHtml = (draft.righe || []).map((line, idx) => buildLineRowHtml(line, idx)).join('');
+    return `
+      <div class="fattura-lines-head">
+        <h3>Righe fattura</h3>
+        <button type="button" class="btn-add" onclick="addFatturaLine()">+ Riga</button>
+      </div>
+      <div class="fattura-lines">${rowHtml}</div>
+    `;
+  }
+
+  function renderStep3Html() {
+    const draft = currentDraft();
+    return `
+      <div class="fattura-form-grid">
+        <label class="fattura-field">
+          <span>IBAN</span>
+          <input id="fatturaIban" type="text" value="${esc(draft.iban)}" oninput="updateFatturaDraftField('iban', this.value)">
+        </label>
+        <label class="fattura-field">
+          <span>Contributo integrativo (€)</span>
+          <input id="fatturaContributoIntegrativo" type="number" min="0" step="0.01" value="${esc(draft.contributoIntegrativo)}" oninput="updateFatturaDraftField('contributoIntegrativo', this.value)">
+        </label>
+        <label class="fattura-field fattura-bollo-field">
+          <span>Marca da bollo</span>
+          <div style="font-size:11px; color:var(--color-text-muted); padding:6px 0;">
+            ${draft.marcaDaBollo ? 'Applicata automaticamente (2,00 €)' : 'Non applicabile (imponibile ≤ 77,47 €)'}
+          </div>
+          <div class="fattura-bollo-wrap" style="opacity:${draft.marcaDaBollo ? '1' : '0.4'};">
+            <input id="fatturaBolloAddebitato" type="checkbox" ${draft.bolloAddebitato ? 'checked' : ''} ${!draft.marcaDaBollo ? 'disabled' : ''} onchange="updateFatturaDraftField('bolloAddebitato', this.checked)">
+            <span style="font-size:10px; color:var(--color-text-faint); text-transform:uppercase; letter-spacing:.04em;">Addebita al cliente</span>
+          </div>
+        </label>
+        <div class="fattura-field fattura-field-wide">
+          <span>Ritenuta d'acconto</span>
+          <div class="fattura-bollo-wrap">
+            <input type="checkbox" id="invHasRitenuta" ${Number(draft.ritenuta) > 0 ? 'checked' : ''}>
+            <span>Applica ritenuta d'acconto</span>
+          </div>
+          <div id="invRitenutaFields" style="display:${Number(draft.ritenuta) > 0 ? 'block' : 'none'}; margin-top:8px;">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+              <label>Aliquota %
+                <input type="number" id="invAliquotaRitenuta" min="0" max="100" step="0.01" value="${draft.aliquotaRitenuta || 20}" style="width:80px;">
+              </label>
+              <label>Tipo ritenuta
+                <select id="invTipoRitenuta">
+                  <option value="RT01" ${(draft.tipoRitenuta || 'RT02') === 'RT01' ? 'selected' : ''}>RT01 — Persone fisiche</option>
+                  <option value="RT02" ${(draft.tipoRitenuta || 'RT02') === 'RT02' ? 'selected' : ''}>RT02 — Persone giuridiche</option>
+                </select>
+              </label>
+              <label>Causale
+                <input type="text" id="invCausaleRitenuta" maxlength="2" value="${esc(draft.causaleRitenuta || 'A')}" style="width:60px;">
+              </label>
+            </div>
+            <div style="margin-top:6px;">
+              <span>Importo ritenuta calcolato: <strong id="invRitenutaImporto">0,00 €</strong></span>
+            </div>
+          </div>
+        </div>
+        <label class="fattura-field fattura-field-wide">
+          <span>Nota</span>
+          <textarea id="fatturaNota" rows="2" oninput="updateFatturaDraftField('note', this.value)">${esc(draft.note)}</textarea>
+        </label>
+      </div>
+      <div id="fatturaSummary" class="fattura-summary"></div>
+      <div class="fattura-export-row">
+        <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaPdf()">Anteprima PDF</button>
+        <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
+        <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
+      </div>
+    `;
+  }
+
+  function renderFatturaViewMode(el) {
+    const draft = currentDraft();
+    const totals = computeDraftTotals(draft);
+    const cliente = (draft.clienteId && typeof getClienteById === 'function') ? getClienteById(draft.clienteId) : draft.clienteSnapshot;
+    const clienteName = cliente && cliente.nome ? cliente.nome : '—';
+    const righeRows = (draft.righe || []).map(r => `
+      <tr>
+        <td>${esc(r.descrizione || '')}</td>
+        <td style="text-align:right;">${r.quantita}</td>
+        <td style="text-align:right;">${formatEur(r.prezzoUnitario || 0)}</td>
+        <td style="text-align:right;">${formatEur((r.quantita || 0) * (r.prezzoUnitario || 0))}</td>
+      </tr>`).join('');
+    const isNC = draft.tipoDocumento === 'TD04';
+    el.innerHTML = `
+      <div class="fattura-sheet fattura-view">
+        <div class="fattura-sheet-header">
+          <div class="fattura-sheet-copy">
+            <h2>${isNC ? 'Nota di credito' : 'Fattura'} ${esc(draft.numero)}</h2>
+            <p>${esc(draft.data)} · ${esc(clienteName)} · <b>${formatEur(totals.total)}</b> ${draft.incassata ? '· <span style="color:var(--color-success);">Incassata</span>' : ''}</p>
+          </div>
+          <div class="fattura-sheet-actions">
+            <button type="button" class="btn-add profile-secondary-btn" onclick="closeFatturaModal()">Chiudi</button>
+            <button type="button" class="btn-add profile-secondary-btn" onclick="switchFatturaToEdit()">Modifica</button>
+            <button type="button" class="btn-add" onclick="downloadFatturaPdf()">Scarica PDF</button>
+          </div>
+        </div>
+        <div id="fatturaModalToast" class="fattura-modal-toast"></div>
+        <div class="fattura-view-body">
+          <div class="fattura-view-grid">
+            <div><span class="fattura-view-label">Cliente</span><b>${esc(clienteName)}</b></div>
+            <div><span class="fattura-view-label">Data emissione</span><b>${esc(draft.data)}</b></div>
+            <div><span class="fattura-view-label">Scadenza</span><b>${esc(draft.scadenzaPagamento || '—')}</b></div>
+            <div><span class="fattura-view-label">Stato</span><b>${draft.incassata ? 'Incassata il ' + esc(draft.dataIncasso || draft.data) : 'Da incassare'}</b></div>
+            <div><span class="fattura-view-label">IBAN</span><b>${esc(draft.iban || '—')}</b></div>
+            <div><span class="fattura-view-label">Bollo</span><b>${draft.marcaDaBollo ? '2,00 €' + (draft.bolloAddebitato ? ' (addebitato)' : ' (non addebitato)') : 'No'}</b></div>
+          </div>
+          <table class="fattura-view-table">
+            <thead><tr><th>Descrizione</th><th style="text-align:right;">Q.tà</th><th style="text-align:right;">P.Unit.</th><th style="text-align:right;">Totale</th></tr></thead>
+            <tbody>${righeRows}</tbody>
+          </table>
+          <div class="fattura-view-totals">
+            <div><span>Imponibile</span><b>${formatEur(totals.subtotal)}</b></div>
+            ${totals.contributoIntegrativo ? `<div><span>Contributo integrativo</span><b>${formatEur(totals.contributoIntegrativo)}</b></div>` : ''}
+            ${totals.bolloInTotal ? `<div><span>Marca da bollo</span><b>${formatEur(totals.bolloInTotal)}</b></div>` : ''}
+            ${Number(draft.ritenuta) > 0 ? `<div><span>Ritenuta</span><b>−${formatEur(draft.ritenuta)}</b></div>` : ''}
+            <div class="fattura-view-totals-grand"><span>Totale</span><b>${formatEur(totals.total)}</b></div>
+          </div>
+          ${draft.note ? `<div class="fattura-view-note"><span class="fattura-view-label">Nota</span><div>${esc(draft.note)}</div></div>` : ''}
+        </div>
+        <div class="fattura-wiz-actions">
+          <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
+            ${!isNC ? `<button type="button" class="btn-add" style="background:var(--color-warning); color:var(--color-bg);" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function switchFatturaToEdit() { state.mode = 'edit'; state.step = 1; renderFatturaModal(); }
+  function createNCFromCurrentInvoice() {
+    const draft = currentDraft();
+    if (!draft || !draft.id) return;
+    if (typeof openNotaCreditoModal === 'function') {
+      closeFatturaModal();
+      openNotaCreditoModal(draft.id);
+    }
+  }
+
+  function _legacyRenderFatturaModalDISABLED() {
     const el = document.getElementById('fatturaModalContent');
     if (!el) return;
     const draft = currentDraft();
@@ -571,6 +817,10 @@
               <div class="fattura-bollo-wrap">
                 <input id="fatturaMarcaDaBollo" type="checkbox" ${draft.marcaDaBollo ? 'checked' : ''} onchange="updateFatturaDraftField('marcaDaBollo', this.checked)">
                 <span>Applica 2,00 € se supera 77,47 €</span>
+              </div>
+              <div class="fattura-bollo-wrap" style="margin-top:6px; padding-left:16px; opacity:${draft.marcaDaBollo ? '1' : '0.5'};">
+                <input id="fatturaBolloAddebitato" type="checkbox" ${draft.bolloAddebitato ? 'checked' : ''} ${!draft.marcaDaBollo ? 'disabled' : ''} onchange="updateFatturaDraftField('bolloAddebitato', this.checked)">
+                <span style="font-size:12px; color:var(--color-text-muted);">Addebita al cliente (raro in forfettario)</span>
               </div>
             </label>
             <div class="fattura-field fattura-field-wide">
@@ -700,6 +950,15 @@
     } else if (field === 'marcaDaBollo') {
       draft.marcaDaBollo = !!value;
       draft.bolloAuto = false;
+      if (!draft.marcaDaBollo) draft.bolloAddebitato = false;
+      const addEl = document.getElementById('fatturaBolloAddebitato');
+      if (addEl) {
+        addEl.disabled = !draft.marcaDaBollo;
+        addEl.checked = !!draft.bolloAddebitato;
+        if (addEl.parentElement) addEl.parentElement.style.opacity = draft.marcaDaBollo ? '1' : '0.5';
+      }
+    } else if (field === 'bolloAddebitato') {
+      draft.bolloAddebitato = !!value;
     } else {
       draft[field] = value;
     }
@@ -747,7 +1006,11 @@
     
     state.editingId = draft.id;
     renderFattureDocsSection();
-    if (!silent) showFatturaToast('Fattura salvata.');
+    if (!silent) {
+      state.mode = 'view';
+      renderFatturaModal();
+      showFatturaToast('Fattura salvata.');
+    }
     if (typeof recalcAll === 'function') recalcAll();
     return draft;
   }
@@ -780,7 +1043,9 @@
     else saveYearData(year, yearData);
   }
 
-  function openFatturaModal(id = null) {
+  function openFatturaModal(id = null, opts = {}) {
+    state.mode = opts.mode === 'view' ? 'view' : 'edit';
+    state.step = 1;
     if (id) {
       const inv = getSavedInvoiceById(id);
       if (inv) {
@@ -802,6 +1067,7 @@
       state.draft.progressivo = prog;
       state.draft.data = new Date().toISOString().slice(0, 10);
     }
+    state.step = 1;
     renderFatturaModal();
     const m = document.getElementById('fatturaModal');
     if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
@@ -966,7 +1232,7 @@
     // totals.subtotal = imponibile (from computeDraftTotals)
     row('Imponibile', totals.subtotal || 0);
     if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
-    if (invoice.marcaDaBollo && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
+    if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
     if (Number(invoice.ritenuta) > 0) {
       doc.setTextColor.apply(doc, NEGATIVE);
       doc.text('Ritenuta', labelX, y);
@@ -1803,6 +2069,12 @@ ${dettaglioLinee.join('\n')}
   window.showXmlPreviewModal = showXmlPreviewModal;
   window.openNotaCreditoModal = openNotaCreditoModal;
   window.setFattureFilter = setFattureFilter;
+  window.goToFatturaStep = goToFatturaStep;
+  window.nextFatturaStep = nextFatturaStep;
+  window.prevFatturaStep = prevFatturaStep;
+  window.switchFatturaToEdit = switchFatturaToEdit;
+  window.createNCFromCurrentInvoice = createNCFromCurrentInvoice;
+  window.viewFatturaModal = (id) => openFatturaModal(id, { mode: 'view' });
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 })();
