@@ -293,7 +293,10 @@
       </div>
       <div class="settings-group">
         <label>Giorni medi per incasso fattura</label>
-        <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="saveSetting('giorniIncasso', this.value); recalcAll()">
+        <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="setGiorniIncassoProfile(this.value)">
+        <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+          Impostazione di profilo, applicata a tutti gli anni.
+        </div>
       </div>
       <div class="settings-group">
         <label>Override INAIL anno corrente (EUR)</label>

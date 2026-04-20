@@ -1715,7 +1715,6 @@ function applySettings() {
   const s = data.settings;
   const fields = {
     settDailyRate: 'dailyRate',
-    settGiorniIncasso: 'giorniIncasso',
     settDipendenteIncome: 'haRedditoDipendente',
     settRiduzione35: 'riduzione35'
   };
@@ -1724,6 +1723,20 @@ function applySettings() {
     if (!el) continue;
     el.value = s[key];
   }
+  // giorniIncasso: lettura profile-scoped con fallback a yearData legacy
+  var gipVal = getGiorniIncassoProfile();
+  if (gipVal === null) {
+    var legacy = (s && s.giorniIncasso !== undefined) ? parseFloat(s.giorniIncasso) : NaN;
+    if (isFinite(legacy) && legacy !== 30) {
+      setGiorniIncassoProfile(legacy);
+      gipVal = legacy;
+    } else {
+      gipVal = 30;
+    }
+  }
+  s.giorniIncasso = gipVal;
+  var gIn = document.getElementById('settGiorniIncasso');
+  if (gIn) gIn.value = gipVal;
   // Optional number fields (empty string = not set)
   const optFields = {
     settInailCorrente: 'scadenziarioInailCorrente',
@@ -1915,6 +1928,36 @@ function saveYearOptionalNumberSetting(year, key, val) {
 }
 
 function S() { return data.settings; }
+
+// Profile-scoped giorniIncasso (applicato a tutti gli anni).
+// Fallback: yearData.settings.giorniIncasso legacy, poi 30.
+function getGiorniIncassoProfile() {
+  try {
+    var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+    if (!profile) return null;
+    var raw = localStorage.getItem('calcoliPIVA_' + profile + '_giorniIncasso');
+    if (raw === null || raw === '') return null;
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (_) { parsed = raw; }
+    var n = parseFloat(parsed);
+    return isFinite(n) ? n : null;
+  } catch (_) { return null; }
+}
+
+function setGiorniIncassoProfile(val) {
+  try {
+    var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+    if (!profile) return;
+    var n = parseFloat(val);
+    if (!isFinite(n)) n = 30;
+    localStorage.setItem('calcoliPIVA_' + profile + '_giorniIncasso', JSON.stringify(n));
+    if (typeof syncProfileMetaToCloud === 'function') {
+      try { syncProfileMetaToCloud(profile); } catch (_) {}
+    }
+    if (data && data.settings) data.settings.giorniIncasso = n;
+    if (typeof recalcAll === 'function') recalcAll();
+  } catch (_) {}
+}
 
 function setRegime(r) {
   data.settings.regime = r;
