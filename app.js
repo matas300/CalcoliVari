@@ -2163,9 +2163,39 @@ function getYearDataFor(year) {
   return year === currentYear ? ensureDataShape(data, year) : loadYearData(year);
 }
 
+// Build a month→ricavi map from FattureSelectors for the given profile/year (per-cassa, pagAnno-based).
+// NC invoices (TD04) contribute negative amounts via getImportoSigned, netting stornate automatically.
+// Stornate with a linked TD04 are skipped to avoid double-counting: the TD04 NC already reduces the total.
+// Returns { 1: amount, 2: amount, ... } for months with non-zero ricavi.
+function buildRicaviMeseFromSelectors(profile, year) {
+  const m2r = {};
+  if (!window.FattureSelectors) return m2r;
+  const fatture = window.FattureSelectors.getByPagAnno(profile, year);
+  for (const f of fatture) {
+    if (f.stato === 'bozza') continue;
+    if (f.stato === 'stornata') continue; // TD04 NC already accounts for the cancellation
+    const mese = Number(f.pagMese);
+    if (!mese) continue;
+    const imp = window.FattureSelectors.getImportoSigned(f); // NC (TD04) → negative
+    m2r[mese] = (m2r[mese] || 0) + imp;
+  }
+  return m2r;
+}
+
 function getTotalAnnuoForYear(year, options) {
   const yearData = getYearDataFor(year);
   if (!yearData) return 0;
+
+  // When selectors available and no estimates needed: use per-cassa ricavi map for accuracy
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile &&
+      options && options.includeEstimates === false) {
+    const ricaviMap = buildRicaviMeseFromSelectors(currentProfile, year);
+    const crossYear = getCrossYearInvoicesForYear(year);
+    let total = 0;
+    for (const m in ricaviMap) total += ricaviMap[m];
+    for (const inv of crossYear) total += inv.importo;
+    return total;
+  }
 
   let total = 0;
   for (let m = 1; m <= 12; m++) total += getMonthEuroFromYearData(yearData, year, m, options);
