@@ -4838,3 +4838,12 @@ html[data-theme="light"] .dich-conto-estero {
   font-size: 12px;
   color: var(--color-text-muted);
 }
+
+/* ═══ Fatture tabella mensile — row variants (T9) ═══ */
+.fatt-row-nc { color: var(--color-error); }
+.fatt-row-stornata .fatt-input-importo { text-decoration: line-through; opacity: .6; }
+.fatt-row-stornata-netto { color: var(--color-text-muted); font-size: 11px; }
+.fatt-row-readonly .fatt-input-importo,
+.fatt-row-readonly .fatt-input-desc { pointer-events: none; background: transparent; border: 0; }
+.btn-open-fatt { padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: transparent; cursor: pointer; color: var(--color-text); font-size: 11px; }
+.btn-open-fatt:hover { background: var(--color-surface-2); }

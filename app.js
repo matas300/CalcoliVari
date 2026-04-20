@@ -1798,51 +1798,181 @@ function getFattureFromYearData(yearData, month) {
   }));
 }
 
+// Helper: get all fattureEmesse for the current profile (from FattureStorico or localStorage)
+function _getFattureEmesse(profile) {
+  if (window.FattureStorico) return window.FattureStorico.load(profile);
+  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; }
+}
+
+// Helper: save updated list back
+function _saveFattureEmesse(profile, list) {
+  if (window.FattureStorico) { window.FattureStorico.save(profile, list); return; }
+  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  localStorage.setItem(key, JSON.stringify(list));
+}
+
+// Helper: get id of fattura at position (month, idx) in the unified store
+function _getFatturaIdAt(month, idx) {
+  if (!window.FattureSelectors) return null;
+  const rows = window.FattureSelectors.getByMonth(currentProfile, currentYear, month);
+  return rows[idx] ? rows[idx].id : null;
+}
+
+// getFatture: shim that reads from fattureEmesse via FattureSelectors.
+// Returns legacy-shaped objects {importo, pagMese, pagAnno, desc, id, origine, stato, tipoDocumento}
+// used by callers that haven't been refactored yet (e.g. getAllFattureForBudget uses yearData directly).
 function getFatture(month) {
+  if (window.FattureSelectors) {
+    return window.FattureSelectors.getByMonth(currentProfile, currentYear, month).map(f => {
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
+      return {
+        importo: imp,
+        pagMese: f.pagMese || null,
+        pagAnno: f.pagAnno || null,
+        desc: cliente ? `${f.numero || ''} - ${cliente}`.trim().replace(/^-\s*/, '') : desc,
+        id: f.id,
+        origine: f.origine,
+        stato: f.stato,
+        tipoDocumento: f.tipoDocumento
+      };
+    });
+  }
+  // Fallback to legacy store (pre-migration)
   return getFattureFromYearData(data, month);
 }
 
 function setFatturaImporto(month, idx, val) {
-  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
-  if (!data.fatture[month][idx]) return;
-  data.fatture[month][idx].importo = parseFloat(val) || 0;
-  saveData();
+  const imp = parseFloat(val) || 0;
+  let id = _getFatturaIdAt(month, idx);
+  if (!id && window.FattureStorico) {
+    // No existing row — create a new legacy-migrated entry on first write
+    addFattura(month);
+    id = _getFatturaIdAt(month, idx);
+  }
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+    if (data.fatture[month][idx] === undefined) data.fatture[month][idx] = { importo: 0, pagMese: null, pagAnno: null, desc: '' };
+    data.fatture[month][idx].importo = imp;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  if (list[i].righe && list[i].righe.length > 0) {
+    list[i].righe[0].prezzoUnitario = imp;
+    list[i].righe[0].quantita = 1;
+  } else {
+    list[i].righe = [{ descrizione: '', quantita: 1, prezzoUnitario: imp, iva: 0 }];
+  }
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function setFatturaDesc(month, idx, val) {
-  if (!data.fatture[month] || !data.fatture[month][idx]) return;
-  data.fatture[month][idx].desc = val;
-  saveData();
+  const id = _getFatturaIdAt(month, idx);
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month] || !data.fatture[month][idx]) return;
+    data.fatture[month][idx].desc = val;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  if (list[i].righe && list[i].righe.length > 0) {
+    list[i].righe[0].descrizione = val;
+  } else {
+    list[i].righe = [{ descrizione: val, quantita: 1, prezzoUnitario: 0, iva: 0 }];
+  }
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function setFatturaPagamento(month, idx, pagMese, pagAnno) {
-  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
-  if (!data.fatture[month][idx]) return;
-  data.fatture[month][idx].pagMese = pagMese;
-  data.fatture[month][idx].pagAnno = pagAnno;
-  saveData();
+  const id = _getFatturaIdAt(month, idx);
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+    if (!data.fatture[month][idx]) return;
+    data.fatture[month][idx].pagMese = pagMese;
+    data.fatture[month][idx].pagAnno = pagAnno;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  list[i].pagMese = pagMese;
+  list[i].pagAnno = pagAnno;
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function addFattura(month) {
-  if (!data.fatture[month]) data.fatture[month] = [];
-  data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
-  saveData();
+  if (window.FattureStorico) {
+    const list = _getFattureEmesse(currentProfile);
+    const prog = window.FattureStorico.nextProgressivo(currentYear, list);
+    const pad = n => String(n).padStart(2, '0');
+    const newFatt = {
+      id: 'fat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      numero: window.FattureStorico.formatNumero(currentYear, prog),
+      anno: currentYear,
+      annoProgressivo: currentYear,
+      progressivo: prog,
+      data: `${currentYear}-${pad(month)}-01`,
+      clienteId: '',
+      clienteSnapshot: null,
+      righe: [{ descrizione: '', quantita: 1, prezzoUnitario: 0, iva: 0 }],
+      contributoIntegrativo: 0,
+      marcaDaBollo: false,
+      bolloAddebitato: false,
+      note: '',
+      modalitaPagamento: '',
+      scadenzaPagamento: '',
+      incassata: false,
+      dataIncasso: '',
+      issuedMonth: month,
+      issuedYear: currentYear,
+      stato: 'pagata',
+      tipoDocumento: 'TD01',
+      dataInvioSdi: null,
+      dataPagamento: null,
+      fatturaOriginaleId: null,
+      ritenuta: 0,
+      aliquotaRitenuta: 0,
+      tipoRitenuta: '',
+      causaleRitenuta: '',
+      ncIds: [],
+      ncTotaleImporto: 0,
+      pagMese: month,
+      pagAnno: currentYear,
+      origine: 'legacy-migrated'
+    };
+    list.unshift(newFatt);
+    _saveFattureEmesse(currentProfile, list);
+  } else {
+    if (!data.fatture[month]) data.fatture[month] = [];
+    data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
+    saveData();
+  }
   recalcAll();
 }
 
 function removeFattura(month, idx) {
+  const id = _getFatturaIdAt(month, idx);
+  if (id) {
+    const list = _getFattureEmesse(currentProfile);
+    const updated = list.filter(f => f.id !== id);
+    _saveFattureEmesse(currentProfile, updated);
+    recalcAll();
+    return;
+  }
+  // Fallback: legacy store
   if (!data.fatture[month] || !data.fatture[month][idx]) return;
   const row = data.fatture[month][idx];
   const linkedInvoiceId = String(row.invoiceId || row.fatturaId || '').trim();
   const canDeleteLast = !!linkedInvoiceId;
   if (data.fatture[month].length <= 1 && !canDeleteLast) return;
-  if (linkedInvoiceId && typeof deleteFatturaEmessa === 'function') {
-    deleteFatturaEmessa(linkedInvoiceId, {
-      skipMonthCleanup: true,
-      skipConfirm: true,
-      silent: true
-    });
-  }
   data.fatture[month].splice(idx, 1);
   if (data.fatture[month].length === 0) delete data.fatture[month];
   saveData();
@@ -5288,6 +5418,88 @@ function renderCalendar() {
 }
 
 // ═══════════════════ Render: Fatture ═══════════════════
+
+// Build one fattura table row (shared between single-row and multi-row month)
+function _renderFatturaRow(f, m, fi, nFatt, stim) {
+  const isFirst = fi === 0;
+  const isLast = fi === nFatt - 1;
+  const imp = f.importo || 0;
+  const hasPag = f.pagMese && f.pagAnno;
+  const isDiffYear = hasPag && f.pagAnno !== currentYear;
+  const isNC = f.tipoDocumento === 'TD04';
+  const isStornata = f.stato === 'stornata';
+  const isLegacy = f.origine === 'legacy-migrated' || !f.origine; // no origin = legacy store fallback
+  const hasId = !!f.id;
+
+  let rowClass = '';
+  if (isNC) rowClass += ' fatt-row-nc';
+  if (isStornata) rowClass += ' fatt-row-stornata';
+  if (!isLegacy && hasId) rowClass += ' fatt-row-readonly';
+
+  // Description: for legacy rows use f.desc; for others use first riga desc + cliente
+  const desc = f.desc || '';
+
+  // Import cell
+  let importoCell;
+  if (!isLegacy && hasId) {
+    // Read-only display for wizard / manuale / ocr-import rows
+    const impFormatted = fmt(Math.abs(imp));
+    importoCell = `<span class="fatt-input-importo" style="${isNC ? 'color:var(--color-error)' : ''}">${isNC ? '−' : ''}${impFormatted}</span>`;
+    if (isStornata && window.FattureSelectors) {
+      const fullFatt = window.FattureSelectors.all(currentProfile).find(x => x.id === f.id);
+      if (fullFatt) {
+        const netto = window.FattureSelectors.getNettoEffettivo(fullFatt);
+        importoCell += `<div class="fatt-row-stornata-netto">Netto eff.: ${fmt(netto)}</div>`;
+      }
+    }
+  } else {
+    const dispImp = isNC ? -Math.abs(imp) : imp;
+    importoCell = `<input type="number" value="${dispImp || ''}" placeholder="—"
+      onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" class="fatt-input-importo"
+      style="${isNC ? 'color:var(--color-error)' : ''}">`;
+  }
+
+  // Desc cell
+  let descCell;
+  if (!isLegacy && hasId) {
+    const ncPrefix = isNC ? 'NC — ' : '';
+    descCell = `<span class="fatt-input-desc" title="${escapeHtml ? escapeHtml(desc) : desc}">${ncPrefix}${desc || '—'}</span>`;
+  } else {
+    descCell = `<input type="text" value="${desc}" placeholder="—"
+      onchange="setFatturaDesc(${m},${fi},this.value)" class="fatt-input-desc">`;
+  }
+
+  // Payment cell
+  const pagCellDisabled = imp <= 0;
+  const pagCell = `<div class="pag-cell">
+    <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
+      <option value="">Mese...</option>
+      ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}" ${f.pagMese === (i+1) ? 'selected' : ''}>${ms}</option>`).join('')}
+    </select>
+    <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno || ''}" placeholder="${currentYear}" min="2020" max="2040"
+      onchange="setPagAnno(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
+    <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${pagCellDisabled ? 'disabled' : ''}>Oggi</button>
+    ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
+  </div>`;
+
+  // Actions cell
+  let actionsHtml = '';
+  if (isLast) actionsHtml += `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi" aria-label="Aggiungi fattura">+</button>`;
+  if (!isLegacy && hasId) {
+    actionsHtml += `<button class="btn-open-fatt" onclick="window.openFatturaModal && window.openFatturaModal('${f.id}')" title="Apri fattura">Apri</button>`;
+  } else if (nFatt > 1) {
+    actionsHtml += `<button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi" aria-label="Rimuovi fattura">&times;</button>`;
+  }
+
+  return `<tr class="${!isFirst ? 'fatt-subrow' : ''}${rowClass}">
+    <td data-label="Mese">${isFirst ? MONTHS[m-1] : ''}</td>
+    <td data-label="Importo">${importoCell}</td>
+    <td data-label="Desc">${descCell}</td>
+    <td data-label="Stimato" style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
+    <td data-label="Tassato nel">${pagCell}</td>
+    <td data-label="" class="fatt-actions">${actionsHtml}</td></tr>`;
+}
+
 function renderFatture() {
   const table = document.getElementById('fattureTable');
   if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
@@ -5298,60 +5510,35 @@ function renderFatture() {
     const stim = getMonthStimato(m);
     const fatture = getFatture(m);
     const nFatt = fatture.length;
-    const totalFatt = fatture.reduce((s, f) => s + f.importo, 0);
+    const totalFatt = fatture.reduce((s, f) => s + (f.importo || 0), 0);
     tF += totalFatt; tS += stim;
 
     if (nFatt <= 1) {
-      const f = fatture[0] || { importo: 0, pagMese: null, pagAnno: null, desc: '' };
-      const hasPag = f.pagMese && f.pagAnno;
-      const isDiffYear = hasPag && f.pagAnno !== currentYear;
-
-      h += `<tr><td data-label="Mese">${MONTHS[m-1]}</td>
-        <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
-          onchange="setFatturaImporto(${m},0,this.value);recalcAll()" class="fatt-input-importo"></td>
-        <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
-          onchange="setFatturaDesc(${m},0,this.value)" class="fatt-input-desc"></td>
-        <td data-label="Stimato" style="color:var(--text2)">${fmt(stim)}</td>
-        <td data-label="Tassato nel"><div class="pag-cell">
-          <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
-            <option value="">Mese...</option>
-            ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
-          </select>
-          <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-            onchange="setPagAnno(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
-          <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
-          ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
-        </div></td>
-        <td data-label=""><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura" aria-label="Aggiungi fattura">+</button></td></tr>`;
+      const f = fatture[0] || { importo: 0, pagMese: null, pagAnno: null, desc: '', origine: 'legacy-migrated' };
+      if (nFatt === 0) {
+        // No fattura: show empty editable row (legacy-compatible)
+        h += `<tr><td data-label="Mese">${MONTHS[m-1]}</td>
+          <td data-label="Importo"><input type="number" value="" placeholder="—"
+            onchange="setFatturaImporto(${m},0,this.value);recalcAll()" class="fatt-input-importo"></td>
+          <td data-label="Desc"><input type="text" value="" placeholder="—"
+            onchange="setFatturaDesc(${m},0,this.value)" class="fatt-input-desc"></td>
+          <td data-label="Stimato" style="color:var(--text2)">${fmt(stim)}</td>
+          <td data-label="Tassato nel"><div class="pag-cell">
+            <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" disabled>
+              <option value="">Mese...</option>
+              ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}">${ms}</option>`).join('')}
+            </select>
+            <input type="number" class="pag-anno fatt-input-anno" value="" placeholder="${currentYear}" min="2020" max="2040"
+              onchange="setPagAnno(${m},0,this.value)" disabled>
+            <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" disabled>Oggi</button>
+          </div></td>
+          <td data-label=""><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura" aria-label="Aggiungi fattura">+</button></td></tr>`;
+      } else {
+        h += _renderFatturaRow(f, m, 0, 1, stim);
+      }
     } else {
       for (let fi = 0; fi < nFatt; fi++) {
-        const f = fatture[fi];
-        const hasPag = f.pagMese && f.pagAnno;
-        const isDiffYear = hasPag && f.pagAnno !== currentYear;
-        const isFirst = fi === 0;
-        const isLast = fi === nFatt - 1;
-
-        h += `<tr class="${!isFirst?'fatt-subrow':''}">
-          <td data-label="Mese">${isFirst ? MONTHS[m-1] : ''}</td>
-          <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
-            onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" class="fatt-input-importo"></td>
-          <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
-            onchange="setFatturaDesc(${m},${fi},this.value)" class="fatt-input-desc"></td>
-          <td data-label="Stimato" style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
-          <td data-label="Tassato nel"><div class="pag-cell">
-            <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
-              <option value="">Mese...</option>
-              ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
-            </select>
-            <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-              onchange="setPagAnno(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
-            <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
-            ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
-          </div></td>
-          <td data-label="" class="fatt-actions">
-            ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi" aria-label="Aggiungi fattura">+</button>` : ''}
-            <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi" aria-label="Rimuovi fattura">&times;</button>
-          </td></tr>`;
+        h += _renderFatturaRow(fatture[fi], m, fi, nFatt, stim);
       }
       h += `<tr class="fatt-total-row"><td data-label=""></td>
         <td data-label="" colspan="2" style="font-weight:600;font-size:.78rem;color:var(--accent)">Totale mese: ${fmt(totalFatt)}</td>
