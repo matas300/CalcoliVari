@@ -1135,15 +1135,6 @@ if (typeof window !== 'undefined') {
   window.autofillClienteFromPiva = autofillClienteFromPiva;
 }
 
-function deleteCliente(id) {
-  const cliente = getClienti().find(c => c.id === id);
-  if (!cliente) return;
-  if (!confirm(`Eliminare ${cliente.nome || 'questo cliente'}?`)) return;
-  const list = getClienti().filter(c => c.id !== id);
-  saveClienti(list);
-  renderClienti();
-}
-
 function matchesClienteSearch(cliente, query) {
   if (!query) return true;
   const haystack = [
@@ -6187,63 +6178,6 @@ function renderBudget() {
 // ────────────────────────────────────────────────────────────────────────────────
 // Render: Clienti
 // ────────────────────────────────────────────────────────────────────────────────
-function renderClienteField(cliente, key, label, opts = {}) {
-  const full = opts.full ? ' cliente-field-full' : '';
-  const type = opts.type || 'text';
-  const value = cliente[key] ?? '';
-  const onChange = `updateClienteField(this.closest('.cliente-card').dataset.clientId, '${key}', this.value)`;
-  if (opts.type === 'textarea') {
-    return `<div class="cliente-field${full}">
-      <label>${label}</label>
-      <textarea onchange="${onChange}">${escapeHtml(value)}</textarea>
-    </div>`;
-  }
-  return `<div class="cliente-field${full}">
-    <label>${label}</label>
-    <input type="${type}" value="${escapeHtml(value)}" onchange="${onChange}">
-  </div>`;
-}
-
-function renderClienteCard(cliente) {
-  const summary = cliente.nome || 'Nuovo cliente';
-  const chips = [
-    cliente.partitaIva ? `P.IVA ${escapeHtml(cliente.partitaIva)}` : '',
-    cliente.codiceSDI ? `SDI ${escapeHtml(cliente.codiceSDI)}` : '',
-    cliente.pec ? 'PEC' : '',
-    cliente.nazione && cliente.nazione !== 'IT' ? escapeHtml(cliente.nazione) : 'IT'
-  ].filter(Boolean);
-  return `<details class="cliente-card" data-client-id="${escapeHtml(cliente.id)}">
-    <summary class="cliente-card-summary">
-      <div class="cliente-card-title">
-        <strong>${escapeHtml(summary)}</strong>
-        <span>${escapeHtml(cliente.codiceFiscale || cliente.indirizzo || 'Cliente salvato')}</span>
-      </div>
-      <div class="cliente-card-badges">
-        ${chips.map(chip => `<span class="cliente-chip">${chip}</span>`).join('')}
-      </div>
-    </summary>
-    <div class="cliente-card-body">
-      <div class="cliente-grid">
-        ${renderClienteField(cliente, 'nome', 'Nome / ragione sociale', { full: true })}
-        ${renderClienteField(cliente, 'partitaIva', 'Partita IVA')}
-        ${renderClienteField(cliente, 'codiceFiscale', 'Codice fiscale')}
-        ${renderClienteField(cliente, 'codiceSDI', 'Codice SDI')}
-        ${renderClienteField(cliente, 'pec', 'PEC', { full: true })}
-        ${renderClienteField(cliente, 'indirizzo', 'Indirizzo', { full: true })}
-        ${renderClienteField(cliente, 'cap', 'CAP')}
-        ${renderClienteField(cliente, 'citta', 'Città')}
-        ${renderClienteField(cliente, 'provincia', 'Provincia')}
-        ${renderClienteField(cliente, 'nazione', 'Nazione')}
-        ${renderClienteField(cliente, 'note', 'Note', { type: 'textarea', full: true })}
-      </div>
-      <div class="cliente-card-footer">
-        <div class="cliente-card-hint">Le modifiche vengono salvate automaticamente nel profilo corrente.</div>
-        <button class="btn-del cliente-delete-btn" type="button" onclick="deleteCliente(this.closest('.cliente-card').dataset.clientId)">Elimina</button>
-      </div>
-    </div>
-  </details>`;
-}
-
 function renderClienteTableRow(cliente) {
   const id = escapeHtml(cliente.id);
   const nome = escapeHtml(cliente.nome || 'Senza nome');
@@ -6261,7 +6195,7 @@ function renderClienti() {
   const el = document.getElementById('clientiContent');
   if (!el) return;
   if (!currentProfile) {
-    el.innerHTML = `<div class="cliente-empty">Accedi per gestire l'anagrafica clienti.</div>`;
+    el.innerHTML = `<div class="clienti-empty">Accedi per gestire l'anagrafica clienti.</div>`;
     return;
   }
   const activeEl = document.activeElement;
