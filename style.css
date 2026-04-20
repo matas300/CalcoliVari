@@ -5045,18 +5045,23 @@ html[data-theme="light"] .dich-conto-estero {
   font-weight: 600;
 }
 .cliente-sede-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  align-items: end;
+  align-items: flex-end;
 }
 .cliente-sede-row .cliente-field {
   min-width: 0;
+  flex: 1 1 0;
+}
+.cliente-sede-row .cliente-field:nth-child(2) {
+  flex: 2 1 0;
 }
 .cliente-sede-row .cliente-field input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  height: 32px;
 }
 .cliente-modal-actions {
   display: flex;
@@ -5082,7 +5087,8 @@ html[data-theme="light"] .dich-conto-estero {
     border-radius: 0;
     border: none;
   }
-  .cliente-sede-row {
-    grid-template-columns: 1fr 1fr;
+  .cliente-sede-row .cliente-field,
+  .cliente-sede-row .cliente-field:nth-child(2) {
+    flex: 1 1 calc(50% - var(--space-2));
   }
 }

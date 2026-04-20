@@ -969,19 +969,19 @@ function renderClienteModal(id) {
         <div class="cliente-sede-row">
           <div class="cliente-field">
             <label>CAP</label>
-            <input type="text" size="5" value="${esc(cliente.cap)}" maxlength="5" ${on('cap')}>
+            <input type="text" autocomplete="off" value="${esc(cliente.cap)}" maxlength="5" ${on('cap')}>
           </div>
           <div class="cliente-field">
             <label>Città</label>
-            <input type="text" size="1" value="${esc(cliente.citta)}" ${on('citta')}>
+            <input type="text" autocomplete="off" value="${esc(cliente.citta)}" ${on('citta')}>
           </div>
           <div class="cliente-field">
             <label>Provincia</label>
-            <input type="text" size="2" value="${esc(cliente.provincia)}" maxlength="2" ${on('provincia')}>
+            <input type="text" autocomplete="off" value="${esc(cliente.provincia)}" maxlength="2" ${on('provincia')}>
           </div>
           <div class="cliente-field">
             <label>Nazione</label>
-            <input type="text" size="2" value="${esc(cliente.nazione)}" maxlength="2" ${on('nazione')}>
+            <input type="text" autocomplete="off" value="${esc(cliente.nazione)}" maxlength="2" ${on('nazione')}>
           </div>
         </div>
       </div>
