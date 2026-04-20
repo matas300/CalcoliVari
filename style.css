@@ -4502,6 +4502,18 @@ html[data-theme="light"] .dich-conto-estero {
 .badge-stato.inviata   { color: var(--color-info); }
 .badge-stato.pagata    { color: var(--color-success); }
 .badge-stato.annullata { color: var(--color-error); }
+.badge-origine-legacy {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
 .storico-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .storico-table th, .storico-table td { padding: 8px; border-bottom: 1px solid var(--color-border); text-align: left; }
 .storico-table th { color: var(--text2); font-weight: 500; font-size: 11px; text-transform: uppercase; }

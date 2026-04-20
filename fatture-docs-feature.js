@@ -290,7 +290,10 @@
       // OCR stubs (forward compat)
       _ocrRawText: raw._ocrRawText || null,
       _ocrConfidence: raw._ocrConfidence || null,
-      _ocrFieldsExtracted: raw._ocrFieldsExtracted || null
+      _ocrFieldsExtracted: raw._ocrFieldsExtracted || null,
+
+      // Legacy migration flag: true once wizard ha completato i dati
+      _legacyCompleted: raw._legacyCompleted === true
     };
   }
 
@@ -1080,6 +1083,12 @@
 
     // Set pagMese/pagAnno on the fattura object (no monthly-store write needed)
     applyPagMesePagAnno(draft);
+
+    // Promote legacy-migrated fatture to wizard-completed once cliente+numero sono valorizzati
+    if (draft.origine === 'legacy-migrated' && draft.clienteId && draft.numero) {
+      draft.origine = 'manuale';
+      draft._legacyCompleted = true;
+    }
 
     const history = loadFattureEmesse();
     const idx = history.findIndex(h => h.id === draft.id);

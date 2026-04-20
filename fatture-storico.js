@@ -40,6 +40,21 @@
     return max + 1;
   }
 
+  // Pure helpers (test-friendly, no DOM)
+  function shouldShowLegacyBadge(f) {
+    if (!f || typeof f !== 'object') return false;
+    if (f._legacyCompleted === true) return false;
+    return f.origine === 'legacy-migrated';
+  }
+
+  function markLegacyCompleted(f) {
+    if (!f || typeof f !== 'object') return f;
+    var out = Object.assign({}, f);
+    out._legacyCompleted = true;
+    out.origine = 'manuale';
+    return out;
+  }
+
   function formatNumero(anno, progressivo) {
     const a = Number(anno) || new Date().getFullYear();
     const p = Number(progressivo) || 1;
@@ -120,9 +135,16 @@
       _formatEur(_calcTotale(f)),
       f.tipoDocumento || 'TD01'
     ];
-    cells.forEach(c => {
+    cells.forEach((c, i) => {
       const td = document.createElement('td');
       td.textContent = c;
+      if (i === 0 && shouldShowLegacyBadge(f)) {
+        const b = document.createElement('span');
+        b.className = 'badge-origine-legacy';
+        b.textContent = 'Legacy';
+        b.style.marginLeft = '6px';
+        td.appendChild(b);
+      }
       tr.appendChild(td);
     });
     // Stato badge
@@ -151,6 +173,9 @@
       return b;
     }
     btns.push(mk('Visualizza', () => window.viewFatturaModal && window.viewFatturaModal(f.id)));
+    if (shouldShowLegacyBadge(f)) {
+      btns.push(mk('Completa dati', () => window.openFatturaModal && window.openFatturaModal(f.id)));
+    }
     if (f.stato === 'bozza') {
       btns.push(mk('Modifica', () => window.openFatturaModal && window.openFatturaModal(f.id)));
       btns.push(mk('Annulla', () => _changeStato(f.id, 'annullata', profile)));
@@ -304,7 +329,9 @@
     renderAnnoFilter,
     openArchivioModal,
     closeArchivioModal,
-    setArchivioStato
+    setArchivioStato,
+    shouldShowLegacyBadge,
+    markLegacyCompleted
   };
   window.openArchivioFatture = openArchivioModal;
 })();
