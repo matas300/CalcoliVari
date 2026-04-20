@@ -5046,7 +5046,7 @@ html[data-theme="light"] .dich-conto-estero {
 }
 .cliente-sede-row {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-2);
   align-items: end;
 }
@@ -5055,6 +5055,8 @@ html[data-theme="light"] .dich-conto-estero {
 }
 .cliente-sede-row .cliente-field input {
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 .cliente-modal-actions {
   display: flex;
