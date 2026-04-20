@@ -270,6 +270,24 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **UI storico** (`#storico-fatture` card in tab Fatture): tabella Numero/Data/Cliente/Importo/Tipo/Stato/Azioni, filtro anno, azioni contestuali per stato (Riapri/Annulla su bozza, Duplica ovunque, Segna inviata/pagata, Nota di credito su inviata/pagata)
 - **Hook tab**: `switchToTab()` in `app.js` chiama `FattureStorico.renderAnnoFilter()` + `renderStorico()` all'attivazione tab Fatture
 
+### Clienti (redesign tabella + modal)
+- **Vista principale**: tabella compatta `.clienti-table` (non più card grid). Colonne essenziali (nome, P.IVA, città, azioni); click riga apre il dettaglio.
+- **Dettaglio**: modal `#clienteModal` aperto via `openClienteModal(id)`, chiuso via `closeClienteModal()`. Sezioni interne: **P.IVA** (con autofill), **Anagrafica**, **Sede**, **Fatturazione Elettronica** (codice SDI, PEC), **Note**.
+- **Inline save**: ogni input nel modal salva al `change` via `updateClienteField(id, field, value)` → `saveClienti(profile, clienti)` + sync cloud. Nessun bottone "Salva" — il modal riflette sempre lo stato persistito.
+- **Storage** (invariato): `calcoliPIVA_{profile}_clienti` (array), normalizzato via `normalizeCliente`. Sync: `PROFILE_META_KEYS` in `firebase-sync.js` include `'clienti'`.
+- **Campi cliente**: `id, nome, partitaIva, codiceFiscale, codiceSDI, pec, indirizzo, cap, citta, provincia, nazione, note`.
+
+#### Autofill da P.IVA (`clienti-autofill.js`)
+- **Modulo**: IIFE che espone `window.ClientiAutofill`.
+- **API**:
+  - `lookupPartitaIva(piva) → { ok, data, error, code }` — codici errore: `INVALID_PIVA` | `NO_KEY` | `NOT_FOUND` | `NETWORK`
+  - `hasApiKey()`, `getApiKey()` — leggono da `settings.openapiKey`
+- **Endpoint**: `https://imprese.openapi.it/advance/{piva}` con header `Authorization: Bearer {key}`.
+- **Mapping response** → `{ nome, cf, indirizzo, cap, citta, provincia, pec }`.
+- **Azione UI**: `autofillClienteFromPiva(id)` nel modal — **non sovrascrive** campi già compilati, riempie solo i vuoti. Feedback inline su errore (chiave mancante, P.IVA non trovata, network).
+- **Settings**: `settings.openapiKey` (string, default `''`), editabile dal tab **Impostazioni → sezione "Clienti"**.
+- **Nota sicurezza**: l'API key viene inclusa nel sync Firebase come qualsiasi altro campo di `settings` (dato sensibile del profilo — l'utente ne è consapevole tramite label esplicativa accanto al campo).
+
 ### Invoice PDF (`buildInvoicePdfMinimal`)
 - Layout minimalista A4 portrait, margini 20 mm, font Helvetica (built-in jsPDF):
   - Header testo "FATTURA N. YYYY/NNN" + Data, senza bande colore; "NOTA DI CREDITO" per TD04
