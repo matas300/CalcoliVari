@@ -1901,11 +1901,29 @@ ${dettaglioLinee.join('\n')}
   }
 
   function openNotaCreditoModal(fatturaOriginaleId) {
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
-    const fatture = loadFattureEmesse(profile);
-    const orig = fatture.find(f => f.id === fatturaOriginaleId);
-    if (!orig) { showFatturaToast('Fattura originale non trovata', 'error'); return; }
+    let orig = getSavedInvoiceById(fatturaOriginaleId);
+    if (!orig && window.FattureStorico) {
+      const profiles = [
+        (typeof window.getProfile === 'function' ? window.getProfile() : null),
+        sessionStorage.getItem('currentProfile'),
+        sessionStorage.getItem('calcoliPIVA_profile')
+      ].filter(Boolean);
+      for (const p of profiles) {
+        const storico = window.FattureStorico.load(p) || [];
+        orig = storico.find(f => f.id === fatturaOriginaleId);
+        if (orig) break;
+      }
+    }
+    if (!orig && state.draft && state.draft.id === fatturaOriginaleId) {
+      orig = state.draft;
+    }
+    if (!orig) {
+      console.warn('[NC] Fattura originale non trovata', { fatturaOriginaleId, stateDraftId: state.draft && state.draft.id });
+      showFatturaToast('Fattura originale non trovata', 'error');
+      return;
+    }
     const annoOggi = new Date().getFullYear();
+    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
     const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
     const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
     const draft = {

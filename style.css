@@ -3190,6 +3190,8 @@ html[data-theme="light"] .qpay-input {
 /* ═══════════════════ Sidebar ═══════════════════ */
 
 body.logged-in { padding-left: var(--sidebar-width); }
+body.sidebar-collapsed.logged-in { padding-left: 60px; }
+body.sidebar-collapsed .container { max-width: none; }
 
 .sidebar {
   position: fixed;
