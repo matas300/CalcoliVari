@@ -14,7 +14,13 @@
 
   function getSettingsObject() {
     if (typeof root.S === 'function') {
-      try { return root.S() || {}; } catch (_e) { return {}; }
+      try { return root.S() || {}; } catch (_e) { /* fallthrough */ }
+    }
+    if (typeof root.getAppData === 'function') {
+      try {
+        var d = root.getAppData();
+        if (d && d.settings) return d.settings;
+      } catch (_e) { /* fallthrough */ }
     }
     return (root.data && root.data.settings) || {};
   }
@@ -44,12 +50,14 @@
     };
   }
 
-  function lookupPartitaIva(piva) {
+  function lookupPartitaIva(piva, apiKeyOverride) {
     var clean = (piva || '').replace(/\s/g, '');
     if (!isValidPivaIT(clean)) {
       return Promise.resolve({ ok: false, code: 'INVALID_PIVA', error: 'P.IVA non valida (11 cifre)' });
     }
-    var key = getApiKey();
+    var key = typeof apiKeyOverride === 'string' && apiKeyOverride.trim()
+      ? apiKeyOverride.trim()
+      : getApiKey();
     if (!key) {
       return Promise.resolve({ ok: false, code: 'NO_KEY', error: 'API key openapi.it non configurata' });
     }

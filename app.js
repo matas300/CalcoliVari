@@ -1067,7 +1067,8 @@ async function autofillClienteFromPiva(id) {
   const originalText = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Caricamento...'; }
   try {
-    const res = await api.lookupPartitaIva(piva);
+    const apiKey = (data && data.settings && data.settings.openapiKey) || '';
+    const res = await api.lookupPartitaIva(piva, apiKey);
     if (!res || !res.ok) {
       const code = res && res.code;
       if (code === 'INVALID_PIVA') {
@@ -1089,7 +1090,7 @@ async function autofillClienteFromPiva(id) {
       showClienteModalToast('Cliente non trovato', 'error');
       return;
     }
-    const data = res.data || {};
+    const payload = res.data || {};
     const mapping = [
       ['nome', 'nome'],
       ['cf', 'codiceFiscale'],
@@ -1101,7 +1102,7 @@ async function autofillClienteFromPiva(id) {
     ];
     let applied = 0, skipped = 0, available = 0;
     for (const [srcKey, targetField] of mapping) {
-      const incoming = (data[srcKey] || '').toString().trim();
+      const incoming = (payload[srcKey] || '').toString().trim();
       if (!incoming) continue;
       available++;
       const current = (cliente[targetField] || '').toString().trim();
@@ -6921,3 +6922,4 @@ function showAppConfirm(optsOrMsg, cbMaybe) {
   });
 }
 window.showAppConfirm = showAppConfirm;
+window.getAppData = function() { return data; };
