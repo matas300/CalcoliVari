@@ -4371,7 +4371,8 @@ function buildForfettarioScheduleForYear(year) {
       note: note || '',
       status: getScheduleStatus(due.date),
       key: opts.key || '',
-      certainty
+      certainty,
+      hint: opts.hint || ''
     });
   }
 
@@ -4576,6 +4577,9 @@ function buildForfettarioScheduleForYear(year) {
 
   const defaultCamera = getInpsMode(scheduleSettings) === 'artigiani_commercianti' ? 53 : 0;
   const cameraAmount = manualCamera !== null ? manualCamera : defaultCamera;
+  const cameraHint = (manualCamera === null && defaultCamera > 0)
+    ? 'Valore di default: 53 EUR (artigiani/commercianti). Sovrascrivi da Impostazioni se diverso.'
+    : '';
   if (cameraAmount > 0) {
     pushDueRow(
       FORFETTARIO_RULES.saldoMonth,
@@ -4586,7 +4590,7 @@ function buildForfettarioScheduleForYear(year) {
       'altro',
       manualCamera !== null ? 'Importo configurato' : 'Default artigiani/commercianti',
       '',
-      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year }
+      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year, hint: cameraHint }
     );
   }
   // Bollo fatture elettroniche: calcolo automatico per trimestre
@@ -4632,15 +4636,36 @@ function buildForfettarioScheduleForYear(year) {
   const autoInailNext = profileInailTasso > 0 ? calcInailPremio(year + 1, profileInailTasso) : 0;
   const inailCurrentAmount = manualInailCurrent !== null ? manualInailCurrent : autoInailCurrent;
   const inailNextAmount = manualInailNext !== null ? manualInailNext : autoInailNext;
+  const inailHintMissing = 'Imposta il tasso in Profilo P.IVA oppure override manuale in Impostazioni.';
+  const inailCurrentHint = (profileInailTasso === 0 && manualInailCurrent === null) ? inailHintMissing : '';
+  const inailNextHint = (profileInailTasso === 0 && manualInailNext === null) ? inailHintMissing : '';
   if (inailCurrentAmount > 0) {
     pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, inailCurrentAmount, 'altro',
       manualInailCurrent !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year))}`,
-      '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year });
+      '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year, hint: inailCurrentHint });
+  } else if (inailCurrentHint) {
+    const dueCurrent = buildRolledDueDate(year, 2, 16);
+    rows.push({
+      due: dueCurrent, title: 'Autoliquidazione INAIL', competence: `Rif. ${year}`,
+      fiscalYear: year, amount: 0, low: 0, high: 0, kind: 'altro',
+      method: 'Tasso non impostato', note: '',
+      status: getScheduleStatus(dueCurrent.date), key: `inail_${year}`,
+      certainty: 'fixed', hint: inailCurrentHint
+    });
   }
   if (inailNextAmount > 0) {
     pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, inailNextAmount, 'altro',
       manualInailNext !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year + 1))}`,
-      '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1 });
+      '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1, hint: inailNextHint });
+  } else if (inailNextHint) {
+    const dueNext = buildRolledDueDate(year + 1, 2, 16);
+    rows.push({
+      due: dueNext, title: 'Autoliquidazione INAIL', competence: `Rif. ${year + 1}`,
+      fiscalYear: year + 1, amount: 0, low: 0, high: 0, kind: 'altro',
+      method: 'Tasso non impostato', note: '',
+      status: getScheduleStatus(dueNext.date), key: `inail_${year + 1}`,
+      certainty: 'fixed', hint: inailNextHint
+    });
   }
 
   const autoCurrentImpostaSaldo = currentApplied ? currentApplied.tasse - impostaAcconti.total : 0;
@@ -4859,7 +4884,7 @@ function mapScheduleRowToScadenziario(rowItem, year) {
   const scadEngine = getScadenziarioEngine();
   const paymentEvents = rowItem && rowItem.key ? getPaymentEventsForScheduleKey(rowItem.key) : [];
   if (scadEngine && typeof scadEngine.normalizeLegacyScheduleRow === 'function') {
-    return scadEngine.normalizeLegacyScheduleRow(rowItem, {
+    const normalized = scadEngine.normalizeLegacyScheduleRow(rowItem, {
       year,
       paymentEvents,
       now: new Date(),
@@ -4884,10 +4909,13 @@ function mapScheduleRowToScadenziario(rowItem, year) {
       supportsPartialPayment: true,
       paymentMode: 'partial_allowed',
       note: rowItem && rowItem.note ? rowItem.note : '',
+      hint: rowItem && rowItem.hint ? rowItem.hint : '',
       warnings: [],
       due: rowItem && rowItem.due ? rowItem.due : null,
       legacyRow: rowItem
     });
+    if (rowItem && rowItem.hint && normalized && !normalized.hint) normalized.hint = rowItem.hint;
+    return normalized;
   }
   const mapped = {
     id: rowItem && rowItem.key ? rowItem.key : `sched_${year}_${Math.random().toString(36).slice(2, 8)}`,
@@ -4914,6 +4942,7 @@ function mapScheduleRowToScadenziario(rowItem, year) {
     paymentMode: 'partial_allowed',
     paymentEvents,
     note: rowItem && rowItem.note ? rowItem.note : '',
+    hint: rowItem && rowItem.hint ? rowItem.hint : '',
     warnings: [],
     due: rowItem && rowItem.due ? rowItem.due : null,
     legacyRow: rowItem
@@ -5259,6 +5288,7 @@ function renderScadenziarioRowsTable(rows, options) {
         <div class="scad-sub">${row.competenceLabel || row.competence || `Competenza ${row.competenceYear}`}</div>
         ${explanation ? `<div class="scad-sub">${explanation}</div>` : ''}
         ${crossYearMeta}
+        ${row.hint ? `<div style="font-size:.72rem;color:var(--color-warning);margin-top:4px">⚠ ${escapeHtml(row.hint)}</div>` : ''}
       </td>
       <td data-label="Importo">
         <div>${fmt(row.amountDue)}</div>
