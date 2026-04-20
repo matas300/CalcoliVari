@@ -805,7 +805,7 @@
         <div class="fattura-view-actions">
           <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
           <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
-          ${!isNC ? `<button type="button" class="btn-add profile-secondary-btn" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
+          ${(!isNC && (draft.stato === 'inviata' || draft.stato === 'pagata')) ? `<button type="button" class="btn-add profile-secondary-btn" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
           ${hardDeleteBtn}
         </div>
       </div>
@@ -815,10 +815,18 @@
   function switchFatturaToEdit() { state.mode = 'edit'; state.step = 1; renderFatturaModal(); }
   function createNCFromCurrentInvoice() {
     const draft = currentDraft();
-    if (!draft || !draft.id) return;
+    if (!draft || !draft.id) {
+      console.warn('[fatture] createNC: nessuna fattura corrente');
+      return;
+    }
+    if (draft.stato !== 'inviata' && draft.stato !== 'pagata') {
+      showFatturaToast('La NC si emette solo su fatture inviate o pagate.', 'error');
+      return;
+    }
     if (typeof openNotaCreditoModal === 'function') {
-      closeFatturaModal();
       openNotaCreditoModal(draft.id);
+    } else {
+      console.error('[fatture] openNotaCreditoModal non disponibile');
     }
   }
 
