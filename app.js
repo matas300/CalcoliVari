@@ -1738,48 +1738,6 @@ function applySettings() {
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
   if (typeof updateNavLabels === 'function') updateNavLabels();
-  // Anagrafica fields
-  const ana = s.anagrafica || {};
-  const anagraficaMap = {
-    settCf:           'codiceFiscale',
-    settCognome:      'cognome',
-    settNome:         'nome',
-    settSesso:        'sesso',
-    settDataNascita:  'dataNascita',
-    settComuneNascita:'comuneNascita',
-    settProvNascita:  'provNascita',
-    settResVia:       'residenzaVia',
-    settResComune:    'residenzaComune',
-    settResProv:      'residenzaProv',
-    settResCap:       'residenzaCap',
-    settDomVia:       'domicilioFiscaleVia',
-    settDomComune:    'domicilioFiscaleComune',
-    settDomProv:      'domicilioFiscaleProv',
-    settDomCap:       'domicilioFiscaleCap',
-    settTelefono:     'telefono',
-    settEmail:        'email',
-    settStatoCivile:  'statoCivile'
-  };
-  for (const [id, key] of Object.entries(anagraficaMap)) {
-    const el = document.getElementById(id);
-    if (el) el.value = ana[key] || '';
-  }
-  if (ana.codiceFiscale !== undefined) updateCfStatus(ana.codiceFiscale);
-  // Attivita fields
-  const att = s.attivita || {};
-  const attivitaMap = {
-    settAttCodiceAteco:  'codiceAteco',
-    settAttDescrizione:  'descrizioneAttivita',
-    settAttDataInizio:   'dataInizioAttivita',
-    settSedeVia:         'sedeVia',
-    settSedeComune:      'sedeComune',
-    settSedeProv:        'sedeProv',
-    settSedeCap:         'sedeCap'
-  };
-  for (const [id, key] of Object.entries(attivitaMap)) {
-    const el = document.getElementById(id);
-    if (el) el.value = att[key] || '';
-  }
   // C4: parametri fiscali
   const coefI = document.getElementById('settCoefficiente'); if (coefI) coefI.value = s.coefficiente ?? '';
   const aliqI = document.getElementById('settAliquotaSost'); if (aliqI) aliqI.value = s.impostaSostitutiva ?? '';
