@@ -7,10 +7,26 @@ function describe(name, fn) {
   fn();
 }
 
+var asyncQueue = [];
 function test(name, fn) {
   total++;
   try {
-    fn();
+    var r = fn();
+    if (r && typeof r.then === 'function') {
+      // Async test: defer the pass/fail verdict until promise settles.
+      total--; // will re-count when resolved
+      asyncQueue.push(r.then(function () {
+        total++;
+        console.log('  ✓ ' + name);
+        passed++;
+      }, function (e) {
+        total++;
+        console.log('  ✗ ' + name);
+        console.log('    ' + (e && e.message ? e.message : e));
+        failed++;
+      }));
+      return;
+    }
     console.log('  ✓ ' + name);
     passed++;
   } catch (e) {
@@ -63,5 +79,7 @@ require('./fatture-legacy-badge.test.js');
 require('./fatture-ocr-stub.test.js');
 require('./clienti-autofill.test.js');
 
-console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
-if (failed > 0) process.exit(1);
+Promise.all(asyncQueue).then(function () {
+  console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
+  if (failed > 0) process.exit(1);
+});
