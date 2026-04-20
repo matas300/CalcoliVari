@@ -5048,6 +5048,13 @@ html[data-theme="light"] .dich-conto-estero {
   display: grid;
   grid-template-columns: 1fr 2fr 1fr 1fr;
   gap: var(--space-2);
+  align-items: end;
+}
+.cliente-sede-row .cliente-field {
+  min-width: 0;
+}
+.cliente-sede-row .cliente-field input {
+  box-sizing: border-box;
 }
 .cliente-modal-actions {
   display: flex;

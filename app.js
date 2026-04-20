@@ -1008,8 +1008,8 @@ function renderClienteModal(id) {
       </div>
 
       <div class="cliente-modal-actions">
-        <button type="button" class="btn-del btn-danger" onclick="deleteClienteFromModal('${idEsc}')">Elimina</button>
-        <button type="button" class="btn-ghost" onclick="closeClienteModal()">Chiudi</button>
+        <button type="button" class="btn-danger" onclick="deleteClienteFromModal('${idEsc}')">Elimina</button>
+        <button type="button" class="btn-primary" onclick="closeClienteModal()">Chiudi</button>
       </div>
     </div>`;
 }
