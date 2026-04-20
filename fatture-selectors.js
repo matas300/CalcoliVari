@@ -44,10 +44,18 @@
     return imp - nc;
   }
 
+  function getByMonth(profile, year, month) {
+    return all(profile).filter(function (f) {
+      if (f.stato === 'bozza') return false;
+      return Number(f.pagAnno) === Number(year) && Number(f.pagMese) === Number(month);
+    });
+  }
+
   window.FattureSelectors = {
     all: all,
     storageKey: storageKey,
     getImportoSigned: getImportoSigned,
-    getNettoEffettivo: getNettoEffettivo
+    getNettoEffettivo: getNettoEffettivo,
+    getByMonth: getByMonth
   };
 })();

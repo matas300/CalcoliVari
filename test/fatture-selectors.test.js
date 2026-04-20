@@ -43,6 +43,38 @@ describe('FattureSelectors.getNettoEffettivo — importo meno NC collegate', fun
   });
 });
 
+describe('FattureSelectors.getByMonth — fatture con pagamento nel mese, escluse bozze', function () {
+  test('esclude bozze', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'a', stato: 'bozza', pagAnno: 2026, pagMese: 3, tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 100 }] },
+      { id: 'b', stato: 'inviata', pagAnno: 2026, pagMese: 3, tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 200 }] }
+    ]);
+    var res = Sel.getByMonth('Mattia', 2026, 3);
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('b');
+  });
+
+  test('include NC (TD04) nel mese', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'orig', stato: 'inviata', pagAnno: 2026, pagMese: 3, tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 200 }] },
+      { id: 'nc', stato: 'inviata', pagAnno: 2026, pagMese: 3, tipoDocumento: 'TD04', righe: [{ quantita: 1, prezzoUnitario: 80 }] }
+    ]);
+    var res = Sel.getByMonth('Mattia', 2026, 3);
+    expect(res.length).toBe(2);
+  });
+
+  test('filtra per pagAnno+pagMese, non per data emissione', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'a', stato: 'pagata', data: '2025-12-20', pagAnno: 2026, pagMese: 1, tipoDocumento: 'TD01', righe: [{ quantita: 1, prezzoUnitario: 300 }] }
+    ]);
+    expect(Sel.getByMonth('Mattia', 2026, 1).length).toBe(1);
+    expect(Sel.getByMonth('Mattia', 2025, 12).length).toBe(0);
+  });
+});
+
 describe('FattureSelectors.all — carica fatture per profilo', function () {
   test('ritorna array vuoto se nessun dato', function () {
     reset();
