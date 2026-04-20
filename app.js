@@ -1558,6 +1558,7 @@ function applySettings() {
   const limI = document.getElementById('settLimiteForfettario'); if (limI) limI.value = s.limiteForfettario ?? '';
   const inailI = document.getElementById('settTassoInail'); if (inailI) inailI.value = s.inailTasso ?? '';
   const uffI = document.getElementById('settUsaInpsUfficiale'); if (uffI) uffI.value = String(s.usaInpsUfficiale ?? 1);
+  const devHD = document.getElementById('settDevHardDelete'); if (devHD) devHD.checked = (parseInt(s.devHardDelete, 10) || 0) === 1;
   populateAtecoGruppoSelect();
 }
 
@@ -1598,6 +1599,11 @@ function saveTextSetting(key, val) {
 
 function saveOptionalNumberSetting(key, val) {
   data.settings[key] = String(val).trim() === '' ? '' : (parseFloat(val) || 0);
+  saveData();
+}
+
+function saveBoolSetting(key, val) {
+  data.settings[key] = val ? 1 : 0;
   saveData();
 }
 
@@ -5562,6 +5568,22 @@ function _renderFatturaRow(f, m, fi, nFatt, stim) {
 function renderFatture() {
   const table = document.getElementById('fattureTable');
   if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+  // Banner warning hard-delete (modalità test)
+  const fattureTab = document.getElementById('tab-fatture');
+  if (fattureTab) {
+    const existing = fattureTab.querySelector('.fatture-banner-warning');
+    const active = (parseInt((data.settings || {}).devHardDelete, 10) || 0) === 1;
+    if (active && !existing) {
+      const banner = document.createElement('div');
+      banner.className = 'fatture-banner-warning';
+      banner.textContent = '\u26A0 Hard-delete attivo — modalità test';
+      const panel = fattureTab.querySelector('.panel');
+      if (panel) panel.insertBefore(banner, panel.firstChild);
+      else fattureTab.insertBefore(banner, fattureTab.firstChild);
+    } else if (!active && existing) {
+      existing.remove();
+    }
+  }
   let h = `<thead><tr><th>Mese</th><th>Importo</th><th>Desc</th><th>Stimato</th><th>Tassato nel</th><th></th></tr></thead><tbody>`;
   let tF = 0, tS = 0;
 

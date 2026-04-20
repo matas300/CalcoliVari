@@ -733,6 +733,10 @@
         <td style="text-align:right;">${formatEur((r.quantita || 0) * (r.prezzoUnitario || 0))}</td>
       </tr>`).join('');
     const isNC = draft.tipoDocumento === 'TD04';
+    const hardDeleteOn = (typeof data !== 'undefined' && data && data.settings && (parseInt(data.settings.devHardDelete, 10) || 0) === 1);
+    const hardDeleteBtn = hardDeleteOn
+      ? `<button type="button" class="btn-danger" onclick="hardDeleteFattura('${esc(draft.id)}')">🗑 Hard delete</button>`
+      : '';
     el.innerHTML = `
       <div class="fattura-sheet fattura-view">
         <div class="fattura-sheet-header">
@@ -774,6 +778,7 @@
           <div style="display:flex; gap:8px;">
             <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
             ${!isNC ? `<button type="button" class="btn-add" style="background:var(--color-warning); color:var(--color-bg);" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
+            ${hardDeleteBtn}
           </div>
         </div>
       </div>
@@ -2131,6 +2136,58 @@ ${dettaglioLinee.join('\n')}
   window.switchFatturaToEdit = switchFatturaToEdit;
   window.createNCFromCurrentInvoice = createNCFromCurrentInvoice;
   window.viewFatturaModal = (id) => openFatturaModal(id, { mode: 'view' });
+
+  // ─── Hard-delete dev toggle (T13) ─────────────────────────────────────────
+  function hardDeleteFattura(id) {
+    const settings = (typeof data !== 'undefined' && data && data.settings) ? data.settings : {};
+    if ((parseInt(settings.devHardDelete, 10) || 0) !== 1) return;
+    const profile = (typeof window.getProfile === 'function')
+      ? window.getProfile()
+      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    if (!profile) return;
+    const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
+    const all = store.load(profile);
+    const target = all.find(f => f.id === id);
+    if (!target) return;
+    const numero = target.numero || id;
+    const msg = `Eliminare definitivamente la fattura ${numero}? L'azione NON è reversibile.`;
+    const confirmer = (typeof window.showAppConfirm === 'function')
+      ? (cb) => window.showAppConfirm(msg, cb)
+      : (cb) => { if (window.confirm(msg)) cb(); };
+    confirmer(() => {
+      const next = all.filter(f => f.id !== id);
+      if (target.tipoDocumento === 'TD04' && target.fatturaOriginaleId) {
+        const orig = next.find(f => f.id === target.fatturaOriginaleId);
+        if (orig) {
+          orig.ncIds = (orig.ncIds || []).filter(x => x !== id);
+          const imp = Math.abs(
+            (window.FattureSelectors && window.FattureSelectors.getImportoSigned)
+              ? window.FattureSelectors.getImportoSigned(target)
+              : (target.righe || []).reduce((s, r) => s + (Number(r.quantita) || 0) * (Number(r.prezzoUnitario) || 0), 0)
+          );
+          orig.ncTotaleImporto = Math.max(0, (Number(orig.ncTotaleImporto) || 0) - imp);
+          if (orig.ncTotaleImporto === 0 && orig.stato === 'stornata') {
+            orig.stato = orig.dataPagamento ? 'pagata' : 'inviata';
+          }
+        }
+      }
+      store.save(profile, next);
+      console.warn('[hard-delete]', id, numero);
+      if (typeof closeFatturaModal === 'function') closeFatturaModal();
+      if (typeof recalcAll === 'function') recalcAll();
+      if (window.FattureStorico && typeof window.FattureStorico.renderStorico === 'function') {
+        const sel = document.getElementById('archivioAnnoSelect');
+        window.FattureStorico.renderStorico(Number(sel && sel.value) || new Date().getFullYear());
+      }
+    });
+  }
+  window.hardDeleteFattura = hardDeleteFattura;
+  window.isDevHardDeleteOn = function () {
+    try {
+      var s = (typeof data !== 'undefined' && data && data.settings) ? data.settings : {};
+      return (parseInt(s.devHardDelete, 10) || 0) === 1;
+    } catch (_) { return false; }
+  };
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 

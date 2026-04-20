@@ -320,6 +320,18 @@
           Lascia vuoto per usare il valore standard (53 EUR artigiani/commercianti).
         </div>
       </div>
+      <div class="settings-subsection-title">Debug / Test</div>
+      <div class="settings-group">
+        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="settDevHardDelete" style="margin-top:3px;"
+            onchange="saveBoolSetting('devHardDelete', this.checked); recalcAll()">
+          <span>
+            <b>Hard-delete fatture (solo test)</b><br>
+            <span style="color:var(--text2); font-size:.75rem;">&#9888; Disattivare prima del rilascio. Elimina fatture bypassando il workflow fiscale.</span>
+          </span>
+        </label>
+      </div>
+
       <div class="settings-group" style="margin-top:30px">
         <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
         <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--accent2);margin-left:8px">Importa dati</button>

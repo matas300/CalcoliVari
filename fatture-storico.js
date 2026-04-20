@@ -165,6 +165,15 @@
     if (f.stato === 'inviata' || f.stato === 'pagata') {
       btns.push(mk('Nota di credito', () => window.openNotaCreditoModal && window.openNotaCreditoModal(f.id)));
     }
+    // Hard-delete dev toggle (T13)
+    if (typeof window.isDevHardDeleteOn === 'function' && window.isDevHardDeleteOn() && typeof window.hardDeleteFattura === 'function') {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-danger';
+      b.textContent = '🗑 Hard delete';
+      b.addEventListener('click', () => window.hardDeleteFattura(f.id));
+      btns.push(b);
+    }
     return btns;
   }
 
