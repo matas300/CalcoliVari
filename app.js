@@ -6664,3 +6664,67 @@ function renderProfiloPiva() {
   host.replaceChildren();
   host.insertAdjacentHTML('afterbegin', html);
 }
+
+// ═══ App confirm modal ═══
+// Drop-in replacement for window.confirm(), DOM-based, themed.
+// Call styles:
+//   showAppConfirm(message, cb)                           → legacy: cb() only on confirm
+//   showAppConfirm({ title, message, okLabel, danger })   → returns Promise<boolean>
+function showAppConfirm(optsOrMsg, cbMaybe) {
+  let opts;
+  if (typeof optsOrMsg === 'string') { opts = { message: optsOrMsg }; }
+  else { opts = optsOrMsg || {}; }
+  const title = opts.title || 'Conferma';
+  const message = opts.message || '';
+  const okLabel = opts.okLabel || 'Conferma';
+  const cancelLabel = opts.cancelLabel || 'Annulla';
+  const danger = opts.danger !== false;
+
+  let root = document.getElementById('appConfirmBackdrop');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'appConfirmBackdrop';
+    root.className = 'app-confirm-backdrop';
+    root.innerHTML = '<div class="app-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="appConfirmTitle">' +
+      '<h3 id="appConfirmTitle" class="app-confirm-title"></h3>' +
+      '<p class="app-confirm-msg"></p>' +
+      '<div class="app-confirm-actions">' +
+        '<button type="button" class="btn-add profile-secondary-btn" data-role="cancel"></button>' +
+        '<button type="button" class="btn-add" data-role="ok"></button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(root);
+  }
+  const titleEl = root.querySelector('#appConfirmTitle');
+  const msgEl = root.querySelector('.app-confirm-msg');
+  const okBtn = root.querySelector('[data-role="ok"]');
+  const cancelBtn = root.querySelector('[data-role="cancel"]');
+  titleEl.textContent = title;
+  msgEl.textContent = message;
+  okBtn.textContent = okLabel;
+  cancelBtn.textContent = cancelLabel;
+  okBtn.classList.toggle('btn-add-danger', !!danger);
+
+  return new Promise(resolve => {
+    function cleanup(value) {
+      root.classList.remove('open');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      root.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      if (typeof cbMaybe === 'function' && value) cbMaybe();
+      resolve(value);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') cleanup(false);
+      else if (e.key === 'Enter') cleanup(true);
+    }
+    okBtn.onclick = () => cleanup(true);
+    cancelBtn.onclick = () => cleanup(false);
+    root.onclick = (e) => { if (e.target === root) cleanup(false); };
+    document.addEventListener('keydown', onKey);
+    root.classList.add('open');
+    setTimeout(() => okBtn.focus(), 0);
+  });
+}
+window.showAppConfirm = showAppConfirm;

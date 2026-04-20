@@ -458,16 +458,24 @@
           const numero = window.FattureStorico
             ? window.FattureStorico.formatNumero(inv.annoProgressivo, inv.progressivo)
             : (inv.annoProgressivo + '/' + inv.progressivo);
+          const isBozza = (inv.stato || 'bozza') === 'bozza';
+          const rowActions = isBozza
+            ? '<span class="fatture-row-actions">' +
+                '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')">✉ Inviata</button>' +
+                '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')">×</button>' +
+              '</span>'
+            : '';
           return '<div class="fatture-row" data-id="' + escHtml(inv.id) + '" role="button" tabindex="0">' +
             '<div class="fatture-num">' + escHtml(numero) + '</div>' +
             '<div class="fatture-client">' + cliente + ' — ' + dataDoc + '</div>' +
-            '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + ' €</div>' +
+            '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + '</div>' +
             '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
+            rowActions +
           '</div>';
         }).join('');
 
     const summaryHtml = summaryVisible
-      ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + ' €<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
+      ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + '<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
       : '';
 
     const markup =
@@ -739,8 +747,10 @@
     const isNC = draft.tipoDocumento === 'TD04';
     const hardDeleteOn = (typeof data !== 'undefined' && data && data.settings && (parseInt(data.settings.devHardDelete, 10) || 0) === 1);
     const hardDeleteBtn = hardDeleteOn
-      ? `<button type="button" class="btn-danger" onclick="hardDeleteFattura('${esc(draft.id)}')">🗑 Hard delete</button>`
+      ? `<button type="button" class="btn-add btn-add-danger" onclick="hardDeleteFattura('${esc(draft.id)}')">🗑 Hard delete</button>`
       : '';
+    const profileFiscal = (typeof getProfileFiscalData === 'function') ? getProfileFiscalData() : {};
+    const ibanEffective = (draft.iban && String(draft.iban).trim()) || (profileFiscal.iban || '');
     el.innerHTML = `
       <div class="fattura-sheet fattura-view">
         <div class="fattura-sheet-header">
@@ -761,7 +771,7 @@
             <div><span class="fattura-view-label">Data emissione</span><b>${esc(draft.data)}</b></div>
             <div><span class="fattura-view-label">Scadenza</span><b>${esc(draft.scadenzaPagamento || '—')}</b></div>
             <div><span class="fattura-view-label">Stato</span><b>${draft.incassata ? 'Incassata il ' + esc(draft.dataIncasso || draft.data) : 'Da incassare'}</b></div>
-            <div><span class="fattura-view-label">IBAN</span><b>${esc(draft.iban || '—')}</b></div>
+            <div><span class="fattura-view-label">IBAN</span><b>${esc(ibanEffective || '—')}</b></div>
             <div><span class="fattura-view-label">Bollo</span><b>${draft.marcaDaBollo ? '2,00 €' + (draft.bolloAddebitato ? ' (addebitato)' : ' (non addebitato)') : 'No'}</b></div>
           </div>
           <table class="fattura-view-table">
@@ -777,13 +787,11 @@
           </div>
           ${draft.note ? `<div class="fattura-view-note"><span class="fattura-view-label">Nota</span><div>${esc(draft.note)}</div></div>` : ''}
         </div>
-        <div class="fattura-wiz-actions">
+        <div class="fattura-view-actions">
           <button type="button" class="btn-add profile-secondary-btn" onclick="previewFatturaXml()">Anteprima XML</button>
-          <div style="display:flex; gap:8px;">
-            <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
-            ${!isNC ? `<button type="button" class="btn-add" style="background:var(--color-warning); color:var(--color-bg);" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
-            ${hardDeleteBtn}
-          </div>
+          <button type="button" class="btn-add profile-secondary-btn" onclick="downloadFatturaXml()">Scarica XML</button>
+          ${!isNC ? `<button type="button" class="btn-add profile-secondary-btn" onclick="createNCFromCurrentInvoice()">Crea nota di credito</button>` : ''}
+          ${hardDeleteBtn}
         </div>
       </div>
     `;
@@ -2074,7 +2082,7 @@ ${dettaglioLinee.join('\n')}
     const numero = target.numero || id;
     const msg = `Eliminare definitivamente la fattura ${numero}? L'azione NON è reversibile.`;
     const confirmer = (typeof window.showAppConfirm === 'function')
-      ? (cb) => window.showAppConfirm(msg, cb)
+      ? (cb) => window.showAppConfirm({ title: 'Hard delete fattura', message: msg, okLabel: 'Elimina', danger: true }, cb)
       : (cb) => { if (window.confirm(msg)) cb(); };
     confirmer(() => {
       const next = all.filter(f => f.id !== id);
@@ -2110,6 +2118,50 @@ ${dettaglioLinee.join('\n')}
       return (parseInt(s.devHardDelete, 10) || 0) === 1;
     } catch (_) { return false; }
   };
+
+  // Quick actions on BOZZA rows in the main Fatture card
+  function quickMarkInviataFromCard(id) {
+    const profile = (typeof window.getProfile === 'function')
+      ? window.getProfile()
+      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    if (!profile) return;
+    const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
+    const all = store.load(profile);
+    const idx = all.findIndex(f => f.id === id);
+    if (idx < 0) return;
+    if ((all[idx].stato || 'bozza') !== 'bozza') return;
+    all[idx].stato = 'inviata';
+    if (!all[idx].dataInvioSdi) {
+      all[idx].dataInvioSdi = new Date().toISOString().slice(0, 10);
+    }
+    store.save(profile, all);
+    if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+    if (typeof recalcAll === 'function') recalcAll();
+  }
+  function quickDeleteBozzaFromCard(id) {
+    const profile = (typeof window.getProfile === 'function')
+      ? window.getProfile()
+      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    if (!profile) return;
+    const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
+    const all = store.load(profile);
+    const target = all.find(f => f.id === id);
+    if (!target) return;
+    if ((target.stato || 'bozza') !== 'bozza') return;
+    const numero = target.numero || id;
+    const msg = `Eliminare la bozza ${numero}? Puoi sempre rifarla, ma l'operazione non è reversibile.`;
+    const confirmer = (typeof window.showAppConfirm === 'function')
+      ? (cb) => window.showAppConfirm({ title: 'Elimina bozza', message: msg, okLabel: 'Elimina', danger: true }, cb)
+      : (cb) => { if (window.confirm(msg)) cb(); };
+    confirmer(() => {
+      const next = all.filter(f => f.id !== id);
+      store.save(profile, next);
+      if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+      if (typeof recalcAll === 'function') recalcAll();
+    });
+  }
+  window.quickMarkInviataFromCard = quickMarkInviataFromCard;
+  window.quickDeleteBozzaFromCard = quickDeleteBozzaFromCard;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 

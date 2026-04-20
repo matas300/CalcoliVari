@@ -4882,3 +4882,89 @@ html[data-theme="light"] .dich-conto-estero {
   font-weight: 600;
 }
 .btn-danger:hover { filter: brightness(1.1); }
+
+/* Fattura view actions — single row of compact buttons */
+.fattura-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  margin-top: 12px;
+}
+.fattura-view-actions .btn-add {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+.btn-add.btn-add-danger {
+  background: var(--color-error);
+  color: #fff;
+  margin-top: 0;
+}
+.btn-add.btn-add-danger:hover { filter: brightness(1.1); }
+
+/* Fatture row inline actions on BOZZA state */
+.fatture-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  align-items: center;
+}
+.fatture-row-action {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.fatture-row-action:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+.fatture-row-action.is-danger:hover {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* App confirm modal (replaces window.confirm) */
+.app-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.app-confirm-backdrop.open { display: flex; }
+.app-confirm-panel {
+  background: var(--color-surface-3, var(--color-surface, #1b1b1b));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  width: min(420px, 92vw);
+  box-shadow: var(--shadow-modal, 0 20px 60px rgba(0,0,0,.5));
+  color: var(--color-text);
+}
+.app-confirm-title {
+  margin: 0 0 8px 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.app-confirm-msg {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.app-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.app-confirm-actions .btn-add { margin-top: 0; }
