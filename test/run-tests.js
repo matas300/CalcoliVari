@@ -61,6 +61,7 @@ require('./fatture-migration.test.js');
 require('./fatture-hard-delete.test.js');
 require('./fatture-legacy-badge.test.js');
 require('./fatture-ocr-stub.test.js');
+require('./clienti-autofill.test.js');
 
 console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);
