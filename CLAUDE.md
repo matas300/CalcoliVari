@@ -28,7 +28,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
     contribFissi, minimaleInps, aliqContributi,
     riduzione35,              // 1 = apply 35% reduction
     haRedditoDipendente,      // 1 = mixed income year
-    giorniIncasso,
+    giorniIncasso,            // legacy; override da chiave profilo `calcoliPIVA_{profile}_giorniIncasso`
     limiteForfettario,
     scadenziarioMetodo,       // 'storico' | 'previsionale'
     scadenziarioSaldoImposta, scadenziarioAccontoImposta,
@@ -146,6 +146,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - `syncAllToCloud` collects keys before iterating to avoid race conditions
 - Export scoped to current profile; import filters keys by current profile prefix
 - Profile-scoped meta storage is supported too: `calcoliPIVA_{profile}_clienti` syncs separately from yearly docs and is merged with the same profile namespace.
+- `giorniIncasso` è profile-scoped via `PROFILE_META_KEYS`: letto/scritto da `getGiorniIncassoProfile()` / `setGiorniIncassoProfile()`. Al primo `applySettings` post-deploy, se l'anno corrente ha un valore ≠ 30, viene promosso alla chiave di profilo (migrazione one-shot idempotente).
 
 ### Dichiarazione Redditi PF
 - **Files**: `dichiarazione-engine.js`, `dichiarazione-ui.js`, `dichiarazione-exports.js`
@@ -281,12 +282,11 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **Modulo**: IIFE che espone `window.ClientiAutofill`.
 - **API**:
   - `lookupPartitaIva(piva) → { ok, data, error, code }` — codici errore: `INVALID_PIVA` | `NO_KEY` | `NOT_FOUND` | `NETWORK`
-  - `hasApiKey()`, `getApiKey()` — leggono da `settings.openapiKey`
+  - `hasApiKey()`, `getApiKey()` — leggono da `GLOBAL_OPENAPI_KEY`
 - **Endpoint**: `https://imprese.openapi.it/advance/{piva}` con header `Authorization: Bearer {key}`.
 - **Mapping response** → `{ nome, cf, indirizzo, cap, citta, provincia, pec }`.
 - **Azione UI**: `autofillClienteFromPiva(id)` nel modal — **non sovrascrive** campi già compilati, riempie solo i vuoti. Feedback inline su errore (chiave mancante, P.IVA non trovata, network).
-- **Settings**: `settings.openapiKey` (string, default `''`), editabile dal tab **Impostazioni → sezione "Clienti"**.
-- **Nota sicurezza**: l'API key viene inclusa nel sync Firebase come qualsiasi altro campo di `settings` (dato sensibile del profilo — l'utente ne è consapevole tramite label esplicativa accanto al campo).
+- **API key**: costante globale `GLOBAL_OPENAPI_KEY` hardcoded in `clienti-autofill.js`, condivisa tra tutti i profili. Non esposta nell'UI. Per aggiornarla: editare il file e ridistribuire. Placeholder `'__OPENAPI_KEY_PLACEHOLDER__'` → `hasApiKey()` ritorna false.
 
 ### Invoice PDF (`buildInvoicePdfMinimal`)
 - Layout minimalista A4 portrait, margini 20 mm, font Helvetica (built-in jsPDF):
