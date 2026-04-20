@@ -1034,22 +1034,53 @@
     }
   }
 
+  // Stima data incasso da data emissione e giorni incasso
+  function estimaPagamento(isoDate, giorniIncasso) {
+    const d = new Date(isoDate || todayIso());
+    if (Number.isNaN(d.getTime())) return { mese: null, anno: null };
+    d.setDate(d.getDate() + (Number(giorniIncasso) || 30));
+    return { mese: d.getMonth() + 1, anno: d.getFullYear() };
+  }
+
+  // Imposta pagMese/pagAnno sulla fattura in base a stato e dataPagamento/dataIncasso
+  function applyPagMesePagAnno(draft) {
+    const stato = draft.stato || 'bozza';
+    if (stato === 'bozza') {
+      draft.pagMese = null;
+      draft.pagAnno = null;
+    } else if (stato === 'pagata') {
+      const dp = draft.dataPagamento || draft.dataIncasso || draft.data;
+      const parts = parseDateParts(dp);
+      draft.pagMese = parts ? parts.month : null;
+      draft.pagAnno = parts ? parts.year : null;
+    } else {
+      // inviata / stornata: use estimated cash date
+      const refDate = draft.tipoDocumento === 'TD04'
+        ? (draft.data || todayIso())
+        : resolveInvoiceCashDate(draft);
+      const giorniIncasso = (typeof S === 'function' && S().giorniIncasso) ? S().giorniIncasso : 30;
+      const est = estimaPagamento(refDate, giorniIncasso);
+      draft.pagMese = est.mese;
+      draft.pagAnno = est.anno;
+    }
+    return draft;
+  }
+
   function saveFatturaDraft(silent = false) {
     const draft = collectDraftFromState();
     if (!draft.clienteId) {
       if (!silent) showFatturaToast('Seleziona un cliente.', 'warn');
       return null;
     }
+
+    // Set pagMese/pagAnno on the fattura object (no monthly-store write needed)
+    applyPagMesePagAnno(draft);
+
     const history = loadFattureEmesse();
     const idx = history.findIndex(h => h.id === draft.id);
     if (idx >= 0) history[idx] = draft; else history.unshift(draft);
     saveFattureEmesse(history);
-    
-    // Integrazione con tab mensile
-    if (typeof upsertInvoiceRowInYearData === 'function') {
-      upsertInvoiceRowInYearData(draft);
-    }
-    
+
     state.editingId = draft.id;
     renderFattureDocsSection();
     if (!silent) {
@@ -1066,27 +1097,6 @@
     const invoice = normalizeFatturaEmessa({ ...draft });
     invoice.id = state.editingId || draft.id;
     return invoice;
-  }
-
-  function upsertInvoiceRowInYearData(invoice) {
-    const year = invoice.anno;
-    const month = invoice.issuedMonth;
-    const yearData = getYearDataFor(year) || ensureDataShape({}, year);
-    if (!yearData.fatture) yearData.fatture = {};
-    const rows = Array.isArray(yearData.fatture[month]) ? yearData.fatture[month] : [];
-    const filtered = rows.filter(r => String(r.invoiceId || r.fatturaId) !== String(invoice.id));
-    filtered.push({
-      invoiceId: invoice.id,
-      importo: invoice.totaleDocument,
-      pagMese: parseDateParts(resolveInvoiceCashDate(invoice))?.month || month,
-      pagAnno: parseDateParts(resolveInvoiceCashDate(invoice))?.year || year,
-      desc: `${invoice.numero} - ${invoice.clienteSnapshot?.nome || 'Cliente'}`,
-      dataEmissione: invoice.data,
-      incassata: invoice.incassata
-    });
-    yearData.fatture[month] = filtered;
-    if (year === currentYear) { data.fatture = yearData.fatture; saveData(); }
-    else saveYearData(year, yearData);
   }
 
   function openFatturaModal(id = null, opts = {}) {
