@@ -244,7 +244,53 @@
       issuedMonth: parseInt(raw.issuedMonth || dateParts.month, 10) || dateParts.month,
       issuedYear: parseInt(raw.issuedYear || dateParts.year, 10) || dateParts.year,
       totaleLordo: round2(subtotal),
-      totaleDocument: totale
+      totaleDocument: totale,
+
+      // Workflow stati
+      stato: (['bozza','inviata','pagata','stornata'].indexOf(String(raw.stato || '')) >= 0) ? String(raw.stato) : 'bozza',
+      tipoDocumento: (String(raw.tipoDocumento || '') === 'TD04') ? 'TD04' : 'TD01',
+      dataInvioSdi: raw.dataInvioSdi ? String(raw.dataInvioSdi) : null,
+      dataPagamento: raw.dataPagamento ? String(raw.dataPagamento) : null,
+
+      // Numerazione progressiva
+      annoProgressivo: Number.isFinite(Number(raw.annoProgressivo)) ? Number(raw.annoProgressivo) : (parseInt(raw.anno || dateParts.year, 10) || dateParts.year),
+      progressivo: Number.isFinite(Number(raw.progressivo)) ? Number(raw.progressivo) : 0,
+
+      // Ritenuta d'acconto (forfettario mixed/ordinario)
+      ritenuta: round2(raw.ritenuta || 0),
+      aliquotaRitenuta: Number.isFinite(Number(raw.aliquotaRitenuta)) ? Number(raw.aliquotaRitenuta) : 0,
+      tipoRitenuta: String(raw.tipoRitenuta || ''),
+      causaleRitenuta: String(raw.causaleRitenuta || ''),
+
+      // Nota di credito (TD04) — link alla fattura originale
+      fatturaOriginaleId: raw.fatturaOriginaleId ? String(raw.fatturaOriginaleId) : null,
+      tipoStorno: (raw.tipoStorno === 'totale' || raw.tipoStorno === 'parziale') ? raw.tipoStorno : null,
+
+      // Sul TD01: elenco NC collegate + totale stornato
+      ncIds: Array.isArray(raw.ncIds) ? raw.ncIds.map(String) : [],
+      ncTotaleImporto: round2(raw.ncTotaleImporto || 0),
+
+      // Cessionario dettagli (fallback per contratto passivo/privato)
+      cessionarioRagione: String(raw.cessionarioRagione || ''),
+      cessionarioNome: String(raw.cessionarioNome || ''),
+      cessionarioCognome: String(raw.cessionarioCognome || ''),
+
+      // Incasso (spostato da riga monthly a fattura — unificazione store)
+      pagMese: (raw.pagMese != null && Number(raw.pagMese) >= 1 && Number(raw.pagMese) <= 12) ? Number(raw.pagMese) : null,
+      pagAnno: Number.isFinite(Number(raw.pagAnno)) ? Number(raw.pagAnno) : null,
+
+      // Origine record (wizard | manuale | legacy-migrated | ocr-import)
+      origine: (['wizard','manuale','legacy-migrated','ocr-import'].indexOf(raw.origine) >= 0) ? raw.origine : 'wizard',
+
+      // PDF allegato (hook per OCR futuro)
+      pdfAllegato: (raw.pdfAllegato && typeof raw.pdfAllegato.dataUrl === 'string')
+        ? { name: String(raw.pdfAllegato.name || 'allegato.pdf'), dataUrl: raw.pdfAllegato.dataUrl }
+        : null,
+
+      // OCR stubs (forward compat)
+      _ocrRawText: raw._ocrRawText || null,
+      _ocrConfidence: raw._ocrConfidence || null,
+      _ocrFieldsExtracted: raw._ocrFieldsExtracted || null
     };
   }
 
@@ -2077,4 +2123,7 @@ ${dettaglioLinee.join('\n')}
   window.viewFatturaModal = (id) => openFatturaModal(id, { mode: 'view' });
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
+
+  // Test hook — accesso diretto per unit test Node.js
+  if (typeof window !== 'undefined') { window.__normalizeFatturaEmessa = normalizeFatturaEmessa; }
 })();

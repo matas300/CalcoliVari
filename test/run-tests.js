@@ -56,6 +56,7 @@ require('./dichiarazione-engine.test.js');
 require('./tax-engine.test.js');
 require('./fatture-storico.test.js');
 require('./fatture-selectors.test.js');
+require('./fatture-normalize.test.js');
 
 console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);
