@@ -1479,7 +1479,8 @@ function getDefaultSettings(year = currentYear) {
     primoAnnoImpostaPrec: '',
     primoAnnoAccontiImpostaPrec: '',
     primoAnnoContribVariabiliPrec: '',
-    primoAnnoAccontiContribPrec: ''
+    primoAnnoAccontiContribPrec: '',
+    openapiKey: ''
   };
 }
 
@@ -1507,6 +1508,8 @@ function applySettings() {
     if (!el) continue;
     el.value = s[key] !== '' && s[key] !== null && s[key] !== undefined ? s[key] : '';
   }
+  const openapiKeyEl = document.getElementById('settOpenapiKey');
+  if (openapiKeyEl) openapiKeyEl.value = s.openapiKey || '';
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
   if (typeof updateNavLabels === 'function') updateNavLabels();

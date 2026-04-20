@@ -320,6 +320,16 @@
           Lascia vuoto per usare il valore standard (53 EUR artigiani/commercianti).
         </div>
       </div>
+      <div class="settings-subsection-title">Clienti — Autofill anagrafica</div>
+      <div class="settings-group">
+        <label>API key openapi.it</label>
+        <input type="password" id="settOpenapiKey" autocomplete="off" placeholder="incolla qui la chiave"
+          onchange="saveTextSetting('openapiKey', this.value.trim())">
+        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
+          Ottieni una chiave gratuita su <a href="https://openapi.it" target="_blank" rel="noopener">openapi.it</a> (100 req/mese gratis). Serve per l'autofill dei dati cliente da P.IVA.
+        </div>
+      </div>
+
       <div class="settings-subsection-title">Debug / Test</div>
       <div class="settings-group">
         <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
@@ -569,6 +579,7 @@
 <script src="scadenziario-engine.js"></script>
 <script src="app.js"></script>
 <script src="clienti-feature.js"></script>
+<script src="clienti-autofill.js" defer></script>
 <script src="fatture-docs-feature.js"></script>
 <script src="fatture-selectors.js"></script>
 <script src="fatture-migration.js"></script>
