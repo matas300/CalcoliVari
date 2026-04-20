@@ -1067,8 +1067,7 @@ async function autofillClienteFromPiva(id) {
   const originalText = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Caricamento...'; }
   try {
-    const apiKey = (data && data.settings && data.settings.openapiKey) || '';
-    const res = await api.lookupPartitaIva(piva, apiKey);
+    const res = await api.lookupPartitaIva(piva);
     if (!res || !res.ok) {
       const code = res && res.code;
       if (code === 'INVALID_PIVA') {

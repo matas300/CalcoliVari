@@ -1,36 +1,29 @@
 /* Clienti Autofill — lookup anagrafica cliente da P.IVA
  * Integrazione openapi.it (imprese.openapi.it/advance/{piva}).
- * API key letta da settings.openapiKey (profilo-specifico).
+ * API key globale condivisa tra tutti i profili (hardcoded in questo file).
  *
  * API:
  * - lookupPartitaIva(piva) → Promise<{ok, data?, code?, error?}>
  * - hasApiKey() → boolean
  * - getApiKey() → string
+ * - _setKeyForTests(k) → void (solo test)
  *
  * Codici errore: INVALID_PIVA, NO_KEY, NOT_FOUND, NETWORK.
  */
 (function (root) {
   'use strict';
 
-  function getSettingsObject() {
-    if (typeof root.S === 'function') {
-      try { return root.S() || {}; } catch (_e) { /* fallthrough */ }
-    }
-    if (typeof root.getAppData === 'function') {
-      try {
-        var d = root.getAppData();
-        if (d && d.settings) return d.settings;
-      } catch (_e) { /* fallthrough */ }
-    }
-    return (root.data && root.data.settings) || {};
-  }
+  // Chiave globale openapi.it — condivisa fra tutti i profili/utenti.
+  // Sostituire il placeholder con la key reale dopo deploy.
+  var GLOBAL_OPENAPI_KEY = '__OPENAPI_KEY_PLACEHOLDER__';
 
   function getApiKey() {
-    return (getSettingsObject().openapiKey || '').trim();
+    return (GLOBAL_OPENAPI_KEY || '').trim();
   }
 
   function hasApiKey() {
-    return getApiKey().length > 0;
+    var k = getApiKey();
+    return k.length > 0 && k !== '__OPENAPI_KEY_PLACEHOLDER__';
   }
 
   function isValidPivaIT(piva) {
@@ -50,15 +43,12 @@
     };
   }
 
-  function lookupPartitaIva(piva, apiKeyOverride) {
+  function lookupPartitaIva(piva) {
     var clean = (piva || '').replace(/\s/g, '');
     if (!isValidPivaIT(clean)) {
       return Promise.resolve({ ok: false, code: 'INVALID_PIVA', error: 'P.IVA non valida (11 cifre)' });
     }
-    var key = typeof apiKeyOverride === 'string' && apiKeyOverride.trim()
-      ? apiKeyOverride.trim()
-      : getApiKey();
-    if (!key) {
+    if (!hasApiKey()) {
       return Promise.resolve({ ok: false, code: 'NO_KEY', error: 'API key openapi.it non configurata' });
     }
     var fetchImpl = typeof root.fetch === 'function' ? root.fetch : null;
@@ -66,7 +56,7 @@
       return Promise.resolve({ ok: false, code: 'NETWORK', error: 'fetch non disponibile' });
     }
     return fetchImpl('https://imprese.openapi.it/advance/' + clean, {
-      headers: { 'Authorization': 'Bearer ' + key }
+      headers: { 'Authorization': 'Bearer ' + getApiKey() }
     }).then(function (res) {
       if (res.status === 404) {
         return { ok: false, code: 'NOT_FOUND', error: 'P.IVA non trovata' };
@@ -85,6 +75,9 @@
   root.ClientiAutofill = {
     lookupPartitaIva: lookupPartitaIva,
     hasApiKey: hasApiKey,
-    getApiKey: getApiKey
+    getApiKey: getApiKey,
+    // Test-only hook: permette ai test unitari di forzare la key senza
+    // rileggere il file. Safe in prod: chi ha accesso al JS può già mutarla.
+    _setKeyForTests: function (k) { GLOBAL_OPENAPI_KEY = k; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
