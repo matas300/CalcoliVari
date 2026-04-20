@@ -890,10 +890,143 @@ function addCliente() {
   openClienteModal(next.id);
 }
 
-// Stub: will be implemented in Task 5 (modal cliente)
+// ── Modal dettaglio cliente (Task 5) ──
+// XSS: tutti i valori passano via escapeHtml (pattern consolidato nel progetto).
+const clienteModalState = { id: null, escHandler: null };
+
 function openClienteModal(id) {
-  console.warn('[clienti] openClienteModal stub', id);
-  if (typeof showAppToast === 'function') showAppToast('Modal cliente in arrivo');
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) return;
+  clienteModalState.id = id;
+  renderClienteModal(id);
+  const m = document.getElementById('clienteModal');
+  if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
+  document.body.classList.add('profile-modal-open');
+  if (!clienteModalState.escHandler) {
+    clienteModalState.escHandler = (ev) => {
+      if (ev.key === 'Escape') closeClienteModal();
+    };
+    document.addEventListener('keydown', clienteModalState.escHandler);
+  }
+}
+
+function closeClienteModal() {
+  const m = document.getElementById('clienteModal');
+  if (m) { m.classList.remove('open'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = ''; }
+  document.body.classList.remove('profile-modal-open');
+  clienteModalState.id = null;
+  if (clienteModalState.escHandler) {
+    document.removeEventListener('keydown', clienteModalState.escHandler);
+    clienteModalState.escHandler = null;
+  }
+}
+
+function renderClienteModal(id) {
+  const m = document.getElementById('clienteModal');
+  if (!m) return;
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) { closeClienteModal(); return; }
+  const esc = (v) => escapeHtml(v ?? '');
+  const titleText = cliente.nome ? esc(cliente.nome) : 'Nuovo cliente';
+  const idEsc = esc(id);
+  const on = (field) => `onchange="updateClienteField('${idEsc}', '${field}', this.value)"`;
+  m.innerHTML = `
+    <div class="cliente-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="clienteModalTitle">
+      <div class="cliente-modal-header">
+        <div class="cliente-modal-title" id="clienteModalTitle">${titleText}</div>
+        <button type="button" class="cliente-modal-close" aria-label="Chiudi" onclick="closeClienteModal()">×</button>
+      </div>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Partita IVA</div>
+        <div class="cliente-autofill-row">
+          <input type="text" value="${esc(cliente.partitaIva)}" placeholder="11 cifre" ${on('partitaIva')}>
+          <button type="button" class="btn-ghost" disabled title="in arrivo">🔍 Autofill</button>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Anagrafica</div>
+        <div class="cliente-field">
+          <label>Nome / Ragione sociale</label>
+          <input type="text" value="${esc(cliente.nome)}" ${on('nome')}>
+        </div>
+        <div class="cliente-field">
+          <label>Codice fiscale</label>
+          <input type="text" value="${esc(cliente.codiceFiscale)}" ${on('codiceFiscale')}>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Sede</div>
+        <div class="cliente-field">
+          <label>Indirizzo</label>
+          <input type="text" value="${esc(cliente.indirizzo)}" ${on('indirizzo')}>
+        </div>
+        <div class="cliente-sede-row">
+          <div class="cliente-field">
+            <label>CAP</label>
+            <input type="text" value="${esc(cliente.cap)}" ${on('cap')}>
+          </div>
+          <div class="cliente-field">
+            <label>Città</label>
+            <input type="text" value="${esc(cliente.citta)}" ${on('citta')}>
+          </div>
+          <div class="cliente-field">
+            <label>Provincia</label>
+            <input type="text" value="${esc(cliente.provincia)}" maxlength="2" ${on('provincia')}>
+          </div>
+          <div class="cliente-field">
+            <label>Nazione</label>
+            <input type="text" value="${esc(cliente.nazione)}" maxlength="2" ${on('nazione')}>
+          </div>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Fatturazione elettronica</div>
+        <div class="cliente-field">
+          <label>Codice SDI</label>
+          <input type="text" value="${esc(cliente.codiceSDI)}" maxlength="7" ${on('codiceSDI')}>
+        </div>
+        <div class="cliente-field">
+          <label>PEC</label>
+          <input type="email" value="${esc(cliente.pec)}" ${on('pec')}>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Note</div>
+        <div class="cliente-field">
+          <textarea rows="3" ${on('note')}>${esc(cliente.note)}</textarea>
+        </div>
+      </div>
+
+      <div class="cliente-modal-actions">
+        <button type="button" class="btn-del btn-danger" onclick="deleteClienteFromModal('${idEsc}')">Elimina</button>
+        <button type="button" class="btn-ghost" onclick="closeClienteModal()">Chiudi</button>
+      </div>
+    </div>`;
+}
+
+function deleteClienteFromModal(id) {
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) return;
+  const msg = `Eliminare ${cliente.nome || 'questo cliente'}? L'operazione è irreversibile.`;
+  const onConfirm = () => {
+    saveClienti(getClienti().filter(c => c.id !== id));
+    closeClienteModal();
+    renderClienti();
+  };
+  if (typeof window.showAppConfirm === 'function') {
+    window.showAppConfirm({ title: 'Eliminare cliente?', message: msg, okLabel: 'Elimina', danger: true }, onConfirm);
+  } else if (confirm(msg)) {
+    onConfirm();
+  }
 }
 
 function updateClienteField(id, key, value) {
@@ -903,6 +1036,20 @@ function updateClienteField(id, key, value) {
   });
   saveClienti(list);
   renderClienti();
+  // Non re-renderizzare l'intero modal (perderebbe il focus sull'input attivo).
+  // Aggiorna solo il titolo se cambia il nome.
+  if (clienteModalState.id === id && key === 'nome') {
+    const titleEl = document.getElementById('clienteModalTitle');
+    if (titleEl) titleEl.textContent = value || 'Nuovo cliente';
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.openClienteModal = openClienteModal;
+  window.closeClienteModal = closeClienteModal;
+  window.renderClienteModal = renderClienteModal;
+  window.deleteClienteFromModal = deleteClienteFromModal;
+  window.updateClienteField = updateClienteField;
 }
 
 function deleteCliente(id) {
