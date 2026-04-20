@@ -1787,7 +1787,19 @@ function setActivity(month, day, val) {
 function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
 
 // ═══════════════════ Fatture helpers ═══════════════════
-function getFattureFromYearData(yearData, month) {
+// year param routes to FattureSelectors when available; legacy fallback for unmigrated data.
+function getFattureFromYearData(yearData, month, year) {
+  if (year && typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const fatture = window.FattureSelectors.getByMonth(currentProfile, year, month);
+    // NC invoices (TD04) return negative importo via getImportoSigned
+    return fatture.map(f => ({
+      importo: window.FattureSelectors.getImportoSigned(f),
+      pagMese: f.pagMese || null,
+      pagAnno: f.pagAnno || null,
+      desc: (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || ''
+    }));
+  }
+  // Legacy fallback (pre-migration or year not known)
   const arr = yearData && yearData.fatture ? yearData.fatture[month] : null;
   if (!arr || !Array.isArray(arr) || arr.length === 0) return [];
   return arr.map(f => ({
@@ -2044,13 +2056,30 @@ function getMonthEuro(month) {
 
 // Get invoices from previous years that are paid in the target year
 function getCrossYearInvoicesForYear(year) {
+  // Prefer unified store via FattureSelectors.getCrossYearPaidIn
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const crossFatture = window.FattureSelectors.getCrossYearPaidIn(currentProfile, year);
+    return crossFatture.map(f => {
+      const dataAnno = parseInt(String(f.data || '').slice(0, 4), 10) || null;
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      return {
+        mese: Number(f.pagMese) || null,
+        anno: dataAnno,
+        importo: imp,
+        pagMese: f.pagMese || null,
+        desc
+      };
+    }).filter(f => f.importo > 0 && f.anno && f.anno < year);
+  }
+  // Legacy fallback
   const results = [];
   for (const sourceYear of getStoredYears(year - 1)) {
     if (sourceYear >= year) continue;
     const sourceData = loadYearData(sourceYear);
     if (!sourceData || !sourceData.fatture) continue;
     for (let m = 1; m <= 12; m++) {
-      for (const f of getFattureFromYearData(sourceData, m)) {
+      for (const f of getFattureFromYearData(sourceData, m, sourceYear)) {
         const importo = parseFloat(f.importo) || 0;
         if (importo > 0 && f.pagAnno === year) {
           results.push({ mese: m, anno: sourceYear, importo, pagMese: f.pagMese, desc: f.desc || '' });
@@ -2112,7 +2141,7 @@ function shouldIncludeEstimatesForYear(year, options) {
 function getMonthEuroFromYearData(yearData, year, month, options) {
   const opts = options || {};
   const includeEstimates = shouldIncludeEstimatesForYear(year, opts);
-  const fatture = getFattureFromYearData(yearData, month);
+  const fatture = getFattureFromYearData(yearData, month, year);
   const hasFatture = fatture.some(f => f.importo > 0);
   if (!hasFatture) {
     if (!includeEstimates) return 0;
@@ -3044,7 +3073,7 @@ function getFattureForAccantonamentoForYear(year) {
   // 2. Fatture emesse in questo anno e pagate in questo anno (o senza data pagamento = assunto nello stesso anno)
   for (let m = 1; m <= 12; m++) {
     let idx = 0;
-    for (const f of getFattureFromYearData(yearData, m)) {
+    for (const f of getFattureFromYearData(yearData, m, year)) {
       idx++;
       if (f.importo <= 0) continue;
       if (f.pagAnno && f.pagAnno !== year) continue; // deferred to another year
@@ -3931,7 +3960,7 @@ function yearHasEstimates(year) {
   for (let month = 1; month <= 12; month++) {
     const amount = getMonthEuroFromYearData(yearData, year, month, { includeEstimates: true });
     if (amount <= 0) continue;
-    const hasFatture = getFattureFromYearData(yearData, month).some(f => f.importo > 0);
+    const hasFatture = getFattureFromYearData(yearData, month, year).some(f => f.importo > 0);
     if (!hasFatture) return true;
   }
   return false;
@@ -3950,7 +3979,7 @@ function getForfettarioProjectionRange(year, variancePct) {
   for (let month = 1; month <= 12; month++) {
     const amount = getMonthEuroFromYearData(yearData, year, month, { includeEstimates: true });
     if (amount <= 0) continue;
-    const hasFatture = getFattureFromYearData(yearData, month).some(f => f.importo > 0);
+    const hasFatture = getFattureFromYearData(yearData, month, year).some(f => f.importo > 0);
     baseGross += amount;
     if (hasFatture || pct <= 0) {
       lowGross += amount;
@@ -5623,14 +5652,37 @@ function setPagOggi(month, idx) {
 // Find all fatture across years for the current profile, sorted newest first
 function getAllFattureForBudget() {
   const results = [];
+
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const all = window.FattureSelectors.all(currentProfile);
+    // Group by (pagAnno, pagMese) — only non-bozza with a pagamento date
+    const byKey = {};
+    for (const f of all) {
+      if (f.stato === 'bozza') continue;
+      const pa = Number(f.pagAnno);
+      const pm = Number(f.pagMese);
+      if (!pa || !pm) continue;
+      const key = pa + '_' + pm;
+      if (!byKey[key]) byKey[key] = { year: pa, month: pm, lordo: 0 };
+      byKey[key].lordo += window.FattureSelectors.getImportoSigned(f);
+    }
+    for (const key in byKey) {
+      const { year: y, month: mo, lordo } = byKey[key];
+      if (lordo <= 0) continue;
+      const rate = y === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(y);
+      results.push({ year: y, month: mo, lordo, netto: lordo * (1 - rate), rate });
+    }
+    results.sort((a, b) => b.year - a.year || b.month - a.month);
+    return results;
+  }
+
+  // Legacy fallback: iterate yearData.fatture across stored years
   const yearsToCheck = [];
   for (let y = currentYear + 1; y >= currentYear - 5; y--) yearsToCheck.push(y);
-
   for (const y of yearsToCheck) {
     const yd = y === currentYear ? data : loadYearData(y);
     if (!yd || !yd.fatture) continue;
     const rate = y === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(y);
-
     for (let m = 12; m >= 1; m--) {
       const raw = yd.fatture[m];
       if (!raw) continue;
@@ -5641,8 +5693,6 @@ function getAllFattureForBudget() {
       }
     }
   }
-
-  // Sort: newest first (year desc, month desc)
   results.sort((a, b) => b.year - a.year || b.month - a.month);
   return results;
 }
@@ -5652,23 +5702,29 @@ function getBudgetNettoMensile() {
   const baseM = data.budgetBaseMonth;
 
   if (baseY && baseM) {
-    // User selected a specific month
-    const yd = baseY === currentYear ? data : loadYearData(baseY);
-    if (yd && yd.fatture) {
-      const raw = yd.fatture[baseM];
-      const arr = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
-      const total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
-      if (total > 0) {
-        const rate = baseY === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(baseY);
-        return { netto: total * (1 - rate), lordo: total, rate, year: baseY, month: baseM, source: 'manual' };
+    // User selected a specific month — prefer selectors, then legacy
+    let total = 0;
+    if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+      const fatture = window.FattureSelectors.getByMonth(currentProfile, baseY, baseM);
+      total = fatture.reduce((s, f) => s + window.FattureSelectors.getImportoSigned(f), 0);
+    } else {
+      const yd = baseY === currentYear ? data : loadYearData(baseY);
+      if (yd && yd.fatture) {
+        const raw = yd.fatture[baseM];
+        const arr = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
+        total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
       }
+    }
+    if (total > 0) {
+      const rate = baseY === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(baseY);
+      return { netto: total * (1 - rate), lordo: total, rate, year: baseY, month: baseM, source: 'manual' };
     }
   }
 
   // Auto: find latest fattura
-  const all = getAllFattureForBudget();
-  if (all.length > 0) {
-    const latest = all[0];
+  const allFatture = getAllFattureForBudget();
+  if (allFatture.length > 0) {
+    const latest = allFatture[0];
     return { netto: latest.netto, lordo: latest.lordo, rate: latest.rate, year: latest.year, month: latest.month, source: 'auto' };
   }
 
