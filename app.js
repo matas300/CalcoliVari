@@ -5855,7 +5855,7 @@ function renderBudget() {
   h += `<div style="margin:16px 0 12px;font-size:.88rem;color:var(--text2)">
     Netto mensile: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
 
-  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
+  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile (€)</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
 
   // Calculate auto-fill: items with auto=true and no manual importo get the remaining split equally
   let totManual = 0, autoCount = 0;
@@ -5875,7 +5875,7 @@ function renderBudget() {
     h += `<div class="budget-row budget-row-5">
       <input type="text" value="${b.nome||''}" placeholder="es. Affitto, Cibo..."
         onchange="data.budget[${i}].nome=this.value;saveData();renderBudget()">
-      <input type="number" value="${isAuto?'':val||''}" placeholder="${isAuto?fmt(autoAmount):'0'}" step="0.01"
+      <input type="number" value="${isAuto?'':val||''}" placeholder="${isAuto?(autoAmount?autoAmount.toFixed(2):'0'):'0'}" step="0.01"
         onchange="budgetSetImporto(${i},this.value)">
       <input type="number" value="${pct?pct.toFixed(1):''}" placeholder="%" step="0.1" min="0" max="100"
         onchange="budgetSetPercent(${i},this.value)" style="text-align:center">
@@ -5924,18 +5924,18 @@ function renderBudget() {
       const { val, nome, isAuto } = budgetVals[i];
       if (val <= 0) continue;
       const pct = (val / nettoMensile * 100).toFixed(1);
-      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px">
+      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px;font-variant-numeric:tabular-nums">
         <span style="width:12px;height:12px;border-radius:3px;background:${colors[i%colors.length]}${isAuto?';opacity:.6':''};flex-shrink:0"></span>
         <span style="color:var(--text2)">${nome || 'Voce '+(i+1)}${isAuto?' (auto)':''}</span>
-        <span style="margin-left:auto;font-weight:600">${fmt(val)}</span>
-        <span style="color:var(--text2);font-size:.75rem">(${pct}%)</span></div>`;
+        <span style="margin-left:auto;font-weight:600;min-width:100px;text-align:right">${fmt(val)}</span>
+        <span style="color:var(--text2);font-size:.75rem;min-width:60px;text-align:right">(${pct}%)</span></div>`;
     }
     if (rimanente > 0) {
-      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px">
+      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px;font-variant-numeric:tabular-nums">
         <span style="width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,.15);flex-shrink:0"></span>
         <span style="color:var(--text2)">Rimanente</span>
-        <span style="margin-left:auto;font-weight:600;color:var(--green)">${fmt(rimanente)}</span>
-        <span style="color:var(--text2);font-size:.75rem">(${(rimanente/nettoMensile*100).toFixed(1)}%)</span></div>`;
+        <span style="margin-left:auto;font-weight:600;color:var(--green);min-width:100px;text-align:right">${fmt(rimanente)}</span>
+        <span style="color:var(--text2);font-size:.75rem;min-width:60px;text-align:right">(${(rimanente/nettoMensile*100).toFixed(1)}%)</span></div>`;
     }
     h += `</div>`;
   }
