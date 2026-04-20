@@ -1920,6 +1920,8 @@ ${dettaglioLinee.join('\n')}
     state.draft = draft;
     state.editingId = null;
     state.numberAuto = false;
+    state.mode = 'edit';
+    state.step = 1;
     renderFatturaModal();
     const m = document.getElementById('fatturaModal');
     if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
