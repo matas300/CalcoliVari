@@ -75,6 +75,51 @@ describe('FattureSelectors.getByMonth — fatture con pagamento nel mese, esclus
   });
 });
 
+describe('FattureSelectors.getByQuarter', function () {
+  test('trimestre 1 = mesi 1-2-3', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'a', stato: 'pagata', pagAnno: 2026, pagMese: 1, tipoDocumento: 'TD01', righe: [] },
+      { id: 'b', stato: 'pagata', pagAnno: 2026, pagMese: 3, tipoDocumento: 'TD01', righe: [] },
+      { id: 'c', stato: 'pagata', pagAnno: 2026, pagMese: 4, tipoDocumento: 'TD01', righe: [] }
+    ]);
+    expect(Sel.getByQuarter('Mattia', 2026, 1).length).toBe(2);
+  });
+
+  test('include stornate e NC', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'orig', stato: 'stornata', pagAnno: 2026, pagMese: 2, tipoDocumento: 'TD01', righe: [] },
+      { id: 'nc', stato: 'inviata', pagAnno: 2026, pagMese: 2, tipoDocumento: 'TD04', righe: [] }
+    ]);
+    expect(Sel.getByQuarter('Mattia', 2026, 1).length).toBe(2);
+  });
+});
+
+describe('FattureSelectors.getByPagAnno', function () {
+  test('filtra solo per anno di pagamento', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'a', stato: 'pagata', pagAnno: 2026, pagMese: 1, tipoDocumento: 'TD01', righe: [] },
+      { id: 'b', stato: 'pagata', pagAnno: 2025, pagMese: 12, tipoDocumento: 'TD01', righe: [] }
+    ]);
+    expect(Sel.getByPagAnno('Mattia', 2026).length).toBe(1);
+  });
+});
+
+describe('FattureSelectors.getCrossYearPaidIn', function () {
+  test('emesse in anno precedente ma pagate nel year', function () {
+    reset();
+    seed('Mattia', [
+      { id: 'a', stato: 'pagata', data: '2025-11-10', pagAnno: 2026, pagMese: 1, tipoDocumento: 'TD01', righe: [] },
+      { id: 'b', stato: 'pagata', data: '2026-01-05', pagAnno: 2026, pagMese: 2, tipoDocumento: 'TD01', righe: [] }
+    ]);
+    var res = Sel.getCrossYearPaidIn('Mattia', 2026);
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe('a');
+  });
+});
+
 describe('FattureSelectors.all — carica fatture per profilo', function () {
   test('ritorna array vuoto se nessun dato', function () {
     reset();

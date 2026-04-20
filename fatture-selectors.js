@@ -51,11 +51,39 @@
     });
   }
 
+  function getByQuarter(profile, year, quarter) {
+    var months = [quarter * 3 - 2, quarter * 3 - 1, quarter * 3];
+    return all(profile).filter(function (f) {
+      if (f.stato === 'bozza') return false;
+      if (Number(f.pagAnno) !== Number(year)) return false;
+      return months.indexOf(Number(f.pagMese)) !== -1;
+    });
+  }
+
+  function getByPagAnno(profile, year) {
+    return all(profile).filter(function (f) {
+      if (f.stato === 'bozza') return false;
+      return Number(f.pagAnno) === Number(year);
+    });
+  }
+
+  function getCrossYearPaidIn(profile, year) {
+    return all(profile).filter(function (f) {
+      if (f.stato === 'bozza') return false;
+      if (Number(f.pagAnno) !== Number(year)) return false;
+      var dataAnno = Number(String(f.data || '').slice(0, 4));
+      return dataAnno && dataAnno < Number(year);
+    });
+  }
+
   window.FattureSelectors = {
     all: all,
     storageKey: storageKey,
     getImportoSigned: getImportoSigned,
     getNettoEffettivo: getNettoEffettivo,
-    getByMonth: getByMonth
+    getByMonth: getByMonth,
+    getByQuarter: getByQuarter,
+    getByPagAnno: getByPagAnno,
+    getCrossYearPaidIn: getCrossYearPaidIn
   };
 })();
