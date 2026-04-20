@@ -232,17 +232,18 @@
   <div id="tab-settings" class="tab-content">
     <div class="panel">
       <h3>Impostazioni Annuali</h3>
-      <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
+      <div style="font-size:.82rem;color:var(--color-text-muted);line-height:1.5;margin-bottom:18px">
         Qui restano le impostazioni operative dell'anno selezionato. I dati stabili si gestiscono nelle tab <b>Profilo personale</b> e <b>Profilo P.IVA</b>.
       </div>
-      <div class="settings-subsection-title">Parametri fiscali (anno corrente)</div>
+
+      <div class="settings-subsection-title">Parametri fiscali (anno)</div>
       <div class="settings-group">
         <label>Gruppo ATECO</label>
         <select id="settAtecoGruppo" onchange="applyAtecoGruppo(this.value)"></select>
       </div>
       <div class="settings-grid-2">
         <div class="settings-group">
-          <label>Coefficiente redditivita (%)</label>
+          <label>Coefficiente redditività (%)</label>
           <input type="number" id="settCoefficiente" step="0.01" min="0" max="100"
             onchange="saveSetting('coefficiente', this.value); recalcAll()">
         </div>
@@ -260,84 +261,82 @@
         <div class="settings-group">
           <label>Usa parametri INPS ufficiali</label>
           <select id="settUsaInpsUfficiale" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
-            <option value="1">Si (auto da anno)</option>
+            <option value="1">Sì (auto da anno)</option>
             <option value="0">No (manuale)</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label>Riduzione contributi 35%</label>
+          <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
+          </select>
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Solo INPS Artigiani/Commercianti, solo per questo anno.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Anno con reddito da lavoro dipendente</label>
+          <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
           </select>
         </div>
       </div>
 
-      <div class="settings-subsection-title">Impostazioni operative</div>
-      <div class="settings-group">
-        <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
-        <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Anno con reddito da lavoro dipendente</label>
-        <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
-          <option value="0">No</option>
-          <option value="1">Si</option>
-        </select>
-        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-          Serve per segnalare correttamente gli anni misti e avvisare quando il metodo storico puo essere conservativo.
+      <div class="settings-subsection-title">Operatività</div>
+      <div class="settings-grid-2">
+        <div class="settings-group">
+          <label>Paga giornaliera (EUR)</label>
+          <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Giorni medi per incasso fattura</label>
+          <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="setGiorniIncassoProfile(this.value)">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Impostazione di profilo, applicata a tutti gli anni.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Override INAIL anno corrente (EUR)</label>
+          <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
+            onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Il premio è calcolato dal tasso INAIL in Profilo P.IVA. Compila qui solo per sovrascrivere.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Override INAIL anno successivo (EUR)</label>
+          <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
+            onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Diritto Camera di Commercio (EUR)</label>
+          <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
+            onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Vuoto = valore standard 53 EUR (artigiani/commercianti).
+          </div>
         </div>
       </div>
-      <div class="settings-group">
-        <label>Riduzione contributi 35% per l'anno selezionato</label>
-        <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
-          <option value="0">No</option>
-          <option value="1">Si</option>
-        </select>
-        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-          Vale solo per questo anno e solo per INPS Artigiani / Commercianti. Non e un parametro globale del profilo fiscale.
-        </div>
+
+      <div class="settings-subsection-title">Dati & backup</div>
+      <div class="settings-group" style="margin-top:12px">
+        <button class="btn-add" onclick="exportData()" style="background:var(--color-info)">Esporta dati (JSON)</button>
+        <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--color-secondary);margin-left:8px">Importa dati</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
       </div>
-      <div class="settings-group">
-        <label>Giorni medi per incasso fattura</label>
-        <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="setGiorniIncassoProfile(this.value)">
-        <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
-          Impostazione di profilo, applicata a tutti gli anni.
-        </div>
-      </div>
-      <div class="settings-group">
-        <label>Override INAIL anno corrente (EUR)</label>
-        <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
-          onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
-        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
-          Se il tasso INAIL e configurato nel profilo fiscale, il premio viene calcolato automaticamente. Inserisci qui solo per sovrascrivere.
-        </div>
-      </div>
-      <div class="settings-group">
-        <label>Override INAIL anno successivo (EUR)</label>
-        <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
-          onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Diritto annuale Camera di Commercio (EUR)</label>
-        <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
-          onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
-        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
-          Lascia vuoto per usare il valore standard (53 EUR artigiani/commercianti).
-        </div>
-      </div>
-      <div class="settings-subsection-title">Debug / Test</div>
-      <div class="settings-group">
+      <div class="settings-group" style="margin-top:12px">
         <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
           <input type="checkbox" id="settDevHardDelete" style="margin-top:3px;"
             onchange="saveBoolSetting('devHardDelete', this.checked); recalcAll()">
           <span>
             <b>Hard-delete fatture (solo test)</b><br>
-            <span style="color:var(--text2); font-size:.75rem;">&#9888; Disattivare prima del rilascio. Elimina fatture bypassando il workflow fiscale.</span>
+            <span style="color:var(--color-text-muted); font-size:.75rem;">&#9888; Disattivare prima del rilascio. Elimina fatture bypassando il workflow fiscale.</span>
           </span>
         </label>
       </div>
-
-      <div class="settings-group" style="margin-top:30px">
-        <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
-        <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--accent2);margin-left:8px">Importa dati</button>
-        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-      </div>
     </div>
-
   </div>
 
   <div id="tab-profilo-personale" class="tab-content">
