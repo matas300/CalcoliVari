@@ -940,9 +940,10 @@ function renderClienteModal(id) {
       <div class="cliente-section">
         <div class="cliente-section-label">Partita IVA</div>
         <div class="cliente-autofill-row">
-          <input type="text" value="${esc(cliente.partitaIva)}" placeholder="11 cifre" ${on('partitaIva')}>
-          <button type="button" class="btn-ghost" disabled title="in arrivo">🔍 Autofill</button>
+          <input type="text" id="clienteModalPiva" value="${esc(cliente.partitaIva)}" placeholder="11 cifre" ${on('partitaIva')}>
+          <button type="button" id="clienteAutofillBtn" class="btn-ghost" onclick="autofillClienteFromPiva('${idEsc}')">🔍 Autofill</button>
         </div>
+        <div id="clienteModalToast" class="fattura-modal-toast"></div>
       </div>
       <hr>
 
@@ -1044,12 +1045,94 @@ function updateClienteField(id, key, value) {
   }
 }
 
+function showClienteModalToast(message, tone = 'success') {
+  const toast = document.getElementById('clienteModalToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.dataset.tone = tone;
+  toast.classList.add('show');
+  if (showClienteModalToast._timer) clearTimeout(showClienteModalToast._timer);
+  showClienteModalToast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+async function autofillClienteFromPiva(id) {
+  const api = window.ClientiAutofill;
+  if (!api || typeof api.lookupPartitaIva !== 'function') {
+    showClienteModalToast('Modulo autofill non disponibile', 'error');
+    return;
+  }
+  const input = document.getElementById('clienteModalPiva');
+  const piva = (input ? input.value : '').trim();
+  const btn = document.getElementById('clienteAutofillBtn');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Caricamento...'; }
+  try {
+    const res = await api.lookupPartitaIva(piva);
+    if (!res || !res.ok) {
+      const code = res && res.code;
+      if (code === 'INVALID_PIVA') {
+        showClienteModalToast('P.IVA non valida (deve essere 11 cifre)', 'error');
+      } else if (code === 'NO_KEY') {
+        showClienteModalToast('Configura API key openapi.it in Impostazioni', 'warn');
+      } else if (code === 'NOT_FOUND') {
+        showClienteModalToast('P.IVA non trovata in openapi.it', 'warn');
+      } else if (code === 'NETWORK') {
+        showClienteModalToast('Errore di rete, riprova', 'error');
+      } else {
+        showClienteModalToast((res && res.error) || 'Errore autofill', 'error');
+      }
+      return;
+    }
+    // ok: true — merge only into empty fields of the cliente record.
+    const cliente = getClienti().find(c => c.id === id);
+    if (!cliente) {
+      showClienteModalToast('Cliente non trovato', 'error');
+      return;
+    }
+    const data = res.data || {};
+    const mapping = [
+      ['nome', 'nome'],
+      ['cf', 'codiceFiscale'],
+      ['indirizzo', 'indirizzo'],
+      ['cap', 'cap'],
+      ['citta', 'citta'],
+      ['provincia', 'provincia'],
+      ['pec', 'pec']
+    ];
+    let applied = 0, skipped = 0, available = 0;
+    for (const [srcKey, targetField] of mapping) {
+      const incoming = (data[srcKey] || '').toString().trim();
+      if (!incoming) continue;
+      available++;
+      const current = (cliente[targetField] || '').toString().trim();
+      if (current) { skipped++; continue; }
+      updateClienteField(id, targetField, incoming);
+      applied++;
+    }
+    // Re-render modal so new values display (updateClienteField intentionally
+    // skips re-render to preserve input focus).
+    if (clienteModalState.id === id) renderClienteModal(id);
+    if (applied === 0 && available === 0) {
+      showClienteModalToast('Nessun dato disponibile da openapi.it', 'warn');
+    } else if (skipped > 0) {
+      showClienteModalToast('Autofill completato (alcuni campi già compilati non sono stati modificati)');
+    } else {
+      showClienteModalToast('Dati cliente compilati');
+    }
+  } catch (err) {
+    showClienteModalToast('Errore autofill: ' + ((err && err.message) || err), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText || '🔍 Autofill'; }
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.openClienteModal = openClienteModal;
   window.closeClienteModal = closeClienteModal;
   window.renderClienteModal = renderClienteModal;
   window.deleteClienteFromModal = deleteClienteFromModal;
   window.updateClienteField = updateClienteField;
+  window.autofillClienteFromPiva = autofillClienteFromPiva;
 }
 
 function deleteCliente(id) {
