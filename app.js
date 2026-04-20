@@ -499,15 +499,30 @@ const BOLLO_QUARTERS = [
   { label: '3o trimestre', months: [7, 8, 9], dueMonth: 11, dueDay: 30, codice: '2523' },
   { label: '4o trimestre', months: [10, 11, 12], dueMonth: 2, dueDay: 28, codice: '2524', nextYear: true }
 ];
-function calcBolloPerQuarter(yearData) {
-  const fatture = yearData && yearData.fatture ? yearData.fatture : {};
-  return BOLLO_QUARTERS.map(q => {
+function calcBolloPerQuarter(yearData, year) {
+  const hasSelectors = typeof window !== 'undefined'
+    && window.FattureSelectors
+    && typeof window.FattureSelectors.getByQuarter === 'function';
+  const profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+  const derivedYear = Number(year) || Number(yearData && yearData.year) || null;
+
+  return BOLLO_QUARTERS.map((q, qi) => {
     let count = 0;
-    for (const m of q.months) {
-      const arr = fatture[m];
-      if (!Array.isArray(arr)) continue;
-      for (const f of arr) {
-        if ((parseFloat(f.importo) || 0) > BOLLO_SOGLIA) count++;
+    if (hasSelectors && profile && derivedYear) {
+      const fatture = window.FattureSelectors.getByQuarter(profile, derivedYear, qi + 1);
+      for (const f of fatture) {
+        const gross = Math.abs(window.FattureSelectors.getImportoSigned(f));
+        if (gross > BOLLO_SOGLIA) count++;
+      }
+    } else {
+      // Fallback legacy: monthly store
+      const fatture = yearData && yearData.fatture ? yearData.fatture : {};
+      for (const m of q.months) {
+        const arr = fatture[m];
+        if (!Array.isArray(arr)) continue;
+        for (const f of arr) {
+          if ((parseFloat(f.importo) || 0) > BOLLO_SOGLIA) count++;
+        }
       }
     }
     return { ...q, count, amount: count * BOLLO_IMPORTO };
@@ -4154,7 +4169,7 @@ function buildForfettarioScheduleForYear(year) {
   }
   // Bollo fatture elettroniche: calcolo automatico per trimestre
   // Q4 anno precedente (scade feb anno corrente)
-  const prevYearBolloQ4 = calcBolloPerQuarter(getYearDataFor(year - 1))[3];
+  const prevYearBolloQ4 = calcBolloPerQuarter(getYearDataFor(year - 1), year - 1)[3];
   const bolloPrevQ4Amount = manualBolloPrevQ4 !== null ? manualBolloPrevQ4 : prevYearBolloQ4.amount;
   if (bolloPrevQ4Amount > 0) {
     pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, bolloPrevQ4Amount, 'altro',
@@ -4162,7 +4177,7 @@ function buildForfettarioScheduleForYear(year) {
       '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1 });
   }
   // Q1-Q4 anno corrente
-  const currentBolloQuarters = calcBolloPerQuarter(yearData);
+  const currentBolloQuarters = calcBolloPerQuarter(yearData, year);
   // Q1-Q3 always auto-calculated, Q4 can be overridden manually
   const bolloHasOverride = (qi) => qi === 3 ? manualBolloQ4 !== null : false;
   const currentBolloConsolidated = applyBolloDifferimento(currentBolloQuarters, bolloHasOverride);
