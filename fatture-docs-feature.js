@@ -501,6 +501,7 @@
             '<button type="button" class="btn btn-ghost" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">Archivio</button>' +
             '<button type="button" class="btn btn-ghost" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
             '<button type="button" class="btn btn-ghost" onclick="window.triggerImportFatturaPdf && window.triggerImportFatturaPdf()" title="Importa fattura da PDF (OCR — in arrivo)">📄 Importa da PDF (OCR)</button>' +
+            '<button type="button" class="btn btn-ghost" onclick="document.getElementById(\'inputImportXmlNuove\').click()" title="Importa fatture XML FatturaPA (stato: inviata)">📄 Importa da XML</button>' +
           '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
         '</div>' +
