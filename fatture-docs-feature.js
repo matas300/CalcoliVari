@@ -1400,6 +1400,9 @@
     if (!draft.data) errors.push('Data fattura mancante.');
     const totals = computeDraftTotals(draft);
     if (totals.subtotal <= 0) errors.push('Importo totale della fattura pari a zero.');
+    if (totals.contributoIntegrativo > 0) {
+      errors.push('Contributo integrativo non supportato in XML (richiede cassa autonoma con TipoCassa). Gestione separata INPS non prevede integrativo: azzera il campo.');
+    }
     const cliente = draft.clienteSnapshot;
     if (!cliente || !cliente.nome) {
       errors.push('Cliente non selezionato o senza ragione sociale.');
@@ -1484,8 +1487,8 @@
       ? 'Operazioni non soggette a IVA ai sensi degli articoli da 7 a 7-septies del DPR 633/1972'
       : "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
 
-    // Imponibile = sum of all lines + contributo integrativo (bollo excluded)
-    const imponibile = round2(totals.subtotal + totals.contributoIntegrativo);
+    // Imponibile = somma righe (bollo e contributo integrativo esclusi dall'XML SdI)
+    const imponibile = round2(totals.subtotal);
 
     // Lines
     let lineNum = 0;
@@ -1505,18 +1508,11 @@
     </DettaglioLinee>`;
     });
 
-    if (totals.contributoIntegrativo > 0) {
-      lineNum++;
-      dettaglioLinee.push(`    <DettaglioLinee>
-      <NumeroLinea>${lineNum}</NumeroLinea>
-      <Descrizione>Contributo integrativo</Descrizione>
-      <Quantita>1.00</Quantita>
-      <PrezzoUnitario>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoUnitario>
-      <PrezzoTotale>${fmtXmlNum(round2(totals.contributoIntegrativo * sign))}</PrezzoTotale>
-      <AliquotaIVA>0.00</AliquotaIVA>
-      <Natura>${naturaLinea}</Natura>
-    </DettaglioLinee>`);
-    }
+    // Contributo integrativo: si applica SOLO alle casse autonome (es. TC01 avvocati,
+    // TC02 ingegneri). Gestione separata INPS (TC22) non ha integrativo. Finché non
+    // supportiamo TipoCassa + DatiCassaPrevidenziale, blocchiamo l'export se il
+    // campo è valorizzato per evitare XML fiscalmente non conforme (lo standard
+    // Fiscozen per gestione separata non emette integrativo — vedi campioni).
 
     // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6)
     const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo)) ? `
