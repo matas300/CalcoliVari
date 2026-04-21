@@ -24,8 +24,8 @@
   <div class="login-box">
     <h2>Lira</h2>
     <p class="login-tagline">Per la tua Partita IVA</p>
-    <p>Inserisci la password per accedere</p>
-    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+    <p><label for="loginPassword">Inserisci la password per accedere</label></p>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">Entra</button>
     <div id="loginError" class="login-error"></div>
   </div>
@@ -238,17 +238,17 @@
 
       <div class="settings-subsection-title">Parametri fiscali (anno)</div>
       <div class="settings-group">
-        <label>Gruppo ATECO</label>
+        <label for="settAtecoGruppo">Gruppo ATECO</label>
         <select id="settAtecoGruppo" onchange="applyAtecoGruppo(this.value)"></select>
       </div>
       <div class="settings-grid-2">
         <div class="settings-group">
-          <label>Coefficiente redditività (%)</label>
+          <label for="settCoefficiente">Coefficiente redditività (%)</label>
           <input type="number" id="settCoefficiente" step="0.01" min="0" max="100"
             onchange="saveSetting('coefficiente', this.value); recalcAll()">
         </div>
         <div class="settings-group">
-          <label>Aliquota imposta sostitutiva (%)</label>
+          <label for="settAliquotaSost">Aliquota imposta sostitutiva (%)</label>
           <input type="number" id="settAliquotaSost" step="0.01" min="0" max="100"
             onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
         </div>
@@ -259,14 +259,14 @@
           </div>
         </div>
         <div class="settings-group">
-          <label>Usa parametri INPS ufficiali</label>
+          <label for="settUsaInpsUfficiale">Usa parametri INPS ufficiali</label>
           <select id="settUsaInpsUfficiale" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
             <option value="1">Sì (auto da anno)</option>
             <option value="0">No (manuale)</option>
           </select>
         </div>
         <div class="settings-group">
-          <label>Riduzione contributi 35%</label>
+          <label for="settRiduzione35">Riduzione contributi 35%</label>
           <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
             <option value="0">No</option>
             <option value="1">Sì</option>
@@ -276,7 +276,7 @@
           </div>
         </div>
         <div class="settings-group">
-          <label>Anno con reddito da lavoro dipendente</label>
+          <label for="settDipendenteIncome">Anno con reddito da lavoro dipendente</label>
           <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
             <option value="0">No</option>
             <option value="1">Sì</option>
@@ -287,18 +287,18 @@
       <div class="settings-subsection-title">Operatività</div>
       <div class="settings-grid-2">
         <div class="settings-group">
-          <label>Paga giornaliera (EUR)</label>
+          <label for="settDailyRate">Paga giornaliera (EUR)</label>
           <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
         </div>
         <div class="settings-group">
-          <label>Giorni medi per incasso fattura</label>
+          <label for="settGiorniIncasso">Giorni medi per incasso fattura</label>
           <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="setGiorniIncassoProfile(this.value)">
           <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
             Impostazione di profilo, applicata a tutti gli anni.
           </div>
         </div>
         <div class="settings-group">
-          <label>Override INAIL anno corrente (EUR)</label>
+          <label for="settInailCorrente">Override INAIL anno corrente (EUR)</label>
           <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
             onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
           <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
@@ -306,12 +306,12 @@
           </div>
         </div>
         <div class="settings-group">
-          <label>Override INAIL anno successivo (EUR)</label>
+          <label for="settInailSuccessivo">Override INAIL anno successivo (EUR)</label>
           <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
             onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
         </div>
         <div class="settings-group">
-          <label>Diritto Camera di Commercio (EUR)</label>
+          <label for="settDirittoCamerale">Diritto Camera di Commercio (EUR)</label>
           <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
             onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
           <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
@@ -327,7 +327,7 @@
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
       </div>
       <div class="settings-group" style="margin-top:12px">
-        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+        <label for="settDevHardDelete" style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
           <input type="checkbox" id="settDevHardDelete" style="margin-top:3px;"
             onchange="saveBoolSetting('devHardDelete', this.checked); recalcAll()">
           <span>
