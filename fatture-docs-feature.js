@@ -1046,6 +1046,21 @@
     if (idx >= 0) history[idx] = draft; else history.unshift(draft);
     saveFattureEmesse(history);
 
+    // Validazione XML asincrona via openapi.com — fire-and-forget.
+    // Solo per fatture non-bozza (bozza = work-in-progress, manca ancora roba).
+    // L'errore di validate non blocca il save: notifica via toast se fallisce.
+    if (draft.stato && draft.stato !== 'bozza' && window.FattureXmlValidator) {
+      try {
+        const opts = (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId)
+          ? { fatturaOriginale: getSavedInvoiceById(draft.fatturaOriginaleId) || null }
+          : {};
+        const xml = buildFatturaElettronicaXml(draft, opts);
+        window.FattureXmlValidator.validateAndNotify(xml, { label: draft.numero || draft.id });
+      } catch (err) {
+        console.warn('[saveFattura] skip validation — XML build failed:', err && err.message);
+      }
+    }
+
     state.editingId = draft.id;
     state.draft = draft;
     renderFattureDocsSection();
