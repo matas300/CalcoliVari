@@ -32,7 +32,26 @@
       "WebFetch(domain:www.studiobenedetti.eu)",
       "WebFetch(domain:www.studiobogoni.it)",
       "WebFetch(domain:www.edotto.com)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(bash \"C:/Users/rossima/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh\" --project-dir \".\" --background)",
+      "Bash(bash \"C:/Users/rossima/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh\" --project-dir \".\" --foreground)",
+      "Bash(curl -s http://localhost:50064/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:50064/)",
+      "Bash(bash \"C:/Users/rossima/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/stop-server.sh\" \"C:/Users/rossima/OneDrive - TXT e-solutions S.p.A/02_Sviluppo/Applicazioni_interne/Calcoli vari/.superpowers/brainstorm/2971-1776624241\")",
+      "Bash(bash *)",
+      "Bash(curl -s http://localhost:51927/)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(node -c app.js)",
+      "Bash(python *)",
+      "Bash(node test/run-tests.js)",
+      "Bash(git reset *)",
+      "Bash(awk 'NR>=5148 && /^function / && NR>5148 {print NR\": \"$0; exit}' app.js)",
+      "Bash(awk 'NR>=4276 && /^function / && NR>4276 {print NR\": \"$0; n++; if\\(n==3\\) exit}' app.js)",
+      "Bash(git -C \"C:/Users/rossima/OneDrive - TXT e-solutions S.p.A/02_Sviluppo/Applicazioni_interne/Calcoli vari\" status)",
+      "Bash(git -C \"C:/Users/rossima/OneDrive - TXT e-solutions S.p.A/02_Sviluppo/Applicazioni_interne/Calcoli vari\" log --oneline -10)",
+      "Bash(git -C \"C:/Users/rossima/OneDrive - TXT e-solutions S.p.A/02_Sviluppo/Applicazioni_interne/Calcoli vari\" status -sb)",
+      "Bash(git -C \"C:/Users/rossima/OneDrive - TXT e-solutions S.p.A/02_Sviluppo/Applicazioni_interne/Calcoli vari\" log origin/codex/dev-newfeatures..HEAD --oneline)"
     ]
   }
 }

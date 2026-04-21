@@ -14,7 +14,7 @@ let db = null;
 let firebaseReady = false;
 let _fs = null; // cached firestore module
 let _syncTimer = null;
-const PROFILE_META_KEYS = ['clienti', 'fattureEmesse'];
+const PROFILE_META_KEYS = ['clienti', 'fattureEmesse', 'giorniIncasso'];
 
 // ── Sync Status Indicator ──
 function setSyncStatus(status) {

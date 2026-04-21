@@ -22,6 +22,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -47,6 +48,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -72,6 +74,7 @@ const PROFILE_FISCAL_LIBRARY = {
     impostaSostitutiva: 15,
     inpsMode: 'artigiani_commercianti',
     inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
@@ -86,15 +89,13 @@ const PROFILE_SYNC_FIELDS = [
   'impostaSostitutiva',
   'inpsMode',
   'inpsCategoria',
+  'inpsTipoGestSep',
   'usaInpsUfficiale',
   'limiteForfettario',
   'inailTasso'
 ];
 let currentProfile = sessionStorage.getItem('currentProfile') || null;
-let profileFiscalState = { editing: false, draft: null, data: null };
-let profileCopyToastTimer = null;
-let quadroLMToastTimer = null;
-let quadroLMState = { open: false, year: null, base: null, draft: null };
+window.getProfile = function() { return currentProfile; };
 let clientiUiState = { search: '' };
 let externalFiscalState = {
   profile: null,
@@ -110,26 +111,131 @@ let externalFiscalState = {
 let scadenziarioUiState = {
   view: 'competence',
   showHistoricalYears: false,
-  showEmptyYears: false
+  showEmptyYears: false,
+  openYears: new Set(),
+  openArchived: new Set()
 };
 
-function updateProfileBadge() {
-  const trigger = document.getElementById('profileBadge');
-  const nameEl = document.getElementById('profileBadgeName');
-  if (!trigger || !nameEl) return;
+function updateProfileAvatar() {
+  const avatarBtn = document.getElementById('profileAvatar');
+  const initialsEl = document.getElementById('profileAvatarInitials');
+  const nameEl = document.getElementById('profileMenuName');
+  const subEl = document.getElementById('profileMenuSubtitle');
+  if (!avatarBtn || !initialsEl) return;
+
   if (!currentProfile) {
-    nameEl.textContent = '';
-    trigger.disabled = true;
-    trigger.classList.add('is-empty');
-    trigger.setAttribute('title', 'Accedi per aprire il profilo fiscale');
+    initialsEl.textContent = '·';
+    if (nameEl) nameEl.textContent = '';
+    if (subEl) subEl.textContent = '';
+    avatarBtn.disabled = true;
+    avatarBtn.setAttribute('title', 'Accedi per aprire il profilo');
+    closeProfileMenu();
     return;
   }
-  const profile = profileFiscalState.data || getProfileFiscalDefaults(currentProfile);
-  const displayName = profile && profile.nome ? profile.nome : currentProfile;
-  nameEl.textContent = displayName;
-  trigger.disabled = false;
-  trigger.classList.remove('is-empty');
-  trigger.setAttribute('title', `Apri il profilo fiscale di ${displayName}`);
+
+  const ana = (data && data.settings && data.settings.anagrafica) || {};
+  const nome = String(ana.nome || '').trim();
+  const cognome = String(ana.cognome || '').trim();
+
+  let initials, displayName;
+  if (nome || cognome) {
+    initials = ((nome.charAt(0) || '') + (cognome.charAt(0) || '')).toUpperCase();
+    if (!initials) initials = currentProfile.charAt(0).toUpperCase();
+    displayName = `${nome} ${cognome}`.trim();
+  } else {
+    initials = currentProfile.charAt(0).toUpperCase();
+    displayName = currentProfile;
+  }
+
+  initialsEl.textContent = initials;
+  if (nameEl) nameEl.textContent = displayName;
+  if (subEl) subEl.textContent = `Profilo: ${currentProfile}`;
+  avatarBtn.disabled = false;
+  avatarBtn.setAttribute('title', displayName);
+}
+
+// ═══════════════════ Sidebar drawer (mobile) ═══════════════════
+function toggleSidebar() {
+  const el = document.getElementById('sidebar');
+  if (!el) return;
+  el.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+function openSidebar() {
+  const el = document.getElementById('sidebar');
+  const btn = document.getElementById('navToggle');
+  if (!el) return;
+  el.classList.add('open');
+  btn?.setAttribute('aria-expanded', 'true');
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.body.style.overflow = 'hidden';
+  }
+}
+function closeSidebar() {
+  const el = document.getElementById('sidebar');
+  const btn = document.getElementById('navToggle');
+  if (!el) return;
+  el.classList.remove('open');
+  btn?.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+}
+
+const SIDEBAR_COLLAPSED_KEY = 'calcoliPIVA_sidebarCollapsed';
+function applySidebarCollapsed(collapsed) {
+  document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+  const btn = document.querySelector('.sb-collapse-btn');
+  if (btn) {
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    btn.title = collapsed ? 'Espandi barra laterale' : 'Comprimi barra laterale';
+  }
+}
+function toggleSidebarCollapsed() {
+  const next = !document.body.classList.contains('sidebar-collapsed');
+  applySidebarCollapsed(next);
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch (e) {}
+}
+function initSidebarCollapsed() {
+  let stored = '0';
+  try { stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) || '0'; } catch (e) {}
+  applySidebarCollapsed(stored === '1');
+  // Mirror each sb-item label into data-tab-label so the collapsed-rail tooltip can show it
+  document.querySelectorAll('.sb-item').forEach(btn => {
+    const label = btn.querySelector('.sb-label');
+    if (label && !btn.getAttribute('data-tab-label')) {
+      btn.setAttribute('data-tab-label', label.textContent.trim());
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', initSidebarCollapsed);
+
+function toggleProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  if (!menu) return;
+  if (menu.hidden) openProfileMenu();
+  else closeProfileMenu();
+}
+
+function openProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || !btn || btn.disabled) return;
+  menu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  updateProfileMenuTheme();
+}
+
+function closeProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || !btn) return;
+  menu.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function updateProfileMenuTheme() {
+  const lbl = document.getElementById('profileMenuThemeLabel');
+  if (!lbl) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  lbl.textContent = isLight ? 'chiaro' : 'scuro';
 }
 
 async function hashPassword(pwd) {
@@ -141,6 +247,7 @@ async function hashPassword(pwd) {
 }
 
 async function doLogin() {
+  clearYearDataCache();
   const pwd = document.getElementById('loginPassword').value;
   const hash = await hashPassword(pwd);
   const profile = PROFILE_HASHES[hash];
@@ -152,12 +259,13 @@ async function doLogin() {
   clientiUiState.search = '';
   sessionStorage.setItem('currentProfile', profile);
   document.getElementById('loginScreen').classList.add('hidden');
+  document.body.classList.add('logged-in');
 
   // Seed historical data (once per profile)
   if (profile === 'Mattia') seedMattiaData();
   if (profile === 'Peru') seedPeruData();
   loadProfileFiscalData();
-  updateProfileBadge();
+  updateProfileAvatar();
 
   // Init Firebase and sync
   const fbOk = await initFirebase();
@@ -171,7 +279,17 @@ async function doLogin() {
 
   loadData();
   recalcAll();
+  restoreActiveTab();
   loadProfileExternalFiscalData(profile).then(() => recalcAll());
+}
+
+function restoreActiveTab() {
+  let saved = null;
+  try { saved = localStorage.getItem('calcoliPIVA_activeTab'); } catch (_) {}
+  if (!saved) return;
+  const navBtn = document.querySelector('.sb-item[data-tab="' + saved + '"]');
+  const tabEl = document.getElementById('tab-' + saved);
+  if (navBtn && tabEl) switchToTab(saved);
 }
 
 function toggleTheme() {
@@ -180,24 +298,15 @@ function toggleTheme() {
   const next = current === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.innerHTML = next === 'dark' ? '&#9790;' : '&#9728;';
+  if (typeof updateProfileMenuTheme === 'function') updateProfileMenuTheme();
 }
-(function initThemeIcon() {
-  const t = localStorage.getItem('theme') || 'dark';
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.innerHTML = t === 'dark' ? '&#9790;' : '&#9728;';
-  });
-})();
 
 function doLogout() {
-  closeProfileFiscalModal();
+  clearYearDataCache();
   if (typeof closeOcrPagamentoModal === 'function') closeOcrPagamentoModal();
   currentProfile = null;
   clientiUiState.search = '';
   sessionStorage.removeItem('currentProfile');
-  profileFiscalState = { editing: false, draft: null, data: null };
   externalFiscalState = {
     profile: null,
     loaded: false,
@@ -209,27 +318,32 @@ function doLogout() {
     summaries: {},
     comparisonMatrix: []
   };
+  document.body.classList.remove('logged-in');
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginError').textContent = '';
-  updateProfileBadge();
+  updateProfileAvatar();
 }
 
 function checkSession() {
   if (currentProfile) {
     document.getElementById('loginScreen').classList.add('hidden');
+    document.body.classList.add('logged-in');
     loadProfileFiscalData();
-    updateProfileBadge();
+    updateProfileAvatar();
     // Init Firebase in background, then sync cloud → local → refresh UI
     initFirebase().then(ok => {
       if (ok) {
         syncAllFromCloud(currentProfile).then(count => {
           loadData();
           recalcAll();
+          restoreActiveTab();
           loadProfileExternalFiscalData(currentProfile).then(() => recalcAll());
           // Also push any local-only changes to cloud
           if (typeof syncAllToCloud === 'function') syncAllToCloud(currentProfile);
         });
+      } else {
+        restoreActiveTab();
       }
     });
     return true;
@@ -296,12 +410,71 @@ const OFFICIAL_ARTCOM_INPS = {
     commerciante: { contribFissi: 4611.63, aliqContributi: 24.48 }
   }
 };
-// Retribuzione convenzionale INAIL (minimale di rendita) per artigiani senza dipendenti
-// Fonte: circolare INAIL annuale. Il premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%)
+// Massimale contributivo annuo INPS Gestione Separata
+// Fonte: circolari INPS annuali (art. 2 c. 18 L. 335/1995)
+// Si applica a: base imponibile annua per il calcolo dei contributi gestione separata
+const OFFICIAL_GESTIONE_SEPARATA_MASSIMALE = {
+  2020: 103055,
+  2021: 103055,
+  2022: 105014,
+  2023: 113520,
+  2024: 119650,
+  2025: 120607,
+  2026: 122295
+};
+function getGestSepMassimale(year) {
+  const y = parseInt(year, 10);
+  if (OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[y]) return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[y];
+  const known = Object.keys(OFFICIAL_GESTIONE_SEPARATA_MASSIMALE).map(Number).sort((a, b) => a - b);
+  if (y < known[0]) return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[0]];
+  return OFFICIAL_GESTIONE_SEPARATA_MASSIMALE[known[known.length - 1]];
+}
+// Aliquote INPS Gestione Separata per Partita IVA (libero professionista)
+// Fonte: circolari INPS annuali (12/2020, 12/2021, 25/2022, 12/2023, 24/2024, 26/2025, 8/2026)
+// - esclusivo: iscritti alla sola gestione separata (P.IVA senza altra copertura previdenziale)
+// - altra_cassa: iscritti che hanno già altra copertura (dipendenti, pensionati, altra cassa prof.)
+const OFFICIAL_GESTIONE_SEPARATA_INPS = {
+  2020: { esclusivo: 25.72, altra_cassa: 24.00 },
+  2021: { esclusivo: 25.98, altra_cassa: 24.00 },
+  2022: { esclusivo: 26.23, altra_cassa: 24.00 },
+  2023: { esclusivo: 26.23, altra_cassa: 24.00 },
+  2024: { esclusivo: 26.07, altra_cassa: 24.00 },
+  2025: { esclusivo: 26.07, altra_cassa: 24.00 },
+  2026: { esclusivo: 26.07, altra_cassa: 24.00 }
+};
+function normalizeGestSepTipo(tipo) {
+  const t = String(tipo || '').toLowerCase().trim();
+  return t === 'altra_cassa' ? 'altra_cassa' : 'esclusivo';
+}
+function getOfficialGestSepAliquota(year, tipo) {
+  const y = parseInt(year, 10);
+  const kind = normalizeGestSepTipo(tipo);
+  const known = Object.keys(OFFICIAL_GESTIONE_SEPARATA_INPS).map(Number).sort((a, b) => a - b);
+  let yearUsed;
+  if (OFFICIAL_GESTIONE_SEPARATA_INPS[y]) {
+    yearUsed = y;
+  } else if (y < known[0]) {
+    yearUsed = known[0];
+  } else {
+    yearUsed = known[known.length - 1];
+  }
+  return {
+    aliqContributi: OFFICIAL_GESTIONE_SEPARATA_INPS[yearUsed][kind],
+    tipo: kind,
+    yearUsed,
+    isFallback: yearUsed !== y
+  };
+}
+// Retribuzione convenzionale annua INAIL per artigiani titolari (= retribuzione giornaliera × 300)
+// Usata per stimare il premio INAIL ordinario: premio = base × tasso ‰ × 1.01 (addizionale ANMIL 1%).
+// Fonte: circolare INAIL annuale (es. circ. 12/2024 per anno 2024; circ. 29/2025 per anno 2025).
+// La circolare per il 2026 verrà pubblicata indicativamente a maggio 2026; fino ad allora fallback al 2025.
+// Nota: questo NON è il "minimale di rendita" INAIL in senso stretto (= 20.426,70 € per il 2025,
+// rivalutazione rendite ai sopravvissuti). Per l'utente conviene comunque usare l'override manuale
+// "Autoliquidazione INAIL febbraio" nello scadenziario quando si conosce l'importo esatto.
 const INAIL_MINIMALE_RENDITA = {
-  2024: 18415.40,
-  2025: 18415.40,
-  2026: 18689.79
+  2024: 17061.00, // 56,87 × 300 - Circolare INAIL 12/2024 del 23 maggio 2024
+  2025: 17196.00  // 57,32 × 300 - Circolare INAIL 29/2025 del 20 maggio 2025
 };
 function getInailMinimale(year) {
   if (INAIL_MINIMALE_RENDITA[year]) return INAIL_MINIMALE_RENDITA[year];
@@ -317,28 +490,75 @@ function calcInailPremio(year, tassoPerMille) {
 
 // Imposta di bollo: 2€ per ogni fattura con importo > 77.47€
 // Scadenze: Q1 → 31/5, Q2 → 30/9, Q3 → 30/11, Q4 → 28/2 anno successivo
-// Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo
+// Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo (L. 73/2022 art. 3)
 const BOLLO_SOGLIA = 77.47;
 const BOLLO_IMPORTO = 2.00;
+const BOLLO_DIFFERIMENTO_SOGLIA = 5000; // EUR — L. 73/2022 art. 3
 const BOLLO_QUARTERS = [
   { label: '1o trimestre', months: [1, 2, 3], dueMonth: 5, dueDay: 31, codice: '2521' },
   { label: '2o trimestre', months: [4, 5, 6], dueMonth: 9, dueDay: 30, codice: '2522' },
   { label: '3o trimestre', months: [7, 8, 9], dueMonth: 11, dueDay: 30, codice: '2523' },
   { label: '4o trimestre', months: [10, 11, 12], dueMonth: 2, dueDay: 28, codice: '2524', nextYear: true }
 ];
-function calcBolloPerQuarter(yearData) {
-  const fatture = yearData && yearData.fatture ? yearData.fatture : {};
-  return BOLLO_QUARTERS.map(q => {
+function calcBolloPerQuarter(yearData, year) {
+  const hasSelectors = typeof window !== 'undefined'
+    && window.FattureSelectors
+    && typeof window.FattureSelectors.getByQuarter === 'function';
+  const profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+  const derivedYear = Number(year) || Number(yearData && yearData.year) || null;
+
+  return BOLLO_QUARTERS.map((q, qi) => {
     let count = 0;
-    for (const m of q.months) {
-      const arr = fatture[m];
-      if (!Array.isArray(arr)) continue;
-      for (const f of arr) {
-        if ((parseFloat(f.importo) || 0) > BOLLO_SOGLIA) count++;
+    if (hasSelectors && profile && derivedYear) {
+      const fatture = window.FattureSelectors.getByQuarter(profile, derivedYear, qi + 1);
+      for (const f of fatture) {
+        const gross = Math.abs(window.FattureSelectors.getImportoSigned(f));
+        if (gross > BOLLO_SOGLIA) count++;
+      }
+    } else {
+      // Fallback legacy: monthly store
+      const fatture = yearData && yearData.fatture ? yearData.fatture : {};
+      for (const m of q.months) {
+        const arr = fatture[m];
+        if (!Array.isArray(arr)) continue;
+        for (const f of arr) {
+          if ((parseFloat(f.importo) || 0) > BOLLO_SOGLIA) count++;
+        }
       }
     }
     return { ...q, count, amount: count * BOLLO_IMPORTO };
   });
+}
+
+// Applica L. 73/2022 art. 3: se Q1 <= 5000, accorpa a Q2; se Q1+Q2 cumulato <= 5000, accorpa a Q3.
+// Nessun differimento dopo Q3: Q4 ha la sua scadenza naturale (28/2 anno successivo).
+// Gli override manuali bypassano il consolidamento sul trimestre interessato.
+function applyBolloDifferimento(quarters, hasManualOverride) {
+  const result = quarters.map(q => ({
+    ...q,
+    finalAmount: q.amount,
+    deferredFromLabels: [],
+    deferred: false
+  }));
+  // Q1 -> Q2
+  if (!hasManualOverride(0) && !hasManualOverride(1)
+      && result[0].finalAmount > 0
+      && result[0].finalAmount <= BOLLO_DIFFERIMENTO_SOGLIA) {
+    result[1].finalAmount += result[0].finalAmount;
+    result[1].deferredFromLabels.push(result[0].label);
+    result[0].deferred = true;
+    result[0].finalAmount = 0;
+  }
+  // Q2 (eventualmente cumulato con Q1) -> Q3
+  if (!hasManualOverride(1) && !hasManualOverride(2)
+      && result[1].finalAmount > 0
+      && result[1].finalAmount <= BOLLO_DIFFERIMENTO_SOGLIA) {
+    result[2].finalAmount += result[1].finalAmount;
+    result[2].deferredFromLabels.push(...result[1].deferredFromLabels, result[1].label);
+    result[1].deferred = true;
+    result[1].finalAmount = 0;
+  }
+  return result;
 }
 
 const F24_GUIDE = {
@@ -579,7 +799,6 @@ const FORFETTARIO_RULES = {
 
 let currentYear = new Date().getFullYear();
 let data = {};
-const yearlyDataCache = {};
 
 function getActualCalendarYear() {
   return new Date().getFullYear();
@@ -669,6 +888,147 @@ function addCliente() {
   });
   saveClienti([next, ...list]);
   renderClienti();
+  openClienteModal(next.id);
+}
+
+// ── Modal dettaglio cliente (Task 5) ──
+// XSS: tutti i valori passano via escapeHtml (pattern consolidato nel progetto).
+const clienteModalState = { id: null, escHandler: null };
+
+function openClienteModal(id) {
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) return;
+  clienteModalState.id = id;
+  renderClienteModal(id);
+  const m = document.getElementById('clienteModal');
+  if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
+  document.body.classList.add('profile-modal-open');
+  if (!clienteModalState.escHandler) {
+    clienteModalState.escHandler = (ev) => {
+      if (ev.key === 'Escape') closeClienteModal();
+    };
+    document.addEventListener('keydown', clienteModalState.escHandler);
+  }
+}
+
+function closeClienteModal() {
+  const m = document.getElementById('clienteModal');
+  if (m) { m.classList.remove('open'); m.setAttribute('aria-hidden', 'true'); m.innerHTML = ''; }
+  document.body.classList.remove('profile-modal-open');
+  clienteModalState.id = null;
+  if (clienteModalState.escHandler) {
+    document.removeEventListener('keydown', clienteModalState.escHandler);
+    clienteModalState.escHandler = null;
+  }
+}
+
+function renderClienteModal(id) {
+  const m = document.getElementById('clienteModal');
+  if (!m) return;
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) { closeClienteModal(); return; }
+  const esc = (v) => escapeHtml(v ?? '');
+  const titleText = cliente.nome ? esc(cliente.nome) : 'Nuovo cliente';
+  const idEsc = esc(id);
+  const on = (field) => `onchange="updateClienteField('${idEsc}', '${field}', this.value)"`;
+  m.innerHTML = `
+    <div class="cliente-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="clienteModalTitle">
+      <div class="cliente-modal-header">
+        <div class="cliente-modal-title" id="clienteModalTitle">${titleText}</div>
+        <button type="button" class="cliente-modal-close" aria-label="Chiudi" onclick="closeClienteModal()">×</button>
+      </div>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Partita IVA</div>
+        <div class="cliente-autofill-row">
+          <input type="text" id="clienteModalPiva" value="${esc(cliente.partitaIva)}" placeholder="11 cifre" ${on('partitaIva')}>
+          <button type="button" id="clienteAutofillBtn" class="btn-ghost" onclick="autofillClienteFromPiva('${idEsc}')">🔍 Autofill</button>
+        </div>
+        <div id="clienteModalToast" class="fattura-modal-toast"></div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Anagrafica</div>
+        <div class="cliente-field">
+          <label>Nome / Ragione sociale</label>
+          <input type="text" value="${esc(cliente.nome)}" ${on('nome')}>
+        </div>
+        <div class="cliente-field">
+          <label>Codice fiscale</label>
+          <input type="text" value="${esc(cliente.codiceFiscale)}" ${on('codiceFiscale')}>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Sede</div>
+        <div class="cliente-field">
+          <label>Indirizzo</label>
+          <input type="text" value="${esc(cliente.indirizzo)}" ${on('indirizzo')}>
+        </div>
+        <div class="cliente-sede-row">
+          <div class="cliente-field">
+            <label>CAP</label>
+            <input type="text" autocomplete="off" value="${esc(cliente.cap)}" maxlength="5" ${on('cap')}>
+          </div>
+          <div class="cliente-field">
+            <label>Città</label>
+            <input type="text" autocomplete="off" value="${esc(cliente.citta)}" ${on('citta')}>
+          </div>
+          <div class="cliente-field">
+            <label>Provincia</label>
+            <input type="text" autocomplete="off" value="${esc(cliente.provincia)}" maxlength="2" ${on('provincia')}>
+          </div>
+          <div class="cliente-field">
+            <label>Nazione</label>
+            <input type="text" autocomplete="off" value="${esc(cliente.nazione)}" maxlength="2" ${on('nazione')}>
+          </div>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Fatturazione elettronica</div>
+        <div class="cliente-field">
+          <label>Codice SDI</label>
+          <input type="text" value="${esc(cliente.codiceSDI)}" maxlength="7" ${on('codiceSDI')}>
+        </div>
+        <div class="cliente-field">
+          <label>PEC</label>
+          <input type="email" value="${esc(cliente.pec)}" ${on('pec')}>
+        </div>
+      </div>
+      <hr>
+
+      <div class="cliente-section">
+        <div class="cliente-section-label">Note</div>
+        <div class="cliente-field">
+          <textarea rows="3" ${on('note')}>${esc(cliente.note)}</textarea>
+        </div>
+      </div>
+
+      <div class="cliente-modal-actions">
+        <button type="button" class="btn-danger" onclick="deleteClienteFromModal('${idEsc}')">Elimina</button>
+        <button type="button" class="btn-primary" onclick="closeClienteModal()">Chiudi</button>
+      </div>
+    </div>`;
+}
+
+function deleteClienteFromModal(id) {
+  const cliente = getClienti().find(c => c.id === id);
+  if (!cliente) return;
+  const msg = `Eliminare ${cliente.nome || 'questo cliente'}? L'operazione è irreversibile.`;
+  const onConfirm = () => {
+    saveClienti(getClienti().filter(c => c.id !== id));
+    closeClienteModal();
+    renderClienti();
+  };
+  if (typeof window.showAppConfirm === 'function') {
+    window.showAppConfirm({ title: 'Eliminare cliente?', message: msg, okLabel: 'Elimina', danger: true }, onConfirm);
+  } else if (confirm(msg)) {
+    onConfirm();
+  }
 }
 
 function updateClienteField(id, key, value) {
@@ -678,15 +1038,103 @@ function updateClienteField(id, key, value) {
   });
   saveClienti(list);
   renderClienti();
+  // Non re-renderizzare l'intero modal (perderebbe il focus sull'input attivo).
+  // Aggiorna solo il titolo se cambia il nome.
+  if (clienteModalState.id === id && key === 'nome') {
+    const titleEl = document.getElementById('clienteModalTitle');
+    if (titleEl) titleEl.textContent = value || 'Nuovo cliente';
+  }
 }
 
-function deleteCliente(id) {
-  const cliente = getClienti().find(c => c.id === id);
-  if (!cliente) return;
-  if (!confirm(`Eliminare ${cliente.nome || 'questo cliente'}?`)) return;
-  const list = getClienti().filter(c => c.id !== id);
-  saveClienti(list);
-  renderClienti();
+function showClienteModalToast(message, tone = 'success') {
+  const toast = document.getElementById('clienteModalToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.dataset.tone = tone;
+  toast.classList.add('show');
+  if (showClienteModalToast._timer) clearTimeout(showClienteModalToast._timer);
+  showClienteModalToast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+async function autofillClienteFromPiva(id) {
+  const api = window.ClientiAutofill;
+  if (!api || typeof api.lookupPartitaIva !== 'function') {
+    showClienteModalToast('Modulo autofill non disponibile', 'error');
+    return;
+  }
+  const input = document.getElementById('clienteModalPiva');
+  const piva = (input ? input.value : '').trim();
+  const btn = document.getElementById('clienteAutofillBtn');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Caricamento...'; }
+  try {
+    const res = await api.lookupPartitaIva(piva);
+    if (!res || !res.ok) {
+      const code = res && res.code;
+      if (code === 'INVALID_PIVA') {
+        showClienteModalToast('P.IVA non valida (deve essere 11 cifre)', 'error');
+      } else if (code === 'NO_KEY') {
+        showClienteModalToast('Configura API key openapi.it in Impostazioni', 'warn');
+      } else if (code === 'NOT_FOUND') {
+        showClienteModalToast('P.IVA non trovata in openapi.it', 'warn');
+      } else if (code === 'NETWORK') {
+        showClienteModalToast('Errore di rete, riprova', 'error');
+      } else {
+        showClienteModalToast((res && res.error) || 'Errore autofill', 'error');
+      }
+      return;
+    }
+    // ok: true — merge only into empty fields of the cliente record.
+    const cliente = getClienti().find(c => c.id === id);
+    if (!cliente) {
+      showClienteModalToast('Cliente non trovato', 'error');
+      return;
+    }
+    const payload = res.data || {};
+    const mapping = [
+      ['nome', 'nome'],
+      ['cf', 'codiceFiscale'],
+      ['indirizzo', 'indirizzo'],
+      ['cap', 'cap'],
+      ['citta', 'citta'],
+      ['provincia', 'provincia'],
+      ['pec', 'pec'],
+      ['codiceSDI', 'codiceSDI']
+    ];
+    let applied = 0, skipped = 0, available = 0;
+    for (const [srcKey, targetField] of mapping) {
+      const incoming = (payload[srcKey] || '').toString().trim();
+      if (!incoming) continue;
+      available++;
+      const current = (cliente[targetField] || '').toString().trim();
+      if (current) { skipped++; continue; }
+      updateClienteField(id, targetField, incoming);
+      applied++;
+    }
+    // Re-render modal so new values display (updateClienteField intentionally
+    // skips re-render to preserve input focus).
+    if (clienteModalState.id === id) renderClienteModal(id);
+    if (applied === 0 && available === 0) {
+      showClienteModalToast('Nessun dato disponibile da openapi.it', 'warn');
+    } else if (skipped > 0) {
+      showClienteModalToast('Autofill completato (alcuni campi già compilati non sono stati modificati)');
+    } else {
+      showClienteModalToast('Dati cliente compilati');
+    }
+  } catch (err) {
+    showClienteModalToast('Errore autofill: ' + ((err && err.message) || err), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText || '🔍 Autofill'; }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.openClienteModal = openClienteModal;
+  window.closeClienteModal = closeClienteModal;
+  window.renderClienteModal = renderClienteModal;
+  window.deleteClienteFromModal = deleteClienteFromModal;
+  window.updateClienteField = updateClienteField;
+  window.autofillClienteFromPiva = autofillClienteFromPiva;
 }
 
 function matchesClienteSearch(cliente, query) {
@@ -731,12 +1179,14 @@ function normalizeProfileFiscalData(input, profile = currentProfile) {
     nazione: String(merged.nazione || base.nazione || 'IT').toUpperCase(),
     ateco: String(merged.ateco || base.ateco || ''),
     atecoDescrizione: String(merged.atecoDescrizione || base.atecoDescrizione || ''),
+    atecoGruppo: String(merged.atecoGruppo || base.atecoGruppo || ''),
     iban: String(merged.iban || ''),
     modalitaPagamento: String(merged.modalitaPagamento || base.modalitaPagamento || 'Bonifico bancario'),
     coefficiente: validatePercentValue(merged.coefficiente, base.coefficiente || 67),
     impostaSostitutiva: validatePercentValue(merged.impostaSostitutiva, base.impostaSostitutiva || 15),
     inpsMode: normalizeInpsMode(merged.inpsMode || base.inpsMode),
     inpsCategoria: normalizeInpsCategory(merged.inpsCategoria || base.inpsCategoria),
+    inpsTipoGestSep: normalizeGestSepTipo(merged.inpsTipoGestSep || base.inpsTipoGestSep),
     usaInpsUfficiale: parseInt(merged.usaInpsUfficiale, 10) === 0 ? 0 : 1,
     riduzione35: parseInt(merged.riduzione35, 10) === 1 ? 1 : 0,
     limiteForfettario: validateMoneyValue(merged.limiteForfettario, base.limiteForfettario || 85000),
@@ -752,24 +1202,54 @@ function getStoredProfileFiscal(profile = currentProfile) {
 }
 
 function loadProfileFiscalData() {
-  profileFiscalState.data = getStoredProfileFiscal(currentProfile);
-  if (!profileFiscalState.editing) profileFiscalState.draft = { ...profileFiscalState.data };
-  updateProfileBadge();
-  return profileFiscalState.data;
+  const data = getStoredProfileFiscal(currentProfile);
+  updateProfileAvatar();
+  return data;
 }
 
 function saveProfileFiscalData(nextData) {
   const normalized = normalizeProfileFiscalData(nextData, currentProfile);
   localStorage.setItem(profileStorageKey(currentProfile), JSON.stringify(normalized));
-  profileFiscalState.data = normalized;
-  profileFiscalState.draft = { ...normalized };
-  updateProfileBadge();
+  updateProfileAvatar();
   return normalized;
 }
 
 function getProfileFiscalData() {
-  if (!profileFiscalState.data) loadProfileFiscalData();
-  return profileFiscalState.data || normalizeProfileFiscalData({}, currentProfile);
+  // C4: compat shim — legacy shape synthesized from settings.anagrafica/attivita/settings
+  const ana = (data && data.settings && data.settings.anagrafica) || {};
+  const att = (data && data.settings && data.settings.attivita) || {};
+  const s = (data && data.settings) || {};
+  const nome = String(ana.nome || '').trim();
+  const cognome = String(ana.cognome || '').trim();
+  const displayName = [nome, cognome].filter(Boolean).join(' ') || (currentProfile || '');
+  return {
+    nome: displayName,
+    cognome: cognome,
+    codiceFiscale: String(ana.codiceFiscale || ''),
+    partitaIva: String(att.partitaIva || ''),
+    indirizzo: String(ana.residenzaVia || ''),
+    cap: String(ana.residenzaCap || ''),
+    citta: String(ana.residenzaComune || ''),
+    provincia: String(ana.residenzaProv || '').toUpperCase(),
+    nazione: String(ana.nazione || 'IT').toUpperCase(),
+    ateco: String(att.codiceAteco || ''),
+    atecoDescrizione: String(att.descrizioneAttivita || ''),
+    atecoGruppo: String(att.atecoGruppo || ''),
+    iban: String(ana.iban || ''),
+    modalitaPagamento: String(ana.modalitaPagamento || 'Bonifico bancario'),
+    coefficiente: parseFloat(s.coefficiente) || 67,
+    impostaSostitutiva: parseFloat(s.impostaSostitutiva) || 15,
+    inpsMode: s.inpsMode || 'artigiani_commercianti',
+    inpsCategoria: s.inpsCategoria || 'artigiano',
+    inpsTipoGestSep: s.inpsTipoGestSep || '',
+    usaInpsUfficiale: parseInt(s.usaInpsUfficiale, 10) === 0 ? 0 : 1,
+    riduzione35: parseInt(s.riduzione35, 10) === 1 ? 1 : 0,
+    limiteForfettario: parseFloat(s.limiteForfettario) || 85000,
+    agevolazioneStartUp: parseInt(att.agevolazioneStartUp, 10) === 1 ? 1 : 0,
+    primoAnnoAgevolato: parseInt(att.primoAnnoAgevolato, 10) === 1 ? 1 : 0,
+    note: String(att.note || ''),
+    inailTasso: parseFloat(s.inailTasso) || 0
+  };
 }
 
 function syncProfileFieldsToSettings(settings, year) {
@@ -788,15 +1268,7 @@ function syncProfileFiscalToStoredYears() {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
     const year = parseInt(key.slice(prefix.length), 10);
-
-    let parsed;
-    if (yearlyDataCache[key]) {
-      parsed = yearlyDataCache[key];
-    } else {
-      parsed = ensureDataShape(JSON.parse(localStorage.getItem(key)), year);
-      yearlyDataCache[key] = parsed;
-    }
-
+    const parsed = ensureDataShape(JSON.parse(localStorage.getItem(key)), year);
     syncProfileFieldsToSettings(parsed.settings, year);
     localStorage.setItem(key, JSON.stringify(parsed));
   }
@@ -853,12 +1325,25 @@ function getOfficialArtComInpsParams(year, category) {
 
 function usesOfficialInpsValues(settings) {
   const s = settings || {};
-  return getInpsMode(s) === 'artigiani_commercianti' && (parseInt(s.usaInpsUfficiale, 10) || 0) === 1;
+  if ((parseInt(s.usaInpsUfficiale, 10) || 0) !== 1) return false;
+  const mode = getInpsMode(s);
+  return mode === 'artigiani_commercianti' || mode === 'gestione_separata';
 }
 
 function getResolvedInpsSettings(settings, year) {
   const s = settings || {};
   if (!usesOfficialInpsValues(s)) return { ...s };
+  const mode = getInpsMode(s);
+  if (mode === 'gestione_separata') {
+    const official = getOfficialGestSepAliquota(year, s.inpsTipoGestSep);
+    return {
+      ...s,
+      aliqContributi: official.aliqContributi,
+      inpsTipoGestSep: official.tipo,
+      _officialInpsYear: official.yearUsed,
+      _officialInpsFallback: official.isFallback
+    };
+  }
   const official = getOfficialArtComInpsParams(year, getInpsCategory(s));
   if (!official) return { ...s };
   return {
@@ -875,6 +1360,13 @@ function getResolvedInpsSettings(settings, year) {
 function syncOfficialInpsValues(settings, year) {
   const s = settings || {};
   if (!usesOfficialInpsValues(s)) return s;
+  const mode = getInpsMode(s);
+  if (mode === 'gestione_separata') {
+    const official = getOfficialGestSepAliquota(year, s.inpsTipoGestSep);
+    s.aliqContributi = official.aliqContributi;
+    s.inpsTipoGestSep = official.tipo;
+    return s;
+  }
   const official = getOfficialArtComInpsParams(year, getInpsCategory(s));
   if (!official) return s;
   s.minimaleInps = official.minimaleInps;
@@ -886,6 +1378,26 @@ function syncOfficialInpsValues(settings, year) {
 
 function getInpsModeLabel(mode) {
   return mode === 'gestione_separata' ? 'Gestione Separata' : 'Artigiani/Commercianti';
+}
+
+function getGestSepTipoLabel(tipo) {
+  return normalizeGestSepTipo(tipo) === 'altra_cassa'
+    ? 'Altra cassa / pensionato'
+    : 'Esclusivo (libero prof.)';
+}
+
+function getAtecoGruppoLabel(profile) {
+  const groups = (window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI.GRUPPI) || [];
+  const id = profile && profile.atecoGruppo;
+  if (id) {
+    const g = groups.find(x => x.id === id);
+    if (g) return `${g.label} (${g.coefficiente}%)`;
+  }
+  if (profile && profile.coefficiente !== undefined && profile.coefficiente !== '') {
+    const g = window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI.findGruppoByCoefficiente(profile.coefficiente);
+    if (g) return `${g.label} (${g.coefficiente}%) [auto]`;
+  }
+  return 'Personalizzato';
 }
 
 function getContribLabel(mode) {
@@ -928,8 +1440,10 @@ function calcInpsContributions(imponibile, settings, year) {
   const aliquota = (parseFloat(s.aliqContributi) || 0) / 100;
 
   if (mode === 'gestione_separata') {
-    const cV = base * aliquota;
-    return { mode, cF: 0, cV, cT: cV, imponibile: base };
+    const massimale = getGestSepMassimale(year || currentYear);
+    const cappedBase = Math.min(base, massimale);
+    const cV = cappedBase * aliquota;
+    return { mode, cF: 0, cV, cT: cV, imponibile: base, massimale, cappedBase };
   }
 
   const cF = Math.max(parseFloat(s.contribFissi) || 0, 0);
@@ -975,7 +1489,56 @@ function ensureDataShape(target, year = currentYear) {
   out.settings.inpsCategoria = getInpsCategory(out.settings);
   syncOfficialInpsValues(out.settings, targetYear);
   migrateFattureFor(out);
+  if (!out.settings.anagrafica) out.settings.anagrafica = {
+    codiceFiscale: '', cognome: '', nome: '', sesso: '', dataNascita: '',
+    comuneNascita: '', provNascita: '',
+    residenzaVia: '', residenzaComune: '', residenzaProv: '', residenzaCap: '',
+    domicilioFiscaleVia: '', domicilioFiscaleComune: '', domicilioFiscaleProv: '', domicilioFiscaleCap: '',
+    telefono: '', email: '', statoCivile: '',
+    nazione: 'IT', iban: '', modalitaPagamento: 'Bonifico bancario'
+  };
+  const anaDefaults = { nazione: 'IT', iban: '', modalitaPagamento: 'Bonifico bancario' };
+  for (const [k, v] of Object.entries(anaDefaults)) {
+    if (out.settings.anagrafica[k] === undefined) out.settings.anagrafica[k] = v;
+  }
+  if (!out.settings.attivita) out.settings.attivita = {
+    codiceAteco: '', descrizioneAttivita: '', dataInizioAttivita: '',
+    sedeVia: '', sedeComune: '', sedeProv: '', sedeCap: '',
+    partitaIva: '', atecoGruppo: '', note: '',
+    agevolazioneStartUp: 0, primoAnnoAgevolato: 0
+  };
+  const attDefaults = { partitaIva: '', atecoGruppo: '', note: '', agevolazioneStartUp: 0, primoAnnoAgevolato: 0 };
+  for (const [k, v] of Object.entries(attDefaults)) {
+    if (out.settings.attivita[k] === undefined) out.settings.attivita[k] = v;
+  }
+  // Dichiarazione Redditi PF
+  if (!out.dichiarazione || typeof out.dichiarazione !== 'object') {
+    out.dichiarazione = {
+      tipoDichiarazione: 'ordinaria',
+      dataPresentazione: null,
+      flags: { annoMisto: false, imposteEstere: false, altriCrediti: false },
+      contiEsteri: [],
+      coniuge: null,
+      familiariCarico: [],
+      overrides: {},
+      computed: null,
+      statoCompilazione: 'bozza'
+    };
+  }
+  if (out.lmQuadro && out.lmQuadro.overrides) {
+    if (!out.dichiarazione.overrides) out.dichiarazione.overrides = {};
+    Object.assign(out.dichiarazione.overrides, out.lmQuadro.overrides);
+    delete out.lmQuadro; // safe: in-memory only; saveData() caller persists
+  }
   return out;
+}
+
+let _yearDataCache = new Map();
+
+function clearYearDataCache() {
+  if (typeof _yearDataCache !== 'undefined') {
+    _yearDataCache.clear();
+  }
 }
 
 function loadYearData(y) {
@@ -984,25 +1547,70 @@ function loadYearData(y) {
     syncProfileFieldsToSettings(shaped.settings, y);
     return shaped;
   }
-  const key = storageKey(y);
-  if (yearlyDataCache[key]) {
-    const shaped = ensureDataShape(yearlyDataCache[key], y);
-    syncProfileFieldsToSettings(shaped.settings, y);
-    return shaped;
+  if (_yearDataCache.has(y)) {
+    return _yearDataCache.get(y);
   }
-  const raw = localStorage.getItem(key);
+  const raw = localStorage.getItem(storageKey(y));
   if (!raw) return null;
-  const parsed = JSON.parse(raw);
-  yearlyDataCache[key] = parsed;
-  const shaped = ensureDataShape(parsed, y);
+  const shaped = ensureDataShape(JSON.parse(raw), y);
   syncProfileFieldsToSettings(shaped.settings, y);
+  _yearDataCache.set(y, shaped);
   return shaped;
+}
+
+function migrateProfileFiscalToSettings() {
+  if (!currentProfile) return;
+  const flagKey = `calcoliPIVA_${currentProfile}_profileFiscalMigrated`;
+  if (localStorage.getItem(flagKey) === '1') return;
+  const srcKey = `calcoliPIVA_${currentProfile}_profileFiscal`;
+  const raw = localStorage.getItem(srcKey);
+  if (!raw) { localStorage.setItem(flagKey, '1'); return; }
+  let src; try { src = JSON.parse(raw); } catch { src = null; }
+  if (!src || typeof src !== 'object') { localStorage.removeItem(srcKey); localStorage.setItem(flagKey, '1'); return; }
+  const ana = data.settings.anagrafica;
+  const att = data.settings.attivita;
+  const s = data.settings;
+  if (!ana.nome && !ana.cognome && src.nome) {
+    const parts = String(src.nome).trim().split(/\s+/);
+    ana.nome = parts[0] || '';
+    ana.cognome = parts.slice(1).join(' ') || '';
+  }
+  const copyIfEmpty = (obj, key, val) => { if ((obj[key] === '' || obj[key] == null) && val) obj[key] = val; };
+  copyIfEmpty(ana, 'codiceFiscale', src.codiceFiscale);
+  copyIfEmpty(ana, 'residenzaVia', src.indirizzo);
+  copyIfEmpty(ana, 'residenzaCap', src.cap);
+  copyIfEmpty(ana, 'residenzaComune', src.citta);
+  copyIfEmpty(ana, 'residenzaProv', src.provincia);
+  copyIfEmpty(ana, 'nazione', src.nazione);
+  copyIfEmpty(ana, 'iban', src.iban);
+  copyIfEmpty(ana, 'modalitaPagamento', src.modalitaPagamento);
+  copyIfEmpty(att, 'partitaIva', src.partitaIva);
+  copyIfEmpty(att, 'codiceAteco', src.ateco);
+  copyIfEmpty(att, 'descrizioneAttivita', src.atecoDescrizione);
+  copyIfEmpty(att, 'atecoGruppo', src.atecoGruppo);
+  copyIfEmpty(att, 'note', src.note);
+  if (src.agevolazioneStartUp === 1) att.agevolazioneStartUp = 1;
+  if (src.primoAnnoAgevolato === 1) att.primoAnnoAgevolato = 1;
+  if ((s.coefficiente == null || s.coefficiente === '') && src.coefficiente) s.coefficiente = src.coefficiente;
+  if ((s.impostaSostitutiva == null || s.impostaSostitutiva === '') && src.impostaSostitutiva) s.impostaSostitutiva = src.impostaSostitutiva;
+  if ((s.limiteForfettario == null || s.limiteForfettario === '') && src.limiteForfettario) s.limiteForfettario = src.limiteForfettario;
+  if (src.usaInpsUfficiale !== undefined) s.usaInpsUfficiale = src.usaInpsUfficiale;
+  if (src.riduzione35 === 1 && (s.riduzione35 == null || s.riduzione35 === 0)) s.riduzione35 = 1;
+  if (src.inpsMode) s.inpsMode = src.inpsMode;
+  if (src.inpsCategoria) s.inpsCategoria = src.inpsCategoria;
+  if (src.inpsTipoGestSep) s.inpsTipoGestSep = src.inpsTipoGestSep;
+  saveData();
+  localStorage.removeItem(srcKey);
+  localStorage.setItem(flagKey, '1');
 }
 
 function loadData() {
   const raw = localStorage.getItem(storageKey());
   data = ensureDataShape(raw ? JSON.parse(raw) : {}, currentYear);
   syncProfileFieldsToSettings(data.settings, currentYear);
+  applySettings();
+  migrateProfileFiscalToSettings();
+  backfillAnagraficaAttivitaFromAllYears();
   applySettings();
 }
 
@@ -1011,16 +1619,16 @@ function migrateFatture() {
 }
 
 function saveData() {
+  clearYearDataCache();
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
-  const key = storageKey();
-  yearlyDataCache[key] = data;
-  localStorage.setItem(key, JSON.stringify(data));
+  localStorage.setItem(storageKey(), JSON.stringify(data));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, currentYear, data);
   }
 }
 
 function saveYearData(year, yearData) {
+  clearYearDataCache();
   const normalized = ensureDataShape(yearData, year);
   syncProfileFieldsToSettings(normalized.settings, year);
   if (year === currentYear) {
@@ -1028,24 +1636,27 @@ function saveYearData(year, yearData) {
     saveData();
     return;
   }
-  const key = storageKey(year);
-  yearlyDataCache[key] = normalized;
-  localStorage.setItem(key, JSON.stringify(normalized));
+  localStorage.setItem(storageKey(year), JSON.stringify(normalized));
   if (typeof syncToCloud === 'function' && currentProfile) {
     syncToCloud(currentProfile, year, normalized);
   }
 }
 
-let _cachedStoredYears = null;
-let _cachedStoredYearsProfile = null;
-let _cachedStorageLength = -1;
-
-function _getStoredYearsBase() {
-  if (_cachedStoredYears && _cachedStoredYearsProfile === currentProfile && _cachedStorageLength === localStorage.length) {
-    return _cachedStoredYears;
+function getStoredYears(maxYear = currentYear) {
+  const years = new Set([maxYear]);
+  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i) || '';
+    if (!key.startsWith(prefix)) continue;
+    const year = parseInt(key.slice(prefix.length), 10);
+    if (!Number.isFinite(year) || year > maxYear) continue;
+    years.add(year);
   }
+  return Array.from(years).sort((a, b) => a - b);
+}
 
-  const years = new Set();
+function getAllStoredYears() {
+  const years = new Set([currentYear]);
   const prefix = 'calcoliPIVA_' + currentProfile + '_';
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
@@ -1054,24 +1665,6 @@ function _getStoredYearsBase() {
     if (!Number.isFinite(year)) continue;
     years.add(year);
   }
-
-  _cachedStoredYearsProfile = currentProfile;
-  _cachedStorageLength = localStorage.length;
-  _cachedStoredYears = years;
-  return years;
-}
-
-function getStoredYears(maxYear = currentYear) {
-  const base = _getStoredYearsBase();
-  const years = new Set(base);
-  years.add(maxYear);
-  return Array.from(years).filter(y => y <= maxYear).sort((a, b) => a - b);
-}
-
-function getAllStoredYears() {
-  const base = _getStoredYearsBase();
-  const years = new Set(base);
-  years.add(currentYear);
   return Array.from(years).sort((a, b) => a - b);
 }
 
@@ -1084,13 +1677,18 @@ function getDefaultSettings(year = currentYear) {
     aliqContributi: 24.0,
     category
   };
+  let defaultAliq = official.aliqContributi;
+  if (profile.inpsMode === 'gestione_separata' && (parseInt(profile.usaInpsUfficiale, 10) || 0) === 1) {
+    defaultAliq = getOfficialGestSepAliquota(year, 'esclusivo').aliqContributi;
+  }
   return {
     dailyRate: 0, coefficiente: profile.coefficiente, impostaSostitutiva: profile.impostaSostitutiva,
-    contribFissi: official.contribFissi, minimaleInps: official.minimaleInps, aliqContributi: official.aliqContributi,
+    contribFissi: official.contribFissi, minimaleInps: official.minimaleInps, aliqContributi: defaultAliq,
     riduzione35: 0, limiteForfettario: profile.limiteForfettario, regime: 'forfettario',
     haRedditoDipendente: 0,
     inpsMode: profile.inpsMode,
     inpsCategoria: official.category,
+    inpsTipoGestSep: 'esclusivo',
     usaInpsUfficiale: profile.usaInpsUfficiale,
     giorniIncasso: 30,
     scadenziarioRangePct: 5,
@@ -1101,9 +1699,9 @@ function getDefaultSettings(year = currentYear) {
     scadenziarioAccontoImposta: '',
     scadenziarioSaldoContributi: '',
     scadenziarioAccontoContributi: '',
+    scadenziarioOverrideDataSaldoImposta: '',
     scadenziarioDirittoCamerale: '',
     scadenziarioBolloPrecedenteQ4: '',
-    scadenziarioBolloCorrente123: '',
     scadenziarioBolloCorrenteQ4: '',
     scadenziarioInailCorrente: '',
     scadenziarioInailSuccessivo: '',
@@ -1119,7 +1717,6 @@ function applySettings() {
   const s = data.settings;
   const fields = {
     settDailyRate: 'dailyRate',
-    settGiorniIncasso: 'giorniIncasso',
     settDipendenteIncome: 'haRedditoDipendente',
     settRiduzione35: 'riduzione35'
   };
@@ -1128,6 +1725,20 @@ function applySettings() {
     if (!el) continue;
     el.value = s[key];
   }
+  // giorniIncasso: lettura profile-scoped con fallback a yearData legacy
+  var gipVal = getGiorniIncassoProfile();
+  if (gipVal === null) {
+    var legacy = (s && s.giorniIncasso !== undefined) ? parseFloat(s.giorniIncasso) : NaN;
+    if (isFinite(legacy) && legacy !== 30) {
+      setGiorniIncassoProfile(legacy);
+      gipVal = legacy;
+    } else {
+      gipVal = 30;
+    }
+  }
+  s.giorniIncasso = gipVal;
+  var gIn = document.getElementById('settGiorniIncasso');
+  if (gIn) gIn.value = gipVal;
   // Optional number fields (empty string = not set)
   const optFields = {
     settInailCorrente: 'scadenziarioInailCorrente',
@@ -1142,6 +1753,36 @@ function applySettings() {
   const speseBtn = document.querySelector('[data-tab="spese"]');
   if (speseBtn) speseBtn.style.display = s.regime === 'ordinario' ? '' : 'none';
   if (typeof updateNavLabels === 'function') updateNavLabels();
+  // C4: parametri fiscali
+  const coefI = document.getElementById('settCoefficiente'); if (coefI) coefI.value = s.coefficiente ?? '';
+  const aliqI = document.getElementById('settAliquotaSost'); if (aliqI) aliqI.value = s.impostaSostitutiva ?? '';
+  const uffI = document.getElementById('settUsaInpsUfficiale'); if (uffI) uffI.value = String(s.usaInpsUfficiale ?? 1);
+  const devHD = document.getElementById('settDevHardDelete'); if (devHD) devHD.checked = (parseInt(s.devHardDelete, 10) || 0) === 1;
+  populateAtecoGruppoSelect();
+}
+
+function populateAtecoGruppoSelect() {
+  const sel = document.getElementById('settAtecoGruppo');
+  if (!sel || !window.ATECO_COEFFICIENTI) return;
+  const current = (S().attivita && S().attivita.atecoGruppo) || '';
+  const options = ['<option value="">— scegli —</option>'];
+  for (const [k, v] of Object.entries(window.ATECO_COEFFICIENTI)) {
+    const label = `${k} — ${v.descrizione} (${v.coefficiente}%)`;
+    options.push(`<option value="${escapeHtml(k)}" ${k===current?'selected':''}>${escapeHtml(label)}</option>`);
+  }
+  sel.replaceChildren();
+  sel.insertAdjacentHTML('afterbegin', options.join(''));
+}
+
+function applyAtecoGruppo(value) {
+  saveAttivitaField('atecoGruppo', value);
+  if (value && window.ATECO_COEFFICIENTI && window.ATECO_COEFFICIENTI[value]) {
+    const coeff = window.ATECO_COEFFICIENTI[value].coefficiente;
+    saveSetting('coefficiente', coeff);
+    const coefInput = document.getElementById('settCoefficiente');
+    if (coefInput) coefInput.value = coeff;
+  }
+  if (typeof recalcAll === 'function') recalcAll();
 }
 
 function saveSetting(key, val) {
@@ -1160,10 +1801,120 @@ function saveOptionalNumberSetting(key, val) {
   saveData();
 }
 
-function saveYearSetting(year, key, val) {
-  const yearData = getYearDataFor(year) || ensureDataShape({}, year);
-  yearData.settings[key] = parseFloat(val) || 0;
-  saveYearData(year, yearData);
+function saveBoolSetting(key, val) {
+  data.settings[key] = val ? 1 : 0;
+  saveData();
+}
+
+function saveAnagraficaField(key, val) {
+  if (!data.settings.anagrafica) data.settings.anagrafica = {};
+  data.settings.anagrafica[key] = val;
+  saveData();
+  propagateAnagraficaAttivitaAcrossYears();
+}
+
+function saveAttivitaField(key, val) {
+  if (!data.settings.attivita) data.settings.attivita = {};
+  data.settings.attivita[key] = val;
+  saveData();
+  propagateAnagraficaAttivitaAcrossYears();
+}
+
+// C4: anagrafica e attivita sono stabili fra anni — propaga da currentYear a tutti gli altri anni salvati del profilo
+function propagateAnagraficaAttivitaAcrossYears() {
+  if (!currentProfile || !data || !data.settings) return;
+  const ana = data.settings.anagrafica || {};
+  const att = data.settings.attivita || {};
+  const prefix = `calcoliPIVA_${currentProfile}_`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const yearStr = key.slice(prefix.length);
+    const year = parseInt(yearStr, 10);
+    if (!Number.isFinite(year) || year === currentYear) continue;
+    let doc; try { doc = JSON.parse(localStorage.getItem(key)); } catch { continue; }
+    if (!doc || typeof doc !== 'object' || !doc.settings) continue;
+    doc.settings.anagrafica = { ...(doc.settings.anagrafica || {}), ...ana };
+    doc.settings.attivita = { ...(doc.settings.attivita || {}), ...att };
+    localStorage.setItem(key, JSON.stringify(doc));
+  }
+}
+
+// C4: al login, raccogli anagrafica/attivita da ogni anno (first-non-empty-wins) e propaga
+function backfillAnagraficaAttivitaFromAllYears() {
+  if (!currentProfile) return;
+  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const mergedAna = { ...(data.settings.anagrafica || {}) };
+  const mergedAtt = { ...(data.settings.attivita || {}) };
+  const fillFrom = (src, target) => {
+    if (!src || typeof src !== 'object') return;
+    for (const [k, v] of Object.entries(src)) {
+      const existing = target[k];
+      const empty = existing === undefined || existing === null || existing === '' || existing === 0;
+      if (empty && v !== undefined && v !== null && v !== '' && v !== 0) target[k] = v;
+    }
+  };
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const yearStr = key.slice(prefix.length);
+    if (!/^\d{4}$/.test(yearStr)) continue;
+    let doc; try { doc = JSON.parse(localStorage.getItem(key)); } catch { continue; }
+    if (!doc || !doc.settings) continue;
+    fillFrom(doc.settings.anagrafica, mergedAna);
+    fillFrom(doc.settings.attivita, mergedAtt);
+  }
+  // Fallback: PROFILE_FISCAL_LIBRARY legacy defaults (Mattia/Peru/Demo) — mappa legacy->nuovo
+  const lib = PROFILE_FISCAL_LIBRARY[currentProfile];
+  if (lib) {
+    const nameParts = String(lib.nome || '').trim().split(/\s+/);
+    const libAna = {
+      nome: nameParts[0] || '',
+      cognome: nameParts.slice(1).join(' ') || '',
+      codiceFiscale: lib.codiceFiscale || '',
+      residenzaVia: lib.indirizzo || '',
+      residenzaCap: lib.cap || '',
+      residenzaComune: lib.citta || '',
+      residenzaProv: lib.provincia || '',
+      nazione: lib.nazione || 'IT',
+      iban: lib.iban || '',
+      modalitaPagamento: lib.modalitaPagamento || ''
+    };
+    const libAtt = {
+      partitaIva: lib.partitaIva || '',
+      codiceAteco: lib.ateco || '',
+      descrizioneAttivita: lib.atecoDescrizione || '',
+      atecoGruppo: lib.atecoGruppo || '',
+      note: lib.note || '',
+      agevolazioneStartUp: lib.agevolazioneStartUp || 0,
+      primoAnnoAgevolato: lib.primoAnnoAgevolato || 0
+    };
+    fillFrom(libAna, mergedAna);
+    fillFrom(libAtt, mergedAtt);
+    // parametri fiscali settings: se vuoti, prendi dal library
+    const libSettings = { coefficiente: lib.coefficiente, impostaSostitutiva: lib.impostaSostitutiva,
+      limiteForfettario: lib.limiteForfettario, inailTasso: lib.inailTasso,
+      inpsMode: lib.inpsMode, inpsCategoria: lib.inpsCategoria, inpsTipoGestSep: lib.inpsTipoGestSep,
+      usaInpsUfficiale: lib.usaInpsUfficiale };
+    for (const [k, v] of Object.entries(libSettings)) {
+      const ex = data.settings[k];
+      const empty = ex === undefined || ex === null || ex === '' || ex === 0;
+      if (empty && v !== undefined && v !== null && v !== '' && v !== 0) data.settings[k] = v;
+    }
+  }
+  data.settings.anagrafica = mergedAna;
+  data.settings.attivita = mergedAtt;
+  saveData();
+  propagateAnagraficaAttivitaAcrossYears();
+}
+
+function updateCfStatus(val) {
+  const el = document.getElementById('cfStatus');
+  if (!el) return;
+  if (!val || val.trim() === '') { el.textContent = ''; el.className = 'cf-status'; return; }
+  const ok = typeof DichiarazioneEngine !== 'undefined' && DichiarazioneEngine.validateCodiceFiscale(val);
+  el.textContent = ok ? '\u2713' : '\u2717';
+  el.className = 'cf-status ' + (ok ? 'ok' : 'err');
 }
 
 function saveYearTextSetting(year, key, val) {
@@ -1179,6 +1930,36 @@ function saveYearOptionalNumberSetting(year, key, val) {
 }
 
 function S() { return data.settings; }
+
+// Profile-scoped giorniIncasso (applicato a tutti gli anni).
+// Fallback: yearData.settings.giorniIncasso legacy, poi 30.
+function getGiorniIncassoProfile() {
+  try {
+    var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+    if (!profile) return null;
+    var raw = localStorage.getItem('calcoliPIVA_' + profile + '_giorniIncasso');
+    if (raw === null || raw === '') return null;
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (_) { parsed = raw; }
+    var n = parseFloat(parsed);
+    return isFinite(n) ? n : null;
+  } catch (_) { return null; }
+}
+
+function setGiorniIncassoProfile(val) {
+  try {
+    var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+    if (!profile) return;
+    var n = parseFloat(val);
+    if (!isFinite(n)) n = 30;
+    localStorage.setItem('calcoliPIVA_' + profile + '_giorniIncasso', JSON.stringify(n));
+    if (typeof syncProfileMetaToCloud === 'function') {
+      try { syncProfileMetaToCloud(profile); } catch (_) {}
+    }
+    if (data && data.settings) data.settings.giorniIncasso = n;
+    if (typeof recalcAll === 'function') recalcAll();
+  } catch (_) {}
+}
 
 function setRegime(r) {
   data.settings.regime = r;
@@ -1241,7 +2022,19 @@ function setActivity(month, day, val) {
 function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
 
 // ═══════════════════ Fatture helpers ═══════════════════
-function getFattureFromYearData(yearData, month) {
+// year param routes to FattureSelectors when available; legacy fallback for unmigrated data.
+function getFattureFromYearData(yearData, month, year) {
+  if (year && typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const fatture = window.FattureSelectors.getByMonth(currentProfile, year, month);
+    // NC invoices (TD04) return negative importo via getImportoSigned
+    return fatture.map(f => ({
+      importo: window.FattureSelectors.getImportoSigned(f),
+      pagMese: f.pagMese || null,
+      pagAnno: f.pagAnno || null,
+      desc: (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || ''
+    }));
+  }
+  // Legacy fallback (pre-migration or year not known)
   const arr = yearData && yearData.fatture ? yearData.fatture[month] : null;
   if (!arr || !Array.isArray(arr) || arr.length === 0) return [];
   return arr.map(f => ({
@@ -1252,59 +2045,216 @@ function getFattureFromYearData(yearData, month) {
   }));
 }
 
+// Helper: get all fattureEmesse for the current profile (from FattureStorico or localStorage)
+function _getFattureEmesse(profile) {
+  if (window.FattureStorico) return window.FattureStorico.load(profile);
+  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; }
+}
+
+// Helper: save updated list back
+function _saveFattureEmesse(profile, list) {
+  if (window.FattureStorico) { window.FattureStorico.save(profile, list); return; }
+  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  localStorage.setItem(key, JSON.stringify(list));
+}
+
+// Helper: get id of fattura at position (month, idx) in the Fatture tab grid.
+// Il tab raggruppa per mese di EMISSIONE (issuedMonth), quindi idx riferisce
+// la posizione nella lista filtrata per issuedMonth — non pagMese.
+function _getFatturaIdAt(month, idx) {
+  if (!window.FattureSelectors) return null;
+  const byIssued = typeof window.FattureSelectors.getByIssuedMonth === 'function'
+    ? window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month)
+    : null;
+  const rows = byIssued || window.FattureSelectors.getByMonth(currentProfile, currentYear, month);
+  return rows[idx] ? rows[idx].id : null;
+}
+
+// getFatture: shim that reads from fattureEmesse via FattureSelectors.
+// Returns legacy-shaped objects {importo, pagMese, pagAnno, desc, id, origine, stato, tipoDocumento}
+// used by callers that haven't been refactored yet (e.g. getAllFattureForBudget uses yearData directly).
 function getFatture(month) {
+  if (window.FattureSelectors) {
+    return window.FattureSelectors.getByMonth(currentProfile, currentYear, month).map(f => {
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
+      return {
+        importo: imp,
+        pagMese: f.pagMese || null,
+        pagAnno: f.pagAnno || null,
+        desc: cliente ? `${f.numero || ''} - ${cliente}`.trim().replace(/^-\s*/, '') : desc,
+        id: f.id,
+        origine: f.origine,
+        stato: f.stato,
+        tipoDocumento: f.tipoDocumento
+      };
+    });
+  }
+  // Fallback to legacy store (pre-migration)
   return getFattureFromYearData(data, month);
 }
 
-function getFattura(month) {
-  const arr = getFatture(month);
-  if (arr.length === 0) return { importo: 0, pagMese: null, pagAnno: null };
-  const total = arr.reduce((s, f) => s + f.importo, 0);
-  if (arr.length === 1) return { importo: total, pagMese: arr[0].pagMese, pagAnno: arr[0].pagAnno };
-  return { importo: total, pagMese: null, pagAnno: null };
+// getFattureIssued: come getFatture ma filtrata per mese di EMISSIONE (issuedMonth).
+// Usata dal tab Fatture per raggruppare le fatture nel mese in cui sono state fatte.
+function getFattureIssued(month) {
+  if (window.FattureSelectors && typeof window.FattureSelectors.getByIssuedMonth === 'function') {
+    return window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month).map(f => {
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
+      return {
+        importo: imp,
+        pagMese: f.pagMese || null,
+        pagAnno: f.pagAnno || null,
+        desc: cliente ? `${f.numero || ''} - ${cliente}`.trim().replace(/^-\s*/, '') : desc,
+        id: f.id,
+        origine: f.origine,
+        stato: f.stato,
+        tipoDocumento: f.tipoDocumento
+      };
+    });
+  }
+  return getFattureFromYearData(data, month);
+}
+
+// Id lookup per posizione nel tab Fatture (raggruppato per issuedMonth).
+function _getFatturaIdAtIssued(month, idx) {
+  if (!window.FattureSelectors || typeof window.FattureSelectors.getByIssuedMonth !== 'function') return null;
+  const rows = window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month);
+  return rows[idx] ? rows[idx].id : null;
 }
 
 function setFatturaImporto(month, idx, val) {
-  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
-  if (!data.fatture[month][idx]) return;
-  data.fatture[month][idx].importo = parseFloat(val) || 0;
-  saveData();
+  const imp = parseFloat(val) || 0;
+  let id = _getFatturaIdAt(month, idx);
+  if (!id && window.FattureStorico) {
+    // No existing row — create a new legacy-migrated entry on first write
+    addFattura(month);
+    id = _getFatturaIdAt(month, idx);
+  }
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+    if (data.fatture[month][idx] === undefined) data.fatture[month][idx] = { importo: 0, pagMese: null, pagAnno: null, desc: '' };
+    data.fatture[month][idx].importo = imp;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  if (list[i].righe && list[i].righe.length > 0) {
+    list[i].righe[0].prezzoUnitario = imp;
+    list[i].righe[0].quantita = 1;
+  } else {
+    list[i].righe = [{ descrizione: '', quantita: 1, prezzoUnitario: imp, iva: 0 }];
+  }
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function setFatturaDesc(month, idx, val) {
-  if (!data.fatture[month] || !data.fatture[month][idx]) return;
-  data.fatture[month][idx].desc = val;
-  saveData();
+  const id = _getFatturaIdAt(month, idx);
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month] || !data.fatture[month][idx]) return;
+    data.fatture[month][idx].desc = val;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  if (list[i].righe && list[i].righe.length > 0) {
+    list[i].righe[0].descrizione = val;
+  } else {
+    list[i].righe = [{ descrizione: val, quantita: 1, prezzoUnitario: 0, iva: 0 }];
+  }
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function setFatturaPagamento(month, idx, pagMese, pagAnno) {
-  if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
-  if (!data.fatture[month][idx]) return;
-  data.fatture[month][idx].pagMese = pagMese;
-  data.fatture[month][idx].pagAnno = pagAnno;
-  saveData();
+  const id = _getFatturaIdAt(month, idx);
+  if (!id) {
+    // Fallback: legacy store
+    if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
+    if (!data.fatture[month][idx]) return;
+    data.fatture[month][idx].pagMese = pagMese;
+    data.fatture[month][idx].pagAnno = pagAnno;
+    saveData(); return;
+  }
+  const list = _getFattureEmesse(currentProfile);
+  const i = list.findIndex(f => f.id === id);
+  if (i < 0) return;
+  list[i].pagMese = pagMese;
+  list[i].pagAnno = pagAnno;
+  _saveFattureEmesse(currentProfile, list);
 }
 
 function addFattura(month) {
-  if (!data.fatture[month]) data.fatture[month] = [];
-  data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
-  saveData();
+  if (window.FattureStorico) {
+    const list = _getFattureEmesse(currentProfile);
+    const prog = window.FattureStorico.nextProgressivo(currentYear, list);
+    const pad = n => String(n).padStart(2, '0');
+    const newFatt = {
+      id: 'fat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      numero: window.FattureStorico.formatNumero(currentYear, prog),
+      anno: currentYear,
+      annoProgressivo: currentYear,
+      progressivo: prog,
+      data: `${currentYear}-${pad(month)}-01`,
+      clienteId: '',
+      clienteSnapshot: null,
+      righe: [{ descrizione: '', quantita: 1, prezzoUnitario: 0, iva: 0 }],
+      contributoIntegrativo: 0,
+      marcaDaBollo: false,
+      bolloAddebitato: false,
+      note: '',
+      modalitaPagamento: '',
+      scadenzaPagamento: '',
+      incassata: false,
+      dataIncasso: '',
+      issuedMonth: month,
+      issuedYear: currentYear,
+      stato: 'pagata',
+      tipoDocumento: 'TD01',
+      dataInvioSdi: null,
+      dataPagamento: null,
+      fatturaOriginaleId: null,
+      ritenuta: 0,
+      aliquotaRitenuta: 0,
+      tipoRitenuta: '',
+      causaleRitenuta: '',
+      ncIds: [],
+      ncTotaleImporto: 0,
+      pagMese: month,
+      pagAnno: currentYear,
+      origine: 'legacy-migrated'
+    };
+    list.unshift(newFatt);
+    _saveFattureEmesse(currentProfile, list);
+  } else {
+    if (!data.fatture[month]) data.fatture[month] = [];
+    data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
+    saveData();
+  }
   recalcAll();
 }
 
 function removeFattura(month, idx) {
+  const id = _getFatturaIdAt(month, idx);
+  if (id) {
+    const list = _getFattureEmesse(currentProfile);
+    const updated = list.filter(f => f.id !== id);
+    _saveFattureEmesse(currentProfile, updated);
+    recalcAll();
+    return;
+  }
+  // Fallback: legacy store
   if (!data.fatture[month] || !data.fatture[month][idx]) return;
   const row = data.fatture[month][idx];
   const linkedInvoiceId = String(row.invoiceId || row.fatturaId || '').trim();
   const canDeleteLast = !!linkedInvoiceId;
   if (data.fatture[month].length <= 1 && !canDeleteLast) return;
-  if (linkedInvoiceId && typeof deleteFatturaEmessa === 'function') {
-    deleteFatturaEmessa(linkedInvoiceId, {
-      skipMonthCleanup: true,
-      skipConfirm: true,
-      silent: true
-    });
-  }
   data.fatture[month].splice(idx, 1);
   if (data.fatture[month].length === 0) delete data.fatture[month];
   saveData();
@@ -1376,13 +2326,30 @@ function getMonthEuro(month) {
 
 // Get invoices from previous years that are paid in the target year
 function getCrossYearInvoicesForYear(year) {
+  // Prefer unified store via FattureSelectors.getCrossYearPaidIn
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const crossFatture = window.FattureSelectors.getCrossYearPaidIn(currentProfile, year);
+    return crossFatture.map(f => {
+      const dataAnno = parseInt(String(f.data || '').slice(0, 4), 10) || null;
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      return {
+        mese: Number(f.pagMese) || null,
+        anno: dataAnno,
+        importo: imp,
+        pagMese: f.pagMese || null,
+        desc
+      };
+    }).filter(f => f.importo > 0 && f.anno && f.anno < year);
+  }
+  // Legacy fallback
   const results = [];
   for (const sourceYear of getStoredYears(year - 1)) {
     if (sourceYear >= year) continue;
     const sourceData = loadYearData(sourceYear);
     if (!sourceData || !sourceData.fatture) continue;
     for (let m = 1; m <= 12; m++) {
-      for (const f of getFattureFromYearData(sourceData, m)) {
+      for (const f of getFattureFromYearData(sourceData, m, sourceYear)) {
         const importo = parseFloat(f.importo) || 0;
         if (importo > 0 && f.pagAnno === year) {
           results.push({ mese: m, anno: sourceYear, importo, pagMese: f.pagMese, desc: f.desc || '' });
@@ -1444,7 +2411,7 @@ function shouldIncludeEstimatesForYear(year, options) {
 function getMonthEuroFromYearData(yearData, year, month, options) {
   const opts = options || {};
   const includeEstimates = shouldIncludeEstimatesForYear(year, opts);
-  const fatture = getFattureFromYearData(yearData, month);
+  const fatture = getFattureFromYearData(yearData, month, year);
   const hasFatture = fatture.some(f => f.importo > 0);
   if (!hasFatture) {
     if (!includeEstimates) return 0;
@@ -1466,9 +2433,39 @@ function getYearDataFor(year) {
   return year === currentYear ? ensureDataShape(data, year) : loadYearData(year);
 }
 
+// Build a month→ricavi map from FattureSelectors for the given profile/year (per-cassa, pagAnno-based).
+// NC invoices (TD04) contribute negative amounts via getImportoSigned, netting stornate automatically.
+// Stornate with a linked TD04 are skipped to avoid double-counting: the TD04 NC already reduces the total.
+// Returns { 1: amount, 2: amount, ... } for months with non-zero ricavi.
+function buildRicaviMeseFromSelectors(profile, year) {
+  const m2r = {};
+  if (!window.FattureSelectors) return m2r;
+  const fatture = window.FattureSelectors.getByPagAnno(profile, year);
+  for (const f of fatture) {
+    if (f.stato === 'bozza') continue;
+    if (f.stato === 'stornata') continue; // TD04 NC already accounts for the cancellation
+    const mese = Number(f.pagMese);
+    if (!mese) continue;
+    const imp = window.FattureSelectors.getImportoSigned(f); // NC (TD04) → negative
+    m2r[mese] = (m2r[mese] || 0) + imp;
+  }
+  return m2r;
+}
+
 function getTotalAnnuoForYear(year, options) {
   const yearData = getYearDataFor(year);
   if (!yearData) return 0;
+
+  // When selectors available and no estimates needed: use per-cassa ricavi map for accuracy
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile &&
+      options && options.includeEstimates === false) {
+    const ricaviMap = buildRicaviMeseFromSelectors(currentProfile, year);
+    const crossYear = getCrossYearInvoicesForYear(year);
+    let total = 0;
+    for (const m in ricaviMap) total += ricaviMap[m];
+    for (const inv of crossYear) total += inv.importo;
+    return total;
+  }
 
   let total = 0;
   for (let m = 1; m <= 12; m++) total += getMonthEuroFromYearData(yearData, year, m, options);
@@ -2021,41 +3018,6 @@ function getProfileRegimeHistory() {
     .sort((a, b) => a.year - b.year);
 }
 
-function startProfileFiscalEdit() {
-  profileFiscalState.editing = true;
-  profileFiscalState.draft = { ...getProfileFiscalData() };
-  renderProfiloFiscale();
-}
-
-function cancelProfileFiscalEdit() {
-  profileFiscalState.editing = false;
-  profileFiscalState.draft = { ...getProfileFiscalData() };
-  renderProfiloFiscale();
-}
-
-function updateProfileFiscalDraftField(key, value) {
-  if (!profileFiscalState.draft) profileFiscalState.draft = { ...getProfileFiscalData() };
-  const draft = profileFiscalState.draft;
-  if (['coefficiente', 'impostaSostitutiva', 'limiteForfettario', 'inailTasso'].includes(key)) {
-    draft[key] = value;
-  } else if (['usaInpsUfficiale', 'agevolazioneStartUp', 'primoAnnoAgevolato'].includes(key)) {
-    draft[key] = parseInt(value, 10) === 1 ? 1 : 0;
-  } else {
-    draft[key] = value;
-  }
-}
-
-function saveProfileFiscalDraft() {
-  const current = getProfileFiscalData();
-  const draft = { ...current, ...(profileFiscalState.draft || {}) };
-  const normalized = normalizeProfileFiscalData(draft, currentProfile);
-  saveProfileFiscalData(normalized);
-  syncProfileFiscalToStoredYears();
-  profileFiscalState.editing = false;
-  applySettings();
-  recalcAll();
-}
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -2065,1179 +3027,91 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function getProfileFieldCopyText(value, options) {
-  const opts = options || {};
-  const candidate = opts.copyValue !== undefined ? opts.copyValue : value;
-  if (candidate === undefined || candidate === null) return '';
-  const text = String(candidate).trim();
-  return text === '-' ? '' : text;
-}
-
-function showProfileCopyToast(message, tone = 'success') {
-  const toast = document.getElementById('profileCopyToast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.dataset.tone = tone;
-  toast.classList.add('show');
-  if (profileCopyToastTimer) clearTimeout(profileCopyToastTimer);
-  profileCopyToastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2200);
-}
-
-async function copyTextToClipboard(text) {
-  if (!text) throw new Error('Nothing to copy');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const area = document.createElement('textarea');
-  area.value = text;
-  area.setAttribute('readonly', '');
-  area.style.position = 'absolute';
-  area.style.left = '-9999px';
-  document.body.appendChild(area);
-  area.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(area);
-  if (!ok) throw new Error('Clipboard unavailable');
-}
-
-async function copyProfileFieldValue(label, value) {
-  const text = String(value || '').trim();
-  if (!text) return;
-  try {
-    await copyTextToClipboard(text);
-    showProfileCopyToast(`${label} copiato negli appunti.`);
-  } catch (err) {
-    showProfileCopyToast(`Non sono riuscito a copiare ${label.toLowerCase()}.`, 'error');
-  }
-}
-
-function buildProfileFiscalClipboardText() {
-  const profile = getProfileFiscalData();
-  const lines = [
-    `Nome e cognome: ${profile.nome || currentProfile}`,
-    `Codice fiscale: ${profile.codiceFiscale || '-'}`,
-    `Partita IVA: ${profile.partitaIva || '-'}`,
-    `Indirizzo: ${[profile.indirizzo, profile.cap, profile.citta, profile.provincia, profile.nazione].filter(Boolean).join(', ') || '-'}`,
-    `IBAN: ${profile.iban || '-'}`,
-    `Modalita pagamento: ${profile.modalitaPagamento || '-'}`
-  ];
-  return lines.join('\n');
-}
-
-async function copyProfileFiscalSummary() {
-  try {
-    await copyTextToClipboard(buildProfileFiscalClipboardText());
-    showProfileCopyToast('Dati essenziali copiati negli appunti.');
-  } catch (err) {
-    showProfileCopyToast('Non sono riuscito a copiare il profilo fiscale.', 'error');
-  }
-}
-
-function renderProfileField(label, value, options) {
-  const opts = options || {};
-  const mode = opts.mode || 'text';
-  const key = opts.key || '';
-  const info = opts.info ? ` ${helpPill(opts.info)}` : '';
-  const draft = profileFiscalState.draft || getProfileFiscalData();
-  if (!profileFiscalState.editing || !opts.editable) {
-    return `<div class="profile-field">
-      <label>${label}${info}</label>
-      <div class="profile-value${opts.calcParam ? ' calc-param' : ''}">${value || '—'}</div>
-    </div>`;
-  }
-
-  let input = '';
-  if (mode === 'select') {
-    input = `<select onchange="updateProfileFiscalDraftField('${key}', this.value)">
-      ${(opts.options || []).map(option => `<option value="${option.value}" ${String(draft[key]) === String(option.value) ? 'selected' : ''}>${option.label}</option>`).join('')}
-    </select>`;
-  } else if (mode === 'textarea') {
-    input = `<textarea onchange="updateProfileFiscalDraftField('${key}', this.value)">${draft[key] || ''}</textarea>`;
-  } else {
-    const step = opts.step ? ` step="${opts.step}"` : '';
-    const min = opts.min !== undefined ? ` min="${opts.min}"` : '';
-    const max = opts.max !== undefined ? ` max="${opts.max}"` : '';
-    const type = opts.inputType || 'text';
-    input = `<input type="${type}" value="${draft[key] ?? ''}"${step}${min}${max} onchange="updateProfileFiscalDraftField('${key}', this.value)">`;
-  }
-  return `<div class="profile-field editing">
-    <label>${label}${info}</label>
-    ${input}
-  </div>`;
-}
-
-function renderProfiloFiscale() {
-  const el = document.getElementById('profiloGrid');
-  if (!el) return;
-  const profile = getProfileFiscalData();
-  const history = getProfileRegimeHistory();
-  const currentSettings = S();
-  const currentResolved = getResolvedInpsSettings(currentSettings, currentYear);
-  const external = getExternalFiscalData();
-  const official2025 = external && external.summaries ? external.summaries.summary2025 : null;
-  let h = '';
-
-  h += `<div class="panel profile-panel"><h3>Profilo fiscale</h3>`;
-  h += `<div class="profile-toolbar">
-    <div class="profile-toolbar-copy">Single source of truth dei parametri fiscali del profilo ${currentProfile}.</div>
-    <div class="profile-toolbar-actions">
-      ${profileFiscalState.editing
-        ? `<button class="btn-add" onclick="saveProfileFiscalDraft()" style="margin-top:0">Salva</button>
-           <button class="btn-add profile-secondary-btn" onclick="cancelProfileFiscalEdit()" style="margin-top:0">Annulla</button>`
-        : `<button class="btn-add" onclick="startProfileFiscalEdit()" style="margin-top:0">Modifica</button>`}
-    </div>
-  </div>`;
-  h += `<div class="profile-grid">`;
-  h += renderProfileField('Nome / denominazione', profile.nome, { key: 'nome', editable: true });
-  h += renderProfileField('Codice fiscale', profile.codiceFiscale, { key: 'codiceFiscale', editable: true });
-  h += renderProfileField('Partita IVA', profile.partitaIva, { key: 'partitaIva', editable: true });
-  h += renderProfileField('Codice ATECO', profile.ateco, { key: 'ateco', editable: true, calcParam: true, info: 'Determina il coefficiente di redditivita e aiuta a documentare il profilo.' });
-  h += renderProfileField('Descrizione ATECO', profile.atecoDescrizione, { key: 'atecoDescrizione', editable: true });
-  h += renderProfileField('Coefficiente redditivita (%)', `${fmtPct(profile.coefficiente / 100)}`, {
-    key: 'coefficiente',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    max: 100,
-    step: '0.01',
-    calcParam: true,
-    info: 'Modifica la base imponibile forfettaria: reddito lordo = incassato x coefficiente.'
-  });
-  h += renderProfileField('Aliquota imposta sostitutiva (%)', `${fmtPct(profile.impostaSostitutiva / 100)}`, {
-    key: 'impostaSostitutiva',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    max: 100,
-    step: '0.01',
-    calcParam: true,
-    info: 'Aliquota della sostitutiva applicata all imponibile fiscale forfettario.'
-  });
-  h += renderProfileField('Gestione previdenziale', getInpsModeLabel(profile.inpsMode), {
-    key: 'inpsMode',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Cambia il modo in cui il motore calcola contributi fissi e variabili.',
-    options: [
-      { value: 'artigiani_commercianti', label: 'Artigiani / Commercianti' },
-      { value: 'gestione_separata', label: 'Gestione Separata' }
-    ]
-  });
-  h += renderProfileField('Categoria INPS', getInpsCategoryLabel(profile.inpsCategoria), {
-    key: 'inpsCategoria',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Per artigiani/commercianti puo cambiare il fisso annuo e l aliquota ufficiale.',
-    options: [
-      { value: 'artigiano', label: 'Artigiano' },
-      { value: 'commerciante', label: 'Commerciante' }
-    ]
-  });
-  h += renderProfileField('Parametri INPS', profile.usaInpsUfficiale === 1 ? 'Ufficiali per anno' : 'Manuali', {
-    key: 'usaInpsUfficiale',
-    editable: true,
-    mode: 'select',
-    calcParam: true,
-    info: 'Se attivo, minimale, fissi e aliquota vengono precompilati con i valori ufficiali dell anno selezionato.',
-    options: [
-      { value: '1', label: 'Usa parametri ufficiali' },
-      { value: '0', label: 'Mantieni inserimento manuale' }
-    ]
-  });
-  h += renderProfileField('Riduzione contributiva 35%', 'Gestita anno per anno', {
-    info: 'Questo flag non e globale: si imposta nelle Impostazioni Annuali dell anno selezionato.'
-  });
-  h += renderProfileField('Limite forfettario', fmt(profile.limiteForfettario), {
-    key: 'limiteForfettario',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    step: '0.01',
-    calcParam: true,
-    info: 'Parametro informativo usato per warning e controlli di superamento regime.'
-  });
-  h += renderProfileField('Tasso INAIL', profile.inailTasso > 0 ? (profile.inailTasso + ' ‰') : 'Non configurato', {
-    key: 'inailTasso',
-    editable: true,
-    mode: 'number',
-    inputType: 'number',
-    min: 0,
-    step: '0.01',
-    calcParam: true,
-    info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL o nella visura. Per artigiani IT tipicamente ~5,19 ‰. Se impostato, il premio INAIL viene calcolato automaticamente nello scadenziario.'
-  });
-  h += renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
-    key: 'agevolazioneStartUp',
-    editable: true,
-    mode: 'select',
-    info: 'Campo informativo per futuri scenari con aliquota agevolata.',
-    options: [
-      { value: '0', label: 'No' },
-      { value: '1', label: 'Si' }
-    ]
-  });
-  h += renderProfileField('Primo anno agevolato', profile.primoAnnoAgevolato === 1 ? 'Si' : 'No', {
-    key: 'primoAnnoAgevolato',
-    editable: true,
-    mode: 'select',
-    info: 'Serve a spiegare i warning del primo ciclo completo saldo + acconti.',
-    options: [
-      { value: '0', label: 'No' },
-      { value: '1', label: 'Si' }
-    ]
-  });
-  h += renderProfileField('Note profilo', profile.note || '—', {
-    key: 'note',
-    editable: true,
-    mode: 'textarea'
-  });
-  h += `</div></div>`;
-
-  h += `<div class="panel profile-panel"><h3>Storico sintetico</h3>`;
-  h += row('Regime corrente', currentSettings.regime === 'forfettario' ? 'Forfettario' : 'Ordinario', 'highlight');
-  h += row('Anno visualizzato', currentYear);
-  h += row('Parametri INPS applicati', currentSettings.usaInpsUfficiale == 1 ? `Ufficiali ${currentResolved._officialInpsYear || currentYear}` : 'Manuali');
-  h += row('Minimale INPS anno selezionato', fmt(currentResolved.minimaleInps || 0));
-  h += row('Contributi fissi anno selezionato', fmt(currentResolved.contribFissi || 0));
-  h += row('Aliquota contributiva anno selezionato', `${(parseFloat(currentResolved.aliqContributi) || 0).toFixed(2)}%`);
-  if (official2025 && official2025.revenueTotal) {
-    const local2025 = getTotalAnnuoForYear(2025, { includeEstimates: false });
-    const delta2025 = ceil2(local2025 - official2025.revenueTotal);
-    h += row('Ricavi 2025 da bilancino', fmt(official2025.revenueTotal), 'highlight');
-    h += row('Ricavi 2025 presenti nell app', fmt(local2025), '', delta2025 === 0 ? 'positive' : 'negative');
-    if (Math.abs(delta2025) >= 0.01) {
-      h += `<div class="scad-note-list" style="margin-top:10px"><div class="scad-note">Il bilancino 2025 del commercialista riporta ${fmt(official2025.revenueTotal)} mentre i dati fatture presenti in app sommano ${fmt(local2025)}. Finche non li riallineiamo, i confronti 2025 vs Fiscozen restano indicativi.</div></div>`;
-    }
-  }
-  h += `<div class="profile-history-list">`;
-  for (const item of history) {
-    h += `<div class="profile-history-item">
-      <div><b>${item.year}</b> - ${item.regime === 'forfettario' ? 'Forfettario' : 'Ordinario'}</div>
-      <div>${item.employeeIncome ? 'Anno misto con reddito dipendente.' : 'Nessun reddito dipendente segnalato.'}</div>
-    </div>`;
-  }
-  h += `</div></div>`;
-
-  el.innerHTML = h;
-}
-
-function renderProfileField(label, value, options) {
-  const opts = options || {};
-  const mode = opts.mode || 'text';
-  const key = opts.key || '';
-  const info = opts.info ? ` ${helpPill(opts.info)}` : '';
-  const draft = profileFiscalState.draft || getProfileFiscalData();
-  const displayValue = value !== undefined && value !== null && String(value) !== '' ? value : '-';
-  const escapedLabel = escapeHtml(label);
-  const escapedDisplayValue = escapeHtml(displayValue);
-  const classes = ['profile-field'];
-  if (opts.calcParam) classes.push('calc-param-card');
-  if (opts.full) classes.push('profile-field-full');
-  if (opts.compact) classes.push('profile-field-compact');
-  if (profileFiscalState.editing && opts.editable) classes.push('editing');
-  const meta = opts.meta ? opts.meta : (opts.calcParam ? 'Parametro di calcolo' : '');
-  const copyText = getProfileFieldCopyText(displayValue, opts);
-  const readonlyCopyMeta = copyText ? [meta, 'Clicca per copiare'].filter(Boolean).join(' | ') : meta;
-  if (!profileFiscalState.editing || !opts.editable) {
-    if (copyText) {
-      return `<button type="button" class="${classes.join(' ')} profile-copy-field" data-copy-label="${escapedLabel}" data-copy-value="${encodeURIComponent(copyText)}" onclick="copyProfileFieldValue(this.dataset.copyLabel, decodeURIComponent(this.dataset.copyValue))" title="Copia ${escapedLabel}">
-        <div class="profile-field-head">
-          <label>${label}${info}</label>
-          <span class="profile-copy-pill">Copia</span>
-        </div>
-        <div class="profile-value${opts.calcParam ? ' calc-param' : ''}">${escapedDisplayValue}</div>
-        ${readonlyCopyMeta ? `<div class="profile-field-meta">${escapeHtml(readonlyCopyMeta)}</div>` : ''}
-      </button>`;
-    }
-    return `<div class="${classes.join(' ')}">
-      <label>${label}${info}</label>
-      <div class="profile-value${opts.calcParam ? ' calc-param' : ''}">${escapedDisplayValue}</div>
-      ${meta ? `<div class="profile-field-meta">${escapeHtml(meta)}</div>` : ''}
-    </div>`;
-  }
-
-  let input = '';
-  if (mode === 'select') {
-    input = `<select onchange="updateProfileFiscalDraftField('${key}', this.value)">
-      ${(opts.options || []).map(option => `<option value="${option.value}" ${String(draft[key]) === String(option.value) ? 'selected' : ''}>${option.label}</option>`).join('')}
-    </select>`;
-  } else if (mode === 'textarea') {
-    input = `<textarea onchange="updateProfileFiscalDraftField('${key}', this.value)">${draft[key] || ''}</textarea>`;
-  } else {
-    const step = opts.step ? ` step="${opts.step}"` : '';
-    const min = opts.min !== undefined ? ` min="${opts.min}"` : '';
-    const max = opts.max !== undefined ? ` max="${opts.max}"` : '';
-    const type = opts.inputType || 'text';
-    input = `<input type="${type}" value="${draft[key] ?? ''}"${step}${min}${max} onchange="updateProfileFiscalDraftField('${key}', this.value)">`;
-  }
-  return `<div class="${classes.join(' ')}">
-    <label>${label}${info}</label>
-    ${input}
-    ${meta ? `<div class="profile-field-meta">${meta}</div>` : ''}
-  </div>`;
-}
-
-function renderProfileHeroStat(label, value, tone) {
-  return `<div class="profile-hero-stat ${tone || ''}">
-    <span>${label}</span>
-    <strong>${value}</strong>
-  </div>`;
-}
-
-function renderProfileMetaPill(label, value) {
-  return `<div class="profile-meta-pill">
-    <span>${label}</span>
-    <strong>${value}</strong>
-  </div>`;
-}
-
-function renderProfileSection(title, description, body, extraClass) {
-  return `<section class="profile-section ${extraClass || ''}">
-    <div class="profile-section-head">
-      <h3>${title}</h3>
-      ${description ? `<p>${description}</p>` : ''}
-    </div>
-    ${body}
-  </section>`;
-}
-
-const QUADRO_LM_FIELD_META = {
-  LM1:  { title: 'Codice attività', type: 'text',   help: 'Codice ATECO del profilo fiscale.' },
-  LM2:  { title: 'Reddito lordo', type: 'money',    help: 'Totale incassato nel periodo d imposta.' },
-  LM3:  { title: 'Rimanenze finali', type: 'money',  help: 'Per attività di servizi di norma e 0.' },
-  LM4:  { title: 'Rimanenze iniziali', type: 'money', help: 'Per attività di servizi di norma e 0.' },
-  LM5:  { title: 'Differenza', type: 'money',        help: 'LM2 + LM3 - LM4.' },
-  LM6:  { title: 'Componenti positivi', type: 'money', help: 'Per il forfettario coincide con la differenza calcolata.' },
-  LM22: { title: 'Reddito lordo forfettario', type: 'money', help: 'Base ricavi/compensi su cui si applica il coefficiente.' },
-  LM23: { title: 'Coefficiente di redditività', type: 'percent', help: 'Percentuale del coefficiente applicata al lordo.' },
-  LM24: { title: 'Reddito forfettario', type: 'money', help: 'LM22 x LM23 / 100.' },
-  LM25: { title: 'Perdite pregresse', type: 'money', help: 'Di norma 0 salvo casi particolari.' },
-  LM26: { title: 'Reddito netto', type: 'money', help: 'LM24 - LM25.' },
-  LM27: { title: 'Contributi previdenziali versati', type: 'money', help: 'Contributi INPS deducibili effettivamente pagati nell anno.' },
-  LM28: { title: 'Reddito al netto contributi', type: 'money', help: 'LM26 - LM27.' },
-  LM29: { title: 'Imposta sostitutiva dovuta', type: 'money', help: 'LM28 x aliquota applicata.' },
-  LM30: { title: 'Aliquota sostitutiva', type: 'percent', help: 'Aliquota del 5% o 15%.' },
-  LM34: { title: 'Imposta sostitutiva a debito', type: 'money', help: 'Debito fiscale dell anno di riferimento.' },
-  LM35: { title: 'Acconti versati', type: 'money', help: 'Acconti imposta già versati.' },
-  LM38: { title: 'Imposta a debito', type: 'money', help: 'LM34 - LM35.' },
-  LM39: { title: 'Imposta a credito', type: 'money', help: 'Credito se gli acconti superano il debito.' },
-  LM40: { title: 'Primo acconto anno successivo', type: 'money', help: 'Acconto del ciclo successivo stimato sul debito attuale.' },
-  LM41: { title: 'Secondo acconto anno successivo', type: 'money', help: 'Seconda rata del ciclo successivo.' }
-};
-
-const QUADRO_LM_SECTIONS = [
-  {
-    title: '1. Identificazione e parametri',
-    description: 'Dati che identificano il profilo e i coefficienti applicati al quadro.',
-    fields: ['LM1', 'LM23', 'LM30']
-  },
-  {
-    title: '2. Base contabile',
-    description: 'Ricavi, rimanenze e differenza di base.',
-    fields: ['LM2', 'LM3', 'LM4', 'LM5', 'LM6']
-  },
-  {
-    title: '3. Reddito forfettario e contributi',
-    description: 'Calcolo dell imponibile forfettario e dei contributi deducibili.',
-    fields: ['LM22', 'LM24', 'LM25', 'LM26', 'LM27', 'LM28', 'LM29']
-  },
-  {
-    title: '4. Debito, acconti e saldo',
-    description: 'Imposta sostitutiva, acconti gia versati e rata del periodo successivo.',
-    fields: ['LM34', 'LM35', 'LM38', 'LM39', 'LM40', 'LM41']
-  }
-];
-
-function getQuadroLMYearData(year) {
-  return getYearDataFor(year) || ensureDataShape({}, year);
-}
-
-function getQuadroLMSavedState(year) {
-  const yearData = getQuadroLMYearData(year);
-  const stored = yearData && yearData.lmQuadro && typeof yearData.lmQuadro === 'object' ? yearData.lmQuadro : {};
-  const overrides = stored && stored.overrides && typeof stored.overrides === 'object' ? stored.overrides : {};
-  return {
-    overrides,
-    updatedAt: stored.updatedAt || ''
-  };
-}
-
-function normalizeQuadroLMInput(key, raw) {
-  const meta = QUADRO_LM_FIELD_META[key] || {};
-  if (meta.type === 'text') return String(raw ?? '').trim();
-  if (meta.type === 'percent' || meta.type === 'money') {
-    const normalized = String(raw ?? '').replace(',', '.').trim();
-    if (normalized === '') return 0;
-    const parsed = parseFloat(normalized);
-    return Number.isFinite(parsed) ? ceil2(parsed) : 0;
-  }
-  return String(raw ?? '').trim();
-}
-
-function formatQuadroLMInputValue(value, meta) {
-  if (meta && meta.type === 'text') return String(value ?? '');
-  if (value === undefined || value === null || value === '') return '';
-  return String(value);
-}
-
-function formatQuadroLMDisplayValue(value, meta) {
-  if (meta && meta.type === 'percent') return `${ceil2(value || 0).toFixed(2)}%`;
-  if (meta && meta.type === 'money') return fmt(value || 0);
-  return String(value ?? '');
-}
-
-function getQuadroLMBaseModel(year) {
-  const targetYear = parseInt(year, 10) || currentYear;
-  const yearData = getQuadroLMYearData(targetYear);
-  const settings = yearData && yearData.settings ? yearData.settings : S();
-  const profile = getProfileFiscalData();
-  const engine = getTaxEngine();
-  const comparison = getForfettarioMethodComparisonForYear(targetYear, { includeEstimates: true });
-  const sourceTruth = getForfettarioSourceOfTruthForYear(targetYear, { includeEstimates: true })
-    || getAppliedForfettarioForYear(targetYear, { includeEstimates: true });
-  const transition = engine && typeof engine.buildTransitionDiagnostics === 'function'
-    ? engine.buildTransitionDiagnostics({
-        year: targetYear,
-        currentSettings: settings,
-        previousSettings: getYearDataFor(targetYear - 1) ? getYearDataFor(targetYear - 1).settings : null
-      })
-    : null;
-  const isClosedYear = isClosedFiscalYear(targetYear);
-  const grossCollected = ceil2(getTotalAnnuoForYear(targetYear, { includeEstimates: true }));
-  const coeffPct = Math.max(parseFloat(profile.coefficiente ?? settings.coefficiente) || 0, 0);
-  const aliquotaPct = Math.max(parseFloat(profile.impostaSostitutiva ?? settings.impostaSostitutiva) || 0, 0);
-  const lm2 = grossCollected;
-  const lm22 = grossCollected;
-  const lm24 = ceil2((lm22 * coeffPct) / 100);
-  const lm27Source = sourceTruth ? (sourceTruth.deductibleContributionsPaid ?? sourceTruth.contribTotali ?? 0) : 0;
-  const lm27 = ceil2(lm27Source);
-  const lm28 = ceil2(Math.max(lm24 - lm27, 0));
-  const lm29 = ceil2(Math.max((lm28 * aliquotaPct) / 100, 0));
-  const lm34 = lm29;
-  const lm35 = ceil2(getLinkedPagamentiTotal([`imposta_acc1_${targetYear}`, `imposta_acc2_${targetYear}`]));
-  const lm38 = ceil2(Math.max(lm34 - lm35, 0));
-  const lm39 = ceil2(Math.max(lm35 - lm34, 0));
-  const enginePlan = engine && typeof engine.buildAccontoPlan === 'function'
-    ? engine.buildAccontoPlan(lm34)
-    : { first: 0, second: 0, total: lm34 };
-  const lm40 = ceil2(enginePlan.first || 0);
-  const lm41 = ceil2(enginePlan.second || 0);
-  const estimatedKeys = new Set(
-    isClosedYear
-      ? []
-      : ['LM2', 'LM22', 'LM24', 'LM26', 'LM27', 'LM28', 'LM29', 'LM34', 'LM38', 'LM39', 'LM40', 'LM41']
-  );
-  const sourceMap = {
-    LM1: 'profile',
-    LM2: isClosedYear ? 'app' : 'estimated',
-    LM3: 'default',
-    LM4: 'default',
-    LM5: 'app',
-    LM6: 'app',
-    LM22: isClosedYear ? 'app' : 'estimated',
-    LM23: 'profile',
-    LM24: isClosedYear ? 'app' : 'estimated',
-    LM25: 'default',
-    LM26: isClosedYear ? 'app' : 'estimated',
-    LM27: isClosedYear ? 'app' : 'estimated',
-    LM28: isClosedYear ? 'app' : 'estimated',
-    LM29: isClosedYear ? 'app' : 'estimated',
-    LM30: 'profile',
-    LM34: isClosedYear ? 'app' : 'estimated',
-    LM35: lm35 > 0 ? 'pagato' : 'zero',
-    LM38: isClosedYear ? 'app' : 'estimated',
-    LM39: isClosedYear ? 'app' : 'estimated',
-    LM40: isClosedYear ? 'app' : 'estimated',
-    LM41: isClosedYear ? 'app' : 'estimated'
-  };
-  const values = {
-    LM1: profile.ateco || settings.ateco || '',
-    LM2: lm2,
-    LM3: 0,
-    LM4: 0,
-    LM5: ceil2(lm2),
-    LM6: ceil2(lm2),
-    LM22: lm22,
-    LM23: coeffPct,
-    LM24: lm24,
-    LM25: 0,
-    LM26: lm24,
-    LM27: lm27,
-    LM28: lm28,
-    LM29: lm29,
-    LM30: aliquotaPct,
-    LM34: lm34,
-    LM35: lm35,
-    LM38: lm38,
-    LM39: lm39,
-    LM40: lm40,
-    LM41: lm41
-  };
-  const summary = {
-    grossCollected,
-    taxableBase: lm24,
-    contributions: lm27,
-    taxDue: lm34,
-    accontiPaid: lm35,
-    residualTax: lm38,
-    taxCredit: lm39,
-    nextYearAcconto1: lm40,
-    nextYearAcconto2: lm41,
-    methodLabel: isClosedYear ? 'Consuntivo' : (comparison && comparison.selectedMethod === 'previsionale' ? 'Previsionale' : 'Storico')
-  };
-  const warnings = [];
-  if (!profile.ateco) warnings.push('Codice ATECO non configurato nel profilo fiscale.');
-  if (!profile.partitaIva) warnings.push('Partita IVA non configurata nel profilo fiscale.');
-  if (!isClosedYear) warnings.push('L anno e ancora aperto: i campi segnati come stimati possono cambiare.');
-  if (transition && Array.isArray(transition.warnings)) warnings.push(...transition.warnings);
-  if (comparison && Array.isArray(comparison.warnings)) warnings.push(...comparison.warnings);
-  const notes = [
-    'Il Quadro LM e un riepilogo di supporto alla compilazione: non genera file telematici.',
-    'I valori modificati manualmente vengono salvati solo per l anno selezionato.'
-  ];
-  return {
-    year: targetYear,
-    isClosedYear,
-    profile,
-    settings,
-    comparison,
-    transition,
-    values,
-    sourceMap,
-    estimatedKeys,
-    summary,
-    warnings,
-    notes
-  };
-}
-
-function getQuadroLMModel(year, overrides) {
-  const base = getQuadroLMBaseModel(year);
-  const draftValues = { ...base.values, ...(overrides || {}) };
-  const manualKeys = new Set();
-  for (const key of Object.keys(base.values)) {
-    if (String(draftValues[key] ?? '') !== String(base.values[key] ?? '')) manualKeys.add(key);
-  }
-  return { ...base, values: draftValues, manualKeys };
-}
-
-function getQuadroLMCurrentModel() {
-  const year = quadroLMState.year || currentYear;
-  const base = quadroLMState.base || getQuadroLMBaseModel(year);
-  const draft = quadroLMState.draft || { ...base.values };
-  const manualKeys = new Set();
-  for (const key of Object.keys(base.values)) {
-    if (String(draft[key] ?? '') !== String(base.values[key] ?? '')) manualKeys.add(key);
-  }
-  return { ...base, values: draft, manualKeys };
-}
-
-function getQuadroLMFieldStatus(model, key) {
-  if (!model) return { label: 'Dato', tone: 'info' };
-  if (model.manualKeys && model.manualKeys.has(key)) return { label: 'Manuale', tone: 'warn' };
-  if (model.estimatedKeys && model.estimatedKeys.has(key)) return { label: 'Stimato', tone: 'warn' };
-  const source = model.sourceMap && model.sourceMap[key] ? model.sourceMap[key] : 'app';
-  if (source === 'profile') return { label: 'Profilo', tone: 'info' };
-  if (source === 'pagato') return { label: 'Pagato', tone: 'ok' };
-  if (source === 'zero') return { label: '0', tone: 'info' };
-  return { label: 'Dato app', tone: 'ok' };
-}
-
-function renderQuadroLMStat(label, value, tone) {
-  return `<div class="lm-stat ${tone || ''}">
-    <span>${escapeHtml(label)}</span>
-    <strong>${escapeHtml(value)}</strong>
-  </div>`;
-}
-
-function renderQuadroLMField(model, key, printable) {
-  const meta = QUADRO_LM_FIELD_META[key] || { title: key, type: 'money', help: '' };
-  const currentValue = model.values ? model.values[key] : '';
-  const baseValue = model.base && model.base.values ? model.base.values[key] : currentValue;
-  const status = getQuadroLMFieldStatus(model, key);
-  const manual = String(currentValue ?? '') !== String(baseValue ?? '');
-  const wrapperClass = ['lm-field'];
-  if (manual) wrapperClass.push('is-manual');
-  if (status.label === 'Stimato') wrapperClass.push('is-estimated');
-  const inputId = `lm_${key}`;
-  const sourceClass = status.tone === 'warn' ? 'warn' : status.tone === 'ok' ? 'ok' : 'info';
-  const valueLabel = formatQuadroLMDisplayValue(currentValue, meta);
-  if (printable) {
-    return `<div class="${wrapperClass.join(' ')}">
-      <div class="lm-field-head">
-        <div class="lm-field-name">${escapeHtml(key)} - ${escapeHtml(meta.title)}</div>
-        <span class="lm-source-pill ${sourceClass}">${escapeHtml(status.label)}</span>
-      </div>
-      <div class="lm-field-value">${escapeHtml(valueLabel)}</div>
-      ${meta.help ? `<div class="lm-field-help">${escapeHtml(meta.help)}</div>` : ''}
-    </div>`;
-  }
-  const inputType = meta.type === 'text' ? 'text' : 'number';
-  const step = meta.type === 'text' ? '' : ' step="0.01" inputmode="decimal"';
-  return `<label class="${wrapperClass.join(' ')}" for="${inputId}">
-    <div class="lm-field-head">
-      <div class="lm-field-name">${escapeHtml(key)} - ${escapeHtml(meta.title)}</div>
-      <span class="lm-source-pill ${sourceClass}">${escapeHtml(status.label)}</span>
-    </div>
-    ${meta.help ? `<div class="lm-field-help">${escapeHtml(meta.help)}</div>` : ''}
-    <input id="${inputId}" type="${inputType}" value="${escapeHtml(formatQuadroLMInputValue(currentValue, meta))}"${step} onchange="updateQuadroLMField('${key}', this.value)">
-  </label>`;
-}
-
-function renderQuadroLMSection(model, section, printable) {
-  return `<section class="lm-section">
-    <div class="lm-section-head">
-      <div>
-        <h4>${escapeHtml(section.title)}</h4>
-        ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ''}
-      </div>
-    </div>
-    <div class="lm-section-grid">
-      ${section.fields.map(key => renderQuadroLMField(model, key, printable)).join('')}
-    </div>
-  </section>`;
-}
-
-function buildQuadroLMPrintHtml(model) {
-  const summary = model.summary || {};
-  const warningHtml = (model.warnings && model.warnings.length)
-    ? `<div class="lm-print-notes">
-        <h3>Warning</h3>
-        ${model.warnings.map(note => `<div class="lm-print-note">${escapeHtml(note)}</div>`).join('')}
-      </div>`
-    : '';
-  const noteHtml = (model.notes && model.notes.length)
-    ? `<div class="lm-print-notes">
-        <h3>Note</h3>
-        ${model.notes.map(note => `<div class="lm-print-note">${escapeHtml(note)}</div>`).join('')}
-      </div>`
-    : '';
-  const sectionsHtml = QUADRO_LM_SECTIONS.map(section => renderQuadroLMSection(model, section, true)).join('');
-  return `<!doctype html>
-  <html lang="it">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quadro LM ${model.year}</title>
-    <style>
-      :root{color-scheme:light;}
-      body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f7fb;color:#101828;}
-      .page{max-width:1080px;margin:0 auto;padding:28px 20px 48px;}
-      .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #d7dde6;}
-      .topbar h1{font-family:Satoshi,Inter,sans-serif;margin:0;font-size:1.8rem;}
-      .topbar p{margin:4px 0 0;color:#475467;}
-      .actions{display:flex;gap:8px;flex-wrap:wrap;}
-      .actions button{border:0;border-radius:12px;padding:10px 14px;background:#0e5f61;color:#fff;font-weight:700;cursor:pointer;}
-      .actions button.secondary{background:#e4e7ec;color:#101828;}
-      .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0;}
-      .stat{border:1px solid #d7dde6;border-radius:14px;background:#fff;padding:14px;}
-      .stat span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:#667085;margin-bottom:6px;}
-      .stat strong{font-size:1.08rem;}
-      .summary-note,.lm-print-notes{border:1px solid #d7dde6;border-radius:14px;background:#fff;padding:14px;margin-bottom:14px;}
-      .lm-print-notes h3{margin:0 0 10px;font-size:1rem;font-family:Satoshi,Inter,sans-serif;}
-      .lm-print-note{padding:10px 12px;border-radius:10px;background:#f9fafb;border:1px solid #eaecf0;margin-top:8px;line-height:1.45;}
-      .sections{display:grid;gap:14px;}
-      .lm-section{border:1px solid #d7dde6;border-radius:18px;background:#fff;padding:16px;}
-      .lm-section-head h4{margin:0 0 4px;font-size:1.06rem;font-family:Satoshi,Inter,sans-serif;}
-      .lm-section-head p{margin:0;color:#667085;font-size:.92rem;line-height:1.5;}
-      .lm-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;}
-      .lm-field{display:block;border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fdfdfd;}
-      .lm-field-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px;}
-      .lm-field-name{font-weight:700;font-size:.92rem;}
-      .lm-source-pill{padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#eef2f6;color:#344054;white-space:nowrap;}
-      .lm-source-pill.ok{background:#ecfdf3;color:#027a48;}
-      .lm-source-pill.warn{background:#fffaeb;color:#b54708;}
-      .lm-source-pill.info{background:#eff8ff;color:#175cd3;}
-      .lm-field-help{font-size:.8rem;color:#667085;line-height:1.45;margin-bottom:10px;}
-      .lm-field-value{font-size:1rem;font-weight:600;color:#101828;}
-      .footer-note{margin-top:16px;color:#667085;font-size:.84rem;line-height:1.5;}
-      @media print{
-        body{background:#fff;}
-        .page{padding:0;max-width:none;}
-        .topbar .actions,.footer-note .no-print{display:none !important;}
-        .lm-section,.stat,.summary-note,.lm-print-notes{break-inside:avoid;}
-      }
-      @media (max-width: 860px){
-        .summary,.lm-section-grid{grid-template-columns:1fr;}
-        .topbar{flex-direction:column;align-items:flex-start;}
-      }
-    </style>
-  </head>
-  <body>
-    <div class="page">
-      <div class="topbar">
-        <div>
-          <h1>Quadro LM ${escapeHtml(String(model.year))}</h1>
-          <p>Riepilogo stampabile basato sui dati dell'app. Per salvare in PDF usa la funzione di stampa del browser.</p>
-        </div>
-        <div class="actions no-print">
-          <button type="button" onclick="window.print()">Stampa / Salva PDF</button>
-          <button type="button" class="secondary" onclick="window.close()">Chiudi</button>
-        </div>
-      </div>
-      <div class="summary">
-        ${renderQuadroLMStat('Lordo incassato', fmt(summary.grossCollected || 0))}
-        ${renderQuadroLMStat('Imponibile forfettario', fmt(summary.taxableBase || 0))}
-        ${renderQuadroLMStat('Imposta sostitutiva', fmt(summary.taxDue || 0))}
-        ${renderQuadroLMStat('Residuo / saldo', fmt(summary.residualTax || 0))}
-      </div>
-      <div class="summary-note">
-        <strong>Metodo:</strong> ${escapeHtml(summary.methodLabel || 'Consuntivo')}<br>
-        <strong>Acconti versati:</strong> ${fmt(summary.accontiPaid || 0)}<br>
-        <strong>Contributi deducibili:</strong> ${fmt(summary.contributions || 0)}
-      </div>
-      ${warningHtml}
-      ${noteHtml}
-      <div class="sections">
-        ${sectionsHtml}
-      </div>
-      <div class="footer-note">
-        Questo documento e un supporto operativo e non sostituisce la verifica del commercialista o del modello telematico ufficiale.
-      </div>
-    </div>
-  </body>
-  </html>`;
-}
-
-function showQuadroLMToast(message, tone = 'success') {
-  const toast = document.getElementById('quadroLMToast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.dataset.tone = tone;
-  toast.classList.add('show');
-  if (quadroLMToastTimer) clearTimeout(quadroLMToastTimer);
-  quadroLMToastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2200);
-}
-
-function openQuadroLMModal() {
-  if (!currentProfile) return;
-  const year = currentYear;
-  quadroLMState.year = year;
-  quadroLMState.base = getQuadroLMBaseModel(year);
-  const saved = getQuadroLMSavedState(year);
-  quadroLMState.draft = { ...quadroLMState.base.values, ...saved.overrides };
-  quadroLMState.open = true;
-  renderQuadroLMModal();
-  const modal = document.getElementById('quadroLMModal');
-  if (!modal) return;
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('profile-modal-open');
-}
-
-function closeQuadroLMModal() {
-  const modal = document.getElementById('quadroLMModal');
-  if (modal) {
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-  document.body.classList.remove('profile-modal-open');
-  if (quadroLMToastTimer) clearTimeout(quadroLMToastTimer);
-  quadroLMState.open = false;
-  quadroLMState.year = null;
-  quadroLMState.base = null;
-  quadroLMState.draft = null;
-}
-
-function updateQuadroLMField(key, value) {
-  if (!quadroLMState.draft) return;
-  quadroLMState.draft[key] = normalizeQuadroLMInput(key, value);
-  renderQuadroLMModal();
-}
-
-function saveQuadroLMDraft() {
-  if (!quadroLMState.base || !quadroLMState.draft) return;
-  const year = quadroLMState.year || currentYear;
-  const overrides = {};
-  for (const key of Object.keys(quadroLMState.base.values || {})) {
-    if (String(quadroLMState.draft[key] ?? '') !== String(quadroLMState.base.values[key] ?? '')) {
-      overrides[key] = quadroLMState.draft[key];
-    }
-  }
-  const yearData = getYearDataFor(year) || ensureDataShape({}, year);
-  yearData.lmQuadro = {
-    overrides,
-    updatedAt: new Date().toISOString()
-  };
-  saveYearData(year, yearData);
-  quadroLMState.base = getQuadroLMBaseModel(year);
-  quadroLMState.draft = { ...quadroLMState.base.values, ...overrides };
-  renderQuadroLMModal();
-  showQuadroLMToast('Quadro LM salvato', 'success');
-}
-
-function exportQuadroLMPrint() {
-  const year = quadroLMState.year || currentYear;
-  const model = getQuadroLMModel(year, quadroLMState.draft || getQuadroLMSavedState(year).overrides);
-  const html = buildQuadroLMPrintHtml(model);
-  const win = window.open('', '_blank', 'noopener,noreferrer');
-  if (!win) {
-    showQuadroLMToast('Popup bloccato dal browser', 'warn');
-    return;
-  }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-}
-
-function renderQuadroLMModal() {
-  const el = document.getElementById('quadroLMContent');
-  if (!el) return;
-  const year = quadroLMState.year || currentYear;
-  const model = getQuadroLMModel(year, quadroLMState.draft || getQuadroLMSavedState(year).overrides);
-  quadroLMState.base = quadroLMState.base || getQuadroLMBaseModel(year);
-  quadroLMState.draft = model.values;
-  const summary = model.summary || {};
-  const warningHtml = (model.warnings && model.warnings.length)
-    ? `<div class="lm-warning-list">${model.warnings.map(note => `<div class="lm-warning">${escapeHtml(note)}</div>`).join('')}</div>`
-    : '';
-  const noteHtml = (model.notes && model.notes.length)
-    ? `<div class="lm-note-list">${model.notes.map(note => `<div class="lm-note">${escapeHtml(note)}</div>`).join('')}</div>`
-    : '';
-  const sectionsHtml = QUADRO_LM_SECTIONS.map(section => renderQuadroLMSection(model, section, false)).join('');
-  el.innerHTML = `
-    <div class="lm-sheet">
-      <div class="lm-sheet-header">
-        <div class="lm-sheet-copy">
-          <div class="lm-sheet-kicker">Quadro LM</div>
-          <h2 id="quadroLMTitle">Riepilogo ${escapeHtml(String(year))}</h2>
-          <p>Campi precompilati dai dati dell'app e modificabili manualmente. I valori segnati come stimati possono cambiare finché l'anno resta aperto.</p>
-        </div>
-        <div class="lm-sheet-actions">
-          <button class="btn-add lm-copy-btn" type="button" onclick="exportQuadroLMPrint()">Apri versione stampabile</button>
-          <button class="btn-add" type="button" onclick="saveQuadroLMDraft()">Salva</button>
-          <button class="btn-add profile-secondary-btn" type="button" onclick="closeQuadroLMModal()">Annulla</button>
-          <button class="profile-close-btn" type="button" onclick="closeQuadroLMModal()" aria-label="Chiudi quadro LM">&times;</button>
-        </div>
-      </div>
-      <div id="quadroLMToast" class="lm-toast" aria-live="polite"></div>
-      <div class="lm-meta-strip">
-        ${renderProfileMetaPill('Anno', year)}
-        ${renderProfileMetaPill('Metodo', summary.methodLabel || 'Consuntivo')}
-        ${renderProfileMetaPill('Regime', model.settings && model.settings.regime === 'forfettario' ? 'Forfettario' : 'Altro')}
-        ${renderProfileMetaPill('Ateco', model.profile && model.profile.ateco ? model.profile.ateco : '-')}
-      </div>
-      <div class="lm-summary-grid">
-        ${renderQuadroLMStat('Lordo incassato', fmt(summary.grossCollected || 0), 'accent')}
-        ${renderQuadroLMStat('Imponibile forfettario', fmt(summary.taxableBase || 0), '')}
-        ${renderQuadroLMStat('Imposta sostitutiva', fmt(summary.taxDue || 0), 'accent')}
-        ${renderQuadroLMStat('Residuo / saldo', fmt(summary.residualTax || 0), summary.residualTax > 0 ? 'warn' : 'ok')}
-      </div>
-      <div class="lm-summary-grid lm-summary-grid-secondary">
-        ${renderQuadroLMStat('Contributi deducibili', fmt(summary.contributions || 0), '')}
-        ${renderQuadroLMStat('Acconti versati', fmt(summary.accontiPaid || 0), '')}
-        ${renderQuadroLMStat('Credito', fmt(summary.taxCredit || 0), summary.taxCredit > 0 ? 'warn' : 'ok')}
-        ${renderQuadroLMStat('Prossimo acconto', fmt((summary.nextYearAcconto1 || 0) + (summary.nextYearAcconto2 || 0)), '')}
-      </div>
-      ${warningHtml}
-      ${noteHtml}
-      <div class="lm-sections">
-        ${sectionsHtml}
-      </div>
-      <div class="lm-footer-note">
-        Il Quadro LM e un riepilogo operativo: puoi usarlo per preparare la compilazione, ma il file telematico ufficiale va sempre verificato con il professionista o il software ministeriale.
-      </div>
-    </div>
-  `;
-}
-
-function openProfileFiscalModal() {
-  if (!currentProfile) return;
-  renderProfiloFiscale();
-  const modal = document.getElementById('profileFiscalModal');
-  if (!modal) return;
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('profile-modal-open');
-}
-
-function closeProfileFiscalModal() {
-  const modal = document.getElementById('profileFiscalModal');
-  if (!modal) return;
-  modal.classList.remove('open');
-  modal.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('profile-modal-open');
-}
-
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  const modal = document.getElementById('profileFiscalModal');
+  const calPicker = document.getElementById('calFatturaPicker');
+  if (calPicker && calPicker.classList.contains('open')) {
+    calPicker.classList.remove('open');
+    return;
+  }
+  const archivio = document.getElementById('archivioFattureModal');
+  if (archivio && archivio.classList.contains('open')) {
+    if (window.FattureStorico && typeof window.FattureStorico.closeArchivioModal === 'function') {
+      window.FattureStorico.closeArchivioModal();
+    }
+    return;
+  }
   const ocrModal = document.getElementById('ocrPagamentoModal');
-  const lmModal = document.getElementById('quadroLMModal');
   if (ocrModal && ocrModal.classList.contains('open')) {
     closeOcrPagamentoModal();
     return;
   }
-  if (lmModal && lmModal.classList.contains('open')) {
-    closeQuadroLMModal();
-    return;
-  }
-  if (modal && modal.classList.contains('open')) closeProfileFiscalModal();
 });
 
-function renderProfiloFiscale() {
-  const el = document.getElementById('profileFiscalContent');
-  if (!el) return;
-  updateProfileBadge();
-  const profile = getProfileFiscalData();
-  const history = getProfileRegimeHistory();
-  const currentSettings = S();
-  const currentResolved = getResolvedInpsSettings(currentSettings, currentYear);
-  const external = getExternalFiscalData();
-  const official2025 = external && external.summaries ? external.summaries.summary2025 : null;
-  const currentRegimeLabel = currentSettings.regime === 'forfettario' ? 'Forfettario' : 'Ordinario';
-  const local2025 = official2025 && official2025.revenueTotal ? getTotalAnnuoForYear(2025, { includeEstimates: false }) : 0;
-  const delta2025 = official2025 && official2025.revenueTotal ? ceil2(local2025 - official2025.revenueTotal) : 0;
-  let h = '';
+// Backdrop click per chiudere modale archivio
+document.addEventListener('click', e => {
+  const target = e.target;
+  if (target && target.id === 'archivioFattureModal') {
+    if (window.FattureStorico && typeof window.FattureStorico.closeArchivioModal === 'function') {
+      window.FattureStorico.closeArchivioModal();
+    }
+  }
+});
 
-  h += `<div class="profile-sheet">`;
-  h += `<div class="profile-sheet-header">
-    <div class="profile-sheet-copy">
-      <div class="profile-sheet-kicker">Profilo fiscale</div>
-      <h2 id="profileFiscalTitle">${profile.nome || currentProfile}</h2>
-      <p>Qui tieni i parametri stabili del profilo. Quando salvi, i valori aggiornano calcolo, scadenziario, accantonamento e tutte le viste dell'app. In sola lettura puoi cliccare ogni campo per copiarlo al volo.</p>
-    </div>
-    <div class="profile-sheet-actions">
-      ${profileFiscalState.editing
-        ? `<button class="btn-add" onclick="saveProfileFiscalDraft()" style="margin-top:0">Salva</button>
-           <button class="btn-add profile-secondary-btn" onclick="cancelProfileFiscalEdit()" style="margin-top:0">Annulla</button>`
-        : `<button class="btn-add profile-copy-btn" onclick="copyProfileFiscalSummary()" style="margin-top:0">Copia dati</button>
-           <button class="btn-add" onclick="startProfileFiscalEdit()" style="margin-top:0">Modifica</button>`}
-      <button class="profile-close-btn" type="button" onclick="closeProfileFiscalModal()" aria-label="Chiudi profilo fiscale">&times;</button>
+
+function buildForfettarioLimitBar(totale, limite, year) {
+  const safeLimit = limite > 0 ? limite : 85000;
+  const pct = Math.min(100, (totale / safeLimit) * 100);
+  const remaining = Math.max(0, safeLimit - totale);
+  const over = totale > safeLimit;
+  return `<div class="panel forfettario-limit-panel" style="grid-column:1/-1">
+    <div class="limit-row"><span class="limit-label">Fatturato ${year}</span><span class="limit-value">${fmt(totale)}</span></div>
+    <div class="limit-row"><span class="limit-label">${over ? 'Oltre il limite' : 'Mancante al limite'} (${fmt(safeLimit)})</span><span class="limit-value ${over ? 'over' : ''}">${fmt(over ? totale - safeLimit : remaining)}</span></div>
+    <div class="limit-bar-track${over ? ' over' : ''}">
+      <div class="limit-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+      <span class="limit-bar-pct">${pct.toFixed(1)}%</span>
     </div>
   </div>`;
+}
 
-  if (profileFiscalState.editing) {
-    h += `<div class="profile-edit-banner">Stai modificando la source of truth del profilo. I campi marcati come parametri di calcolo aggiornano formule e scadenze quando salvi.</div>`;
-  }
-  h += `<div id="profileCopyToast" class="profile-copy-toast" aria-live="polite"></div>`;
+function renderCalcoloForfettario(h, el) {
+  const c = getForfettarioSourceOfTruthForYear(currentYear, { includeEstimates: true }) || getAppliedForfettarioForYear(currentYear, { includeEstimates: true });
+  const s = S();
+  const contrib = c.contribTotali;
+  const tasse = c.competenceTax || c.tasse;
+  const netto = c.competenceNetto || c.netto;
+  const perc = c.competenceRate || c.percEffettiva;
 
-  h += `<div class="profile-meta-strip">`;
-  h += renderProfileMetaPill('Account', currentProfile);
-  h += renderProfileMetaPill('Regime in vista', currentRegimeLabel);
-  h += renderProfileMetaPill('ATECO', profile.ateco || '-');
-  h += renderProfileMetaPill('Previdenza', getInpsModeLabel(profile.inpsMode));
-  h += `</div>`;
-
-  h += `<div class="profile-hero-stats">`;
-  h += renderProfileHeroStat('Coefficiente', fmtPct(profile.coefficiente / 100), 'accent');
-  h += renderProfileHeroStat('Imposta sostitutiva', fmtPct(profile.impostaSostitutiva / 100), 'accent');
-  h += renderProfileHeroStat('Categoria INPS', getInpsCategoryLabel(profile.inpsCategoria));
-  h += renderProfileHeroStat('Limite forfettario', fmt(profile.limiteForfettario));
-  h += `</div>`;
-
-  h += `<div class="profile-layout">`;
-  h += `<div class="profile-main-column">`;
-  h += renderProfileSection(
-    'Identita fiscale',
-    'Dati anagrafici e di inquadramento che descrivono il profilo.',
-    `<div class="profile-field-grid">
-      ${renderProfileField('Nome / denominazione', profile.nome, { key: 'nome', editable: true })}
-      ${renderProfileField('Codice fiscale', profile.codiceFiscale, { key: 'codiceFiscale', editable: true })}
-      ${renderProfileField('Partita IVA', profile.partitaIva, { key: 'partitaIva', editable: true })}
-      ${renderProfileField('Indirizzo', profile.indirizzo || '-', { key: 'indirizzo', editable: true, full: true })}
-      ${renderProfileField('CAP', profile.cap || '-', { key: 'cap', editable: true })}
-      ${renderProfileField('Citta', profile.citta || '-', { key: 'citta', editable: true })}
-      ${renderProfileField('Provincia', profile.provincia || '-', { key: 'provincia', editable: true })}
-      ${renderProfileField('Nazione', profile.nazione || 'IT', { key: 'nazione', editable: true })}
-      ${renderProfileField('Codice ATECO', profile.ateco, { key: 'ateco', editable: true, calcParam: true, info: 'Determina il coefficiente di redditivita e aiuta a documentare il profilo.' })}
-      ${renderProfileField('Descrizione ATECO', profile.atecoDescrizione, { key: 'atecoDescrizione', editable: true, full: true })}
-      ${renderProfileField('Note profilo', profile.note || '-', { key: 'note', editable: true, mode: 'textarea', full: true })}
-    </div>`
-  );
-  h += renderProfileSection(
-    'Parametri di calcolo',
-    'Questi campi guidano il motore fiscale per tutti gli anni del profilo. Se salvi, l app si riallinea subito.',
-    `<div class="profile-section-banner">I campi marcati come parametri di calcolo cambiano direttamente imponibile, contributi, scadenziario e percentuali mostrate nell app.</div>
-    <div class="profile-field-grid">
-      ${renderProfileField('Coefficiente redditivita (%)', `${fmtPct(profile.coefficiente / 100)}`, {
-        key: 'coefficiente',
-        editable: true,
-        mode: 'number',
-        inputType: 'number',
-        min: 0,
-        max: 100,
-        step: '0.01',
-        calcParam: true,
-        info: 'Modifica la base imponibile forfettaria: reddito lordo = incassato x coefficiente.'
-      })}
-      ${renderProfileField('Aliquota imposta sostitutiva (%)', `${fmtPct(profile.impostaSostitutiva / 100)}`, {
-        key: 'impostaSostitutiva',
-        editable: true,
-        mode: 'number',
-        inputType: 'number',
-        min: 0,
-        max: 100,
-        step: '0.01',
-        calcParam: true,
-        info: 'Aliquota della sostitutiva applicata all imponibile fiscale forfettario.'
-      })}
-      ${renderProfileField('Gestione previdenziale', getInpsModeLabel(profile.inpsMode), {
-        key: 'inpsMode',
-        editable: true,
-        mode: 'select',
-        calcParam: true,
-        info: 'Cambia il modo in cui il motore calcola contributi fissi e variabili.',
-        options: [
-          { value: 'artigiani_commercianti', label: 'Artigiani / Commercianti' },
-          { value: 'gestione_separata', label: 'Gestione Separata' }
-        ]
-      })}
-      ${renderProfileField('Categoria INPS', getInpsCategoryLabel(profile.inpsCategoria), {
-        key: 'inpsCategoria',
-        editable: true,
-        mode: 'select',
-        calcParam: true,
-        info: 'Per artigiani/commercianti puo cambiare il fisso annuo e l aliquota ufficiale.',
-        options: [
-          { value: 'artigiano', label: 'Artigiano' },
-          { value: 'commerciante', label: 'Commerciante' }
-        ]
-      })}
-      ${renderProfileField('Parametri INPS', profile.usaInpsUfficiale === 1 ? 'Ufficiali per anno' : 'Manuali', {
-        key: 'usaInpsUfficiale',
-        editable: true,
-        mode: 'select',
-        calcParam: true,
-        info: 'Se attivo, minimale, fissi e aliquota vengono precompilati con i valori ufficiali dell anno selezionato.',
-        options: [
-          { value: '1', label: 'Usa parametri ufficiali' },
-          { value: '0', label: 'Mantieni inserimento manuale' }
-        ]
-      })}
-      ${renderProfileField('Riduzione contributiva 35%', 'Gestita anno per anno', {
-        info: 'Questo flag non e globale: si imposta nelle Impostazioni Annuali dell anno selezionato.',
-        copyValue: 'Riduzione contributiva 35%: parametro annuale',
-        meta: 'Parametro annuale'
-      })}
-      ${renderProfileField('Limite forfettario', fmt(profile.limiteForfettario), {
-        key: 'limiteForfettario',
-        editable: true,
-        mode: 'number',
-        inputType: 'number',
-        min: 0,
-        step: '0.01',
-        calcParam: true,
-        info: 'Parametro informativo usato per warning e controlli di superamento regime.'
-      })}
-      ${renderProfileField('Tasso INAIL', profile.inailTasso > 0 ? (profile.inailTasso + ' ‰') : 'Non configurato', {
-        key: 'inailTasso',
-        editable: true,
-        mode: 'number',
-        inputType: 'number',
-        min: 0,
-        step: '0.01',
-        calcParam: true,
-        info: 'Tasso di premio INAIL in per-mille (‰). Lo trovi sull\'autoliquidazione INAIL. Per artigiani IT tipicamente ~5,19 ‰.'
-      })}
-      ${renderProfileField('IBAN', profile.iban || '-', {
-        key: 'iban',
-        editable: true,
-        full: true,
-        info: 'Usato come default nella generazione PDF/XML della fattura.'
-      })}
-      ${renderProfileField('Modalita pagamento default', profile.modalitaPagamento || '-', {
-        key: 'modalitaPagamento',
-        editable: true,
-        full: true,
-        info: 'Usata come default nella fattura; resta modificabile prima di generare PDF o XML.'
-      })}
-      ${renderProfileField('Agevolazione start-up', profile.agevolazioneStartUp === 1 ? 'Attiva' : 'Non attiva', {
-        key: 'agevolazioneStartUp',
-        editable: true,
-        mode: 'select',
-        info: 'Campo informativo per futuri scenari con aliquota agevolata.',
-        options: [
-          { value: '0', label: 'No' },
-          { value: '1', label: 'Si' }
-        ]
-      })}
-      ${renderProfileField('Primo anno agevolato', profile.primoAnnoAgevolato === 1 ? 'Si' : 'No', {
-        key: 'primoAnnoAgevolato',
-        editable: true,
-        mode: 'select',
-        info: 'Serve a spiegare i warning del primo ciclo completo saldo + acconti.',
-        options: [
-          { value: '0', label: 'No' },
-          { value: '1', label: 'Si' }
-        ]
-      })}
-    </div>`
-  );
-  h += `</div>`;
-
-  h += `<aside class="profile-side-column">`;
-  h += renderProfileSection(
-    `Anno ${currentYear} in vista`,
-    'Questa colonna ti dice quali valori del profilo stanno guidando i calcoli dell anno selezionato.',
-    `<div class="profile-readout">
-      ${row('Regime corrente', currentRegimeLabel, 'highlight')}
-      ${row('Anno visualizzato', currentYear)}
-      ${row('Parametri INPS applicati', currentSettings.usaInpsUfficiale == 1 ? `Ufficiali ${currentResolved._officialInpsYear || currentYear}` : 'Manuali')}
-      ${row('Minimale INPS anno selezionato', fmt(currentResolved.minimaleInps || 0))}
-      ${row('Contributi fissi anno selezionato', fmt(currentResolved.contribFissi || 0))}
-      ${row('Aliquota contributiva anno selezionato', `${(parseFloat(currentResolved.aliqContributi) || 0).toFixed(2)}%`)}
-    </div>`,
-    'profile-section-rail'
-  );
-
-  if (official2025 && official2025.revenueTotal) {
-    h += renderProfileSection(
-      'Dati ufficiali e confronto',
-      'Confronto rapido tra i dati importati dal commercialista / Fiscozen e quanto e presente oggi nell app.',
-      `<div class="profile-compare-grid">
-        ${renderProfileHeroStat('Ricavi 2025 da bilancino', fmt(official2025.revenueTotal), 'neutral')}
-        ${renderProfileHeroStat('Ricavi 2025 presenti in app', fmt(local2025), Math.abs(delta2025) < 0.01 ? 'positive' : 'warning')}
-        ${renderProfileHeroStat('Delta attuale', fmt(delta2025), Math.abs(delta2025) < 0.01 ? 'positive' : 'warning')}
-      </div>
-      <div class="scad-note-list" style="margin-top:12px">
-        <div class="scad-note">${Math.abs(delta2025) < 0.01
-          ? 'I ricavi 2025 presenti nell app sono allineati al bilancino importato.'
-          : `Il bilancino 2025 del commercialista riporta ${fmt(official2025.revenueTotal)} mentre i dati fatture presenti in app sommano ${fmt(local2025)}. Finche non li riallineiamo, i confronti 2025 vs Fiscozen restano indicativi.`}</div>
-      </div>`,
-      'profile-section-rail'
-    );
-  } else {
-    h += renderProfileSection(
-      'Dati ufficiali e confronto',
-      'Quando sono disponibili bilancino o dati Fiscozen importati, li vedi qui come riferimento rapido.',
-      `<div class="scad-note-list"><div class="scad-note">Nessun prospetto esterno importato per questo profilo. Il pannello si aggiorna automaticamente quando carichi dati Fiscozen o bilancini locali.</div></div>`,
-      'profile-section-rail'
-    );
-  }
-
-  h += `<section class="profile-section profile-section-rail">
-    <div class="profile-section-head">
-      <h3>Storico sintetico</h3>
-      <p>Panoramica rapida dei regimi usati negli anni salvati per questo profilo.</p>
-    </div>
-    <div class="profile-history-list">`;
-  for (const item of history) {
-    h += `<div class="profile-history-item">
-      <div><b>${item.year}</b> - ${item.regime === 'forfettario' ? 'Forfettario' : 'Ordinario'}</div>
-      <div>${item.employeeIncome ? 'Anno misto con reddito dipendente.' : 'Nessun reddito dipendente segnalato.'}</div>
+  const profileFiscal = getProfileFiscalData();
+  const aliquotaEff = Number(s.impostaSostitutiva);
+  if (profileFiscal.agevolazioneStartUp === 1 && aliquotaEff > 5) {
+    h += `<div class="startup-warning-banner" role="alert" style="grid-column:1/-1">
+      <strong>Agevolazione start-up attiva ma aliquota al ${aliquotaEff}%</strong>
+      <p>Il flag "Agevolazione start-up" e attivo nel profilo, ma l imposta sostitutiva per il ${currentYear} e impostata al ${aliquotaEff}%. La normativa (L. 190/2014 art. 1 c. 65-bis) prevede il 5% per i primi 5 anni di attivita, al ricorrere dei requisiti. Verifica i requisiti e, se applicabile, imposta l aliquota al 5% nelle Impostazioni annuali.</p>
     </div>`;
   }
-  h += `</div></section>`;
-  h += `</aside>`;
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo${c.useRiduzione ? ' (riduzione 35%)' : ''}</h3>`;
+  h += drawDonut(netto, tasse, contrib);
   h += `</div>`;
+
+  h += buildForfettarioLimitBar(c.totale, s.limiteForfettario, currentYear);
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>In sintesi</h3>`;
+  h += row('Totale annuo lordo', fmt(c.totale), 'highlight');
+  h += row('Imposta sostitutiva', fmt(tasse), '', 'negative');
+  h += row(getContribLabel(c.inpsMode), fmt(contrib), '', 'negative');
+  h += row('Netto annuo', fmt(netto), 'highlight', 'positive');
+  h += row('Netto mensile', fmt(netto / 12), '', 'positive');
+  h += `<div class="scad-note" style="margin-top:10px">Vuoi capire come arriviamo a questi numeri? Apri <a href="#" onclick="switchToTab('riepilogo');return false;">Riepilogo</a> dal menu profilo.</div>`;
   h += `</div>`;
+
+  h += buildMonthlyTable(perc);
 
   el.innerHTML = h;
 }
 
-function renderCalcoloForfettario(h, el) {
+function renderRiepilogoForfettario(h, el) {
   const c = getForfettarioSourceOfTruthForYear(currentYear, { includeEstimates: true }) || getAppliedForfettarioForYear(currentYear, { includeEstimates: true });
   const s = S();
   const contrib = c.contribTotali;
@@ -3250,18 +3124,14 @@ function renderCalcoloForfettario(h, el) {
   const crossYear = getCrossYearInvoices();
   const contribLabel = getContribLabel(c.inpsMode);
 
-  h += `<div class="panel" style="grid-column:1/-1"><h3>Ripartizione del Lordo${c.useRiduzione ? ' (riduzione 35%)' : ''}</h3>`;
-  h += drawDonut(netto, tasse, contrib);
-  h += `</div>`;
-
-  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add lm-open-btn" type="button" onclick="openQuadroLMModal()">Genera Quadro LM</button></div>`;
+  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="openDichiarazione()">Apri Dichiarazione</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
   h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
   h += row('Totale annuo lordo', fmt(c.totale), 'highlight');
   if (crossYear.length > 0) {
     const crossTot = crossYear.reduce((s, i) => s + i.importo, 0);
-    h += `<div style="font-size:.78rem;color:var(--yellow);margin:6px 0">Include ${fmt(crossTot)} da fatture di anni precedenti incassate nel ${currentYear}</div>`;
+    h += `<div class="scad-note" style="margin:6px 0">Include ${fmt(crossTot)} da fatture di anni precedenti incassate nel ${currentYear}</div>`;
   }
   h += '<br>';
   h += row(`Imposta sostitutiva (${s.impostaSostitutiva}% su imponibile fiscale)`, fmt(tasse), '', 'negative');
@@ -3269,17 +3139,13 @@ function renderCalcoloForfettario(h, el) {
   h += '<br>';
   h += row('Netto annuo', fmt(netto), 'highlight', 'positive');
   h += row('Netto mensile', fmt(netto / 12), '', 'positive');
-  h += `<br><div style="font-size:.82rem;color:var(--text2)">% effettiva su base competenza: <b style="color:var(--accent)">${fmtPct(perc)}</b> &mdash; Netto/giorno: <b style="color:var(--green)">${fmt(s.dailyRate*(1-perc))}</b></div></div>`;
-
-  h += `<div class="panel"><h3>Due Prospettive di Costo</h3>`;
-  h += row('Tasse+contributi su base competenza', fmt(tasse + contrib), 'highlight', 'negative');
-  h += row('Percentuale su base competenza', fmtPct(perc));
+  h += `<br><div style="font-size:.82rem;color:var(--text2)">% effettiva (competenza): <b style="color:var(--accent)">${fmtPct(perc)}</b> &mdash; Netto/giorno: <b style="color:var(--green)">${fmt(s.dailyRate*(1-perc))}</b></div>`;
   if (cashPerspective) {
-    h += row(`Tasse+contributi su base cassa ${currentYear}-${currentYear + 1}`, fmt(cashPerspective.totalDue), '', 'negative');
-    h += row(`Percentuale su base cassa ${currentYear}-${currentYear + 1}`, fmtPct(cashPerspective.effectiveRate));
-    h += `<div class="scad-note-list" style="margin-top:10px">
-      <div class="scad-note">La vista di competenza guarda al dovuto fiscale del ${currentYear}. La vista di cassa somma le uscite reali del ciclo ${currentYear}-${currentYear + 1} (saldo + acconti + rate fisse collegate a quell anno).</div>
-    </div>`;
+    h += `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--color-border)">`;
+    h += row(`Tasse+contributi cassa ${currentYear}-${currentYear + 1}`, fmt(cashPerspective.totalDue), '', 'negative');
+    h += row(`% effettiva (cassa)`, fmtPct(cashPerspective.effectiveRate));
+    h += `<div class="scad-note" style="margin-top:8px">La competenza guarda al dovuto fiscale del ${currentYear}; la cassa somma le uscite reali del ciclo ${currentYear}-${currentYear + 1}.</div>`;
+    h += `</div>`;
   }
   h += `</div>`;
 
@@ -3292,10 +3158,10 @@ function renderCalcoloForfettario(h, el) {
     }
     h += `<div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-top:10px">`;
     h += selectedScenario.explanation.join(' ');
-    h += ` Metodo attivo: <b>${comparison.selectedMethod === 'previsionale' ? 'Previsionale' : 'Storico'}</b>.</div>`;
+    h += `</div>`;
     if (Math.abs(c.deductibleContributionsPaid - contrib) >= 0.01) {
-      h += `<div style="font-size:.78rem;color:var(--yellow);line-height:1.5;margin-top:8px">`;
-      h += `Per spiegare storico e previsionale mostro anche i contributi INPS deducibili pagati o pianificati nell'anno (${fmt(c.deductibleContributionsPaid)}). La percentuale effettiva principale resta pero calcolata su base competenza, in modo coerente tra anni aperti e anni chiusi.`;
+      h += `<div class="scad-note" style="margin-top:8px">`;
+      h += `Per spiegare storico e previsionale mostro anche i contributi INPS deducibili pagati o pianificati nell'anno (${fmt(c.deductibleContributionsPaid)}). La percentuale effettiva principale resta pero calcolata su base competenza.`;
       h += `</div>`;
     }
     h += `</div>`;
@@ -3323,9 +3189,9 @@ function renderCalcoloForfettario(h, el) {
 
   h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
-  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-border)">`;
   h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">${contribLabel} (sul ${s.coefficiente}%)</div>`;
-  if (c.useRiduzione) h += `<div style="font-size:.78rem;color:var(--yellow);margin-bottom:6px">Riduzione 35% attiva</div>`;
+  if (c.useRiduzione) h += `<div class="scad-note" style="margin-bottom:6px">Riduzione 35% attiva</div>`;
   if (c.inpsMode === 'gestione_separata') {
     h += row('Su imponibile', fmt(contrib), 'highlight');
   } else {
@@ -3339,9 +3205,26 @@ function renderCalcoloForfettario(h, el) {
   }
   h += `</div></div>`;
 
-  // Quick budget summary
-  h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
-  h += buildBudgetSummary();
+  el.innerHTML = h;
+}
+
+function renderCalcoloOrdinario(h, el) {
+  const c = calcOrdinario(), s = S();
+  const perc = c.perc;
+  const contribLabel = getContribLabel(c.inpsMode);
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>${c.spese > 0 ? "Ripartizione dell'Imponibile (Ordinario)" : 'Ripartizione del Lordo (Ordinario)'}</h3>`;
+  h += drawDonut(c.netto, c.con.tasse, c.cT, c.spese > 0 ? 'Imponibile' : 'Totale lordo');
+  h += `</div>`;
+
+  h += `<div class="panel" style="grid-column:1/-1"><h3>In sintesi</h3>`;
+  h += row('Totale annuo lordo', fmt(c.tot), 'highlight');
+  if (c.spese > 0) h += row('Imponibile', fmt(c.totSp), 'highlight');
+  h += row('IRPEF', fmt(c.con.tasse), '', 'negative');
+  h += row(contribLabel, fmt(c.cT), '', 'negative');
+  h += row('Netto annuo', fmt(c.netto), 'highlight', 'positive');
+  h += row('Netto mensile', fmt(c.netto / 12), '', 'positive');
+  h += `<div class="scad-note" style="margin-top:10px">Vuoi capire come arriviamo a questi numeri? Apri <a href="#" onclick="switchToTab('riepilogo');return false;">Riepilogo</a> dal menu profilo.</div>`;
   h += `</div>`;
 
   h += buildMonthlyTable(perc);
@@ -3349,7 +3232,7 @@ function renderCalcoloForfettario(h, el) {
   el.innerHTML = h;
 }
 
-function renderCalcoloOrdinario(h, el) {
+function renderRiepilogoOrdinario(h, el) {
   const c = calcOrdinario(), s = S();
   const perc = c.perc;
   const labels = getIrpefBracketLabelsForYear(currentYear);
@@ -3357,11 +3240,7 @@ function renderCalcoloOrdinario(h, el) {
   const contribLabel = getContribLabel(c.inpsMode);
   const speseStoriche = calcSpeseCarryoverTotalForYear(currentYear);
 
-  h += `<div class="panel" style="grid-column:1/-1"><h3>${c.spese > 0 ? "Ripartizione dell'Imponibile (Ordinario)" : 'Ripartizione del Lordo (Ordinario)'}</h3>`;
-  h += drawDonut(c.netto, c.con.tasse, c.cT, c.spese > 0 ? 'Imponibile' : 'Totale lordo');
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Riepilogo Annuale</h3>`;
+  h += `<div class="panel"><div class="panel-head"><h3>Riepilogo Annuale</h3><button class="btn-add" id="btn-open-dichiarazione" type="button" onclick="openDichiarazione()">Apri Dichiarazione</button></div>`;
   h += row('Giorni lavorati', getTotalWorkedDays());
   h += row('Paga giornaliera', fmt(s.dailyRate));
   h += row('Gestione INPS', getInpsModeLabel(c.inpsMode));
@@ -3392,7 +3271,7 @@ function renderCalcoloOrdinario(h, el) {
 
   h += `<div class="panel"><h3>Andamento Mensile &amp; Contributi</h3>`;
   h += drawMiniBars(perc);
-  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)">`;
+  h += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-border)">`;
   h += `<div style="font-size:.85rem;color:var(--accent);font-weight:600;margin-bottom:8px">${contribLabel}</div>`;
   if (c.inpsMode === 'gestione_separata') {
     h += row('Su imponibile', fmt(c.cT), 'highlight');
@@ -3404,42 +3283,16 @@ function renderCalcoloOrdinario(h, el) {
   h += row('Totale mensile', fmt(c.cT / 12));
   h += `</div></div>`;
 
-  // Quick budget summary
-  h += `<div class="panel"><h3>Riepilogo Budget</h3>`;
-  h += buildBudgetSummary();
-  h += `</div>`;
-
-  h += buildMonthlyTable(perc);
-
   el.innerHTML = h;
 }
 
-function buildBudgetSummary() {
-  const base = getBudgetNettoMensile();
-  const netM = base.netto;
+function renderRiepilogo() {
+  const el = document.getElementById('riepilogoGrid');
+  if (!el) return;
+  const regime = S().regime;
   let h = '';
-  h += row('Netto mensile' + (base.month ? ` (${MONTHS_SHORT[base.month-1]} ${base.year})` : ''), fmt(netM));
-  if (data.budget && data.budget.length > 0) {
-    // Compute auto amounts same as renderBudget
-    let totManual = 0, autoCount = 0;
-    for (const b of data.budget) {
-      if (b.auto && !(parseFloat(b.importo) > 0)) autoCount++;
-      else totManual += parseFloat(b.importo) || 0;
-    }
-    const autoAmount = autoCount > 0 && netM > totManual ? (netM - totManual) / autoCount : 0;
-    let totB = 0;
-    for (const b of data.budget) {
-      const isAuto = b.auto && !(parseFloat(b.importo) > 0);
-      const v = isAuto ? autoAmount : (parseFloat(b.importo) || 0);
-      totB += v;
-      if (v > 0) h += row((b.nome || 'Voce') + (isAuto ? ' (auto)' : ''), fmt(v));
-    }
-    const rimB = netM - totB;
-    h += row('Rimanente', fmt(rimB), 'highlight', rimB >= 0 ? 'positive' : 'negative');
-  } else {
-    h += `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">Nessuna voce budget. Vai alla tab Budget per configurare.</div>`;
-  }
-  return h;
+  if (regime === 'forfettario') renderRiepilogoForfettario(h, el);
+  else renderRiepilogoOrdinario(h, el);
 }
 
 function buildMonthlyTable(perc) {
@@ -3520,7 +3373,7 @@ function getFattureForAccantonamentoForYear(year) {
   // 2. Fatture emesse in questo anno e pagate in questo anno (o senza data pagamento = assunto nello stesso anno)
   for (let m = 1; m <= 12; m++) {
     let idx = 0;
-    for (const f of getFattureFromYearData(yearData, m)) {
+    for (const f of getFattureFromYearData(yearData, m, year)) {
       idx++;
       if (f.importo <= 0) continue;
       if (f.pagAnno && f.pagAnno !== year) continue; // deferred to another year
@@ -3656,14 +3509,6 @@ function removePagamento(year, idx) {
   recalcAll();
 }
 
-function getPaymentForScheduleKey(scheduleKey) {
-  if (!scheduleKey) return null;
-  for (const p of getPagamentiAcrossYears()) {
-    if (p.scheduleKey === scheduleKey) return p;
-  }
-  return null;
-}
-
 function getPaymentEventsForScheduleKey(scheduleKey) {
   if (!scheduleKey) return [];
   return getPagamentiAcrossYears()
@@ -3685,18 +3530,41 @@ function getPaymentEventsForScheduleKey(scheduleKey) {
     }));
 }
 
-function promptSchedulePaymentAmount(title, competence, fallbackAmount) {
-  const defaultValue = ceil2(fallbackAmount || 0).toFixed(2);
-  const input = prompt(`Importo pagato per "${title} - ${competence}":`, defaultValue);
-  if (input === null) return null;
-  const parsed = parseFloat(String(input).replace(',', '.'));
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return ceil2(parsed);
+let _qpayPending = null;
+
+function openQuickPayModal(scheduleKey, dueDate, kind, title, competence, amount) {
+  _qpayPending = { scheduleKey, dueDate, kind, title, competence };
+  const modal = document.getElementById('quickPayModal');
+  const titleEl = document.getElementById('qpayTitle');
+  const subEl = document.getElementById('qpaySub');
+  const input = document.getElementById('qpayAmount');
+  if (!modal || !input) return;
+  titleEl.textContent = title;
+  subEl.textContent = competence;
+  input.value = ceil2(amount || 0).toFixed(2);
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  requestAnimationFrame(() => input.select());
 }
 
-function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount) {
-  const parsed = promptSchedulePaymentAmount(title, competence, amount);
-  if (!parsed) return;
+function closeQuickPayModal() {
+  const modal = document.getElementById('quickPayModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  _qpayPending = null;
+}
+
+function confirmQuickPay() {
+  if (!_qpayPending) return;
+  const input = document.getElementById('qpayAmount');
+  const parsed = parseFloat(String(input ? input.value : '').replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    if (input) input.focus();
+    return;
+  }
+  const { scheduleKey, dueDate, kind, title, competence } = _qpayPending;
+  closeQuickPayModal();
   const targetYear = (parseIsoDate(dueDate) || {}).year || currentYear;
   const yearData = getYearDataFor(targetYear) || ensureDataShape({}, targetYear);
   if (!Array.isArray(yearData.pagamenti)) yearData.pagamenti = [];
@@ -3709,6 +3577,10 @@ function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence,
   });
   saveYearData(targetYear, yearData);
   recalcAll();
+}
+
+function addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount) {
+  openQuickPayModal(scheduleKey, dueDate, kind, title, competence, amount);
 }
 
 function removePagamentoByScheduleKey(scheduleKey) {
@@ -3725,20 +3597,8 @@ function removePagamentoByScheduleKey(scheduleKey) {
   recalcAll();
 }
 
-function registerPartialPayment(scheduleKey, dueDate, kind, title, competence, amount) {
-  addPagamentoFromSchedule(scheduleKey, dueDate, kind, title, competence, amount);
-}
-
 function reopenPaidScheduleItem(scheduleKey) {
   removePagamentoByScheduleKey(scheduleKey);
-}
-
-function editPaidScheduleItem(year, idx, patch) {
-  if (!patch || typeof patch !== 'object') return;
-  if (patch.amount !== undefined) setPagamentoImporto(year, idx, patch.amount);
-  if (patch.data !== undefined) setPagamentoField(year, idx, 'data', patch.data);
-  if (patch.tipo !== undefined) setPagamentoField(year, idx, 'tipo', patch.tipo);
-  if (patch.descrizione !== undefined) setPagamentoField(year, idx, 'descrizione', patch.descrizione);
 }
 
 function pad2(n) {
@@ -3859,9 +3719,9 @@ function renderPaymentDatePicker() {
   const dim = daysInMonth(state.viewYear, state.viewMonth);
   const today = new Date();
   let html = `<div class="payment-date-head">
-    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(-1)">&lsaquo;</button>
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(-1)" aria-label="Mese precedente">&lsaquo;</button>
     <div class="payment-date-title">${MONTHS[state.viewMonth - 1]} ${state.viewYear}</div>
-    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(1)">&rsaquo;</button>
+    <button type="button" class="payment-date-nav" onclick="shiftPaymentDatePicker(1)" aria-label="Mese successivo">&rsaquo;</button>
   </div>`;
   html += `<div class="payment-date-weekdays">${['L','M','M','G','V','S','D'].map(d => `<span>${d}</span>`).join('')}</div>`;
   html += `<div class="payment-date-grid">`;
@@ -3900,8 +3760,7 @@ function renderAccantonamento() {
   }
 
   h += `<table class="accant-table"><thead><tr>
-    <th>Fattura</th><th>Lordo</th><th>Aliq.</th><th>Da accant.</th><th>Accantonato</th>
-    <th>Delta</th><th>Dovuto cum.</th><th>Accant. cum.</th><th>Delta cum.</th>
+    <th>Fattura</th><th>Lordo</th><th>Da accant.</th><th>Accantonato</th><th>Delta cum.</th>
   </tr></thead><tbody>`;
 
   let cD = 0, cM = 0;
@@ -3917,24 +3776,23 @@ function renderAccantonamento() {
 
     const bgStyle = f.isCrossYear ? ' style="background:rgba(245,166,35,.06)"' : '';
     h += `<tr${bgStyle}>
-      <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? ' <span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
+      <td data-label="Fattura" style="text-align:left;font-size:.82rem">${f.label}${f.isCrossYear ? '<br><span style="color:var(--yellow);font-size:.7rem">(da ' + f.anno + ')</span>' : ''}</td>
       <td data-label="Lordo">${fmt(f.importo)}</td>
-      <td data-label="Aliq." style="color:var(--accent);font-size:.78rem">${fmtPct(f.rate)}</td>
       <td data-label="Da accant." style="color:var(--yellow)">${fmt(dovuto)}</td>
       <td data-label="Accantonato"><input type="number" value="${messo||''}" placeholder="0" step="0.01"
         onchange="data.accantonamento['${accKey}']=ceil2(parseFloat(this.value)||0);saveData();recalcAll()"></td>
-      <td data-label="Delta" class="${dm>=0?'delta-pos':'delta-neg'}">${(dm>=0?'+':'')+fmt(dm)}</td>
-      <td data-label="Dovuto cum." style="color:var(--yellow)">${fmt(cD)}</td>
-      <td data-label="Accant. cum.">${fmt(cM)}</td>
       <td data-label="Delta cum." class="${dc>=0?'delta-pos':'delta-neg'}" style="font-weight:600">${(dc>=0?'+':'')+fmt(dc)}</td></tr>`;
   }
 
   const totLordo = fatture.reduce((s, f) => s + f.importo, 0);
   const fd = ceil2(cM - cD);
-  h += `</tbody><tfoot><tr><td data-label="Fattura" style="text-align:left">Totale</td><td data-label="Lordo">${fmt(totLordo)}</td><td data-label="Aliq."></td>
-    <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td><td data-label="Accantonato">${fmt(cM)}</td>
-    <td data-label="Delta" class="${fd>=0?'delta-pos':'delta-neg'}">${(fd>=0?'+':'')+fmt(fd)}</td>
-    <td data-label="Dovuto cum."></td><td data-label="Accant. cum."></td><td data-label="Delta cum."></td></tr></tfoot></table>`;
+  h += `</tbody><tfoot><tr>
+    <td data-label="Fattura" style="text-align:left">Totale</td>
+    <td data-label="Lordo">${fmt(totLordo)}</td>
+    <td data-label="Da accant." style="color:var(--yellow)">${fmt(cD)}</td>
+    <td data-label="Accantonato">${fmt(cM)}</td>
+    <td data-label="Delta cum." class="${fd>=0?'delta-pos':'delta-neg'}" style="font-weight:700">${(fd>=0?'+':'')+fmt(fd)}</td>
+  </tr></tfoot></table>`;
 
   if (cM > 0 || cD > 0) {
     if (fd >= 0) {
@@ -3948,28 +3806,6 @@ function renderAccantonamento() {
     }
   }
   h += `</div>`;
-
-  // Bar chart - only fatture with data
-  const mdWithData = md.filter(d => d.dovuto > 0 || d.messo > 0);
-  if (mdWithData.length > 0) {
-    h += `<div class="panel" style="grid-column:1/-1"><h3>Confronto per Fattura</h3>`;
-    const mx = Math.max(...mdWithData.map(d => Math.max(d.dovuto, d.messo)), 1);
-    h += '<div class="bar-chart">';
-    for (const d of mdWithData) {
-      const wD = (d.dovuto/mx*100).toFixed(1), wM = (d.messo/mx*100).toFixed(1);
-      const shortLabel = MONTHS_SHORT[d.mese-1] + (d.isCrossYear ? '*' : '');
-      h += `<div class="bar-row"><div class="bar-label">${shortLabel}</div>
-        <div class="bar-track"><div class="bar-fill-dovuto" style="width:${wD}%"></div>
-        <div class="bar-fill-messo ${d.messo>=d.dovuto?'over':'under'}" style="width:${wM}%"></div></div>
-        <div style="width:80px;font-size:.75rem;color:${d.dm>=0?'var(--green)':'var(--red)'};text-align:right">
-          ${d.messo>0||d.dovuto>0?(d.dm>=0?'+':'')+fmt(d.dm):''}</div></div>`;
-    }
-    h += `<div style="display:flex;gap:16px;margin-top:10px;font-size:.75rem;color:var(--text2)">
-      <span><span style="display:inline-block;width:12px;height:12px;background:rgba(233,69,96,.4);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Dovuto</span>
-      <span><span style="display:inline-block;width:12px;height:12px;background:var(--green);border-radius:2px;vertical-align:middle;margin-right:4px"></span>OK</span>
-      <span><span style="display:inline-block;width:12px;height:12px;background:var(--yellow);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Sotto</span>
-    </div></div></div>`;
-  }
 
   // Cumulative chart
   if (md.length > 1) {
@@ -4125,7 +3961,7 @@ function buildPagamentiLedgerPanel(summary, options) {
         </select>
         <input type="text" value="${p.descrizione || ''}" placeholder="es. F24 giugno, saldo INPS..." onchange="setPagamentoField(${anno}, ${idx}, 'descrizione', this.value)">
         <input type="number" value="${p.importo || ''}" placeholder="0" step="0.01" onchange="setPagamentoImporto(${anno}, ${idx}, this.value)">
-        <button class="btn-del" title="Elimina pagamento${storicoLabel}" onclick="removePagamento(${anno}, ${idx})">&times;</button>
+        <button class="btn-del" title="Elimina pagamento${storicoLabel}" aria-label="Elimina pagamento${storicoLabel}" onclick="removePagamento(${anno}, ${idx})">&times;</button>
       </div>`;
     }
   }
@@ -4424,7 +4260,7 @@ function yearHasEstimates(year) {
   for (let month = 1; month <= 12; month++) {
     const amount = getMonthEuroFromYearData(yearData, year, month, { includeEstimates: true });
     if (amount <= 0) continue;
-    const hasFatture = getFattureFromYearData(yearData, month).some(f => f.importo > 0);
+    const hasFatture = getFattureFromYearData(yearData, month, year).some(f => f.importo > 0);
     if (!hasFatture) return true;
   }
   return false;
@@ -4443,7 +4279,7 @@ function getForfettarioProjectionRange(year, variancePct) {
   for (let month = 1; month <= 12; month++) {
     const amount = getMonthEuroFromYearData(yearData, year, month, { includeEstimates: true });
     if (amount <= 0) continue;
-    const hasFatture = getFattureFromYearData(yearData, month).some(f => f.importo > 0);
+    const hasFatture = getFattureFromYearData(yearData, month, year).some(f => f.importo > 0);
     baseGross += amount;
     if (hasFatture || pct <= 0) {
       lowGross += amount;
@@ -4525,6 +4361,19 @@ function buildForfettarioScheduleForYear(year) {
   const projectionRange = isClosedYear ? null : getForfettarioProjectionRange(year, scheduleSettings.scadenziarioRangePct);
   const prevHasEst = yearHasEstimates(year - 1);
 
+  // Override data saldo/1o acconto imposta (proroga AdE): se impostato, sposta le 4 scadenze
+  // del 30/06 relative a imposta sostitutiva (saldo + 1o acconto) e contributi variabili
+  // (saldo + 1o acconto). 2o acconto e INPS fissi non sono interessati.
+  const overrideRaw = (scheduleSettings.scadenziarioOverrideDataSaldoImposta || '').trim();
+  let overrideSaldoImposta = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(overrideRaw)) {
+    const [oy, om, od] = overrideRaw.split('-').map(n => parseInt(n, 10));
+    const odt = new Date(oy, om - 1, od);
+    if (odt.getFullYear() === oy && odt.getMonth() === om - 1 && odt.getDate() === od) {
+      overrideSaldoImposta = { year: oy, month: om, day: od };
+    }
+  }
+
   // Campi primo utilizzo: fallback manuale quando manca lo storico anno precedente
   const primoAnnoImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoImpostaPrec);
   const primoAnnoAccontiImpostaPrec = getOptionalAmountSetting(scheduleSettings.primoAnnoAccontiImpostaPrec);
@@ -4559,7 +4408,8 @@ function buildForfettarioScheduleForYear(year) {
       note: note || '',
       status: getScheduleStatus(due.date),
       key: opts.key || '',
-      certainty
+      certainty,
+      hint: opts.hint || ''
     });
   }
 
@@ -4597,6 +4447,9 @@ function buildForfettarioScheduleForYear(year) {
   if (manualSaldoImposta !== null || manualAccontoImposta !== null || manualSaldoContributi !== null || manualAccontoContributi !== null) {
     notes.push('Sono attivi uno o piu override manuali nello scadenziario: i relativi importi prevalgono sul calcolo automatico.');
   }
+  if (overrideSaldoImposta) {
+    notes.push(`Proroga applicata: saldo e 1o acconto spostati al ${overrideSaldoImposta.day.toString().padStart(2, '0')}/${overrideSaldoImposta.month.toString().padStart(2, '0')}/${overrideSaldoImposta.year}.`);
+  }
 
   const autoImpostaSaldo = prevApplied
     ? prevApplied.tasse - prevImpostaAccontiPaid
@@ -4606,8 +4459,8 @@ function buildForfettarioScheduleForYear(year) {
   const impostaSaldo = manualSaldoImposta !== null ? manualSaldoImposta : autoImpostaSaldo;
   if (impostaSaldo > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       'Imposta sostitutiva',
       `Saldo ${year - 1}`,
       impostaSaldo,
@@ -4616,7 +4469,7 @@ function buildForfettarioScheduleForYear(year) {
         : (firstYearManualUsed ? 'Manuale primo utilizzo'
           : (prevImpostaAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `imposta_saldo_${year - 1}`, certainty: manualSaldoImposta !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   } else if (manualSaldoImposta === null && autoImpostaSaldo < 0) {
     credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoImpostaSaldo), fiscalYear: year - 1 });
@@ -4636,8 +4489,8 @@ function buildForfettarioScheduleForYear(year) {
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
   if (impostaAcconti.first > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       'Imposta sostitutiva',
       `1o acconto ${year}`,
       impostaAcconti.first,
@@ -4648,7 +4501,7 @@ function buildForfettarioScheduleForYear(year) {
           ? `Previsionale ${forecastImposta.source === 'manual' ? 'manuale' : 'auto'}`
           : (prevApplied ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
-      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year }
+      { key: `imposta_acc1_${year}`, certainty: impostaAccCertainty, fiscalYear: year, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   }
   if (impostaAcconti.second > 0) {
@@ -4696,8 +4549,8 @@ function buildForfettarioScheduleForYear(year) {
   const contribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoContribSaldo;
   if (contribSaldo > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       prevForfettarioContribution ? prevForfettarioContribution.saldoLabel : getContribLabel(currentApplied.inpsMode),
       `Saldo ${year - 1}`,
       contribSaldo,
@@ -4706,7 +4559,7 @@ function buildForfettarioScheduleForYear(year) {
         : (firstYearManualUsed ? 'Manuale primo utilizzo'
           : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
       '',
-      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1 }
+      { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   } else if (manualSaldoContributi === null && autoContribSaldo < 0) {
     credits.push({ title: prevContribution ? prevContribution.saldoLabel : 'Contributi', competence: `Credito da saldo ${year - 1}`, amount: Math.abs(autoContribSaldo), fiscalYear: year - 1 });
@@ -4726,8 +4579,8 @@ function buildForfettarioScheduleForYear(year) {
     : (accontoMethod === 'previsionale' ? 'estimated' : (prevHasEst ? 'estimated' : 'fixed'));
   if (contribAcconti.first > 0) {
     pushDueRow(
-      FORFETTARIO_RULES.saldoMonth,
-      FORFETTARIO_RULES.saldoDay,
+      overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
+      overrideSaldoImposta ? overrideSaldoImposta.day : FORFETTARIO_RULES.saldoDay,
       prevForfettarioContribution ? prevForfettarioContribution.saldoLabel : getContribLabel(currentApplied.inpsMode),
       `1o acconto ${year}`,
       contribAcconti.first,
@@ -4738,7 +4591,7 @@ function buildForfettarioScheduleForYear(year) {
           ? `Previsionale ${forecastContributi.source === 'manual' ? 'manuale' : 'auto'}`
           : (prevForfettarioContribution ? `Storico ${year - 1}` : (firstYearManualUsed ? `Manuale primo utilizzo` : `Stima ${year}`))),
       '',
-      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year }
+      { key: `contributi_acc1_${year}`, certainty: contribAccCertainty, fiscalYear: year, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );
   }
   if (contribAcconti.second > 0) {
@@ -4761,6 +4614,9 @@ function buildForfettarioScheduleForYear(year) {
 
   const defaultCamera = getInpsMode(scheduleSettings) === 'artigiani_commercianti' ? 53 : 0;
   const cameraAmount = manualCamera !== null ? manualCamera : defaultCamera;
+  const cameraHint = (manualCamera === null && defaultCamera > 0)
+    ? 'Valore di default: 53 EUR (artigiani/commercianti). Sovrascrivi da Impostazioni se diverso.'
+    : '';
   if (cameraAmount > 0) {
     pushDueRow(
       FORFETTARIO_RULES.saldoMonth,
@@ -4771,12 +4627,12 @@ function buildForfettarioScheduleForYear(year) {
       'altro',
       manualCamera !== null ? 'Importo configurato' : 'Default artigiani/commercianti',
       '',
-      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year }
+      { key: `camera_${year}`, certainty: 'fixed', fiscalYear: year, hint: cameraHint }
     );
   }
   // Bollo fatture elettroniche: calcolo automatico per trimestre
   // Q4 anno precedente (scade feb anno corrente)
-  const prevYearBolloQ4 = calcBolloPerQuarter(getYearDataFor(year - 1))[3];
+  const prevYearBolloQ4 = calcBolloPerQuarter(getYearDataFor(year - 1), year - 1)[3];
   const bolloPrevQ4Amount = manualBolloPrevQ4 !== null ? manualBolloPrevQ4 : prevYearBolloQ4.amount;
   if (bolloPrevQ4Amount > 0) {
     pushDueRow(2, 28, 'Imposta di bollo fatture elettroniche', `4o trimestre ${year - 1}`, bolloPrevQ4Amount, 'altro',
@@ -4784,35 +4640,69 @@ function buildForfettarioScheduleForYear(year) {
       '', { dueYear: year, key: `bollo_q4prev_${year - 1}`, certainty: 'fixed', fiscalYear: year - 1 });
   }
   // Q1-Q4 anno corrente
-  const currentBolloQuarters = calcBolloPerQuarter(yearData);
+  const currentBolloQuarters = calcBolloPerQuarter(yearData, year);
+  // Q1-Q3 always auto-calculated, Q4 can be overridden manually
+  const bolloHasOverride = (qi) => qi === 3 ? manualBolloQ4 !== null : false;
+  const currentBolloConsolidated = applyBolloDifferimento(currentBolloQuarters, bolloHasOverride);
   for (let qi = 0; qi < 4; qi++) {
-    const q = currentBolloQuarters[qi];
-    // Q1-Q3 always auto-calculated, Q4 can be overridden manually
+    const q = currentBolloConsolidated[qi];
     const manualOverride = qi < 3 ? null : manualBolloQ4;
-    const autoAmount = q.amount;
-    const finalAmount = manualOverride !== null ? manualOverride : autoAmount;
-    if (finalAmount > 0) {
+    const baseAmount = manualOverride !== null ? manualOverride : q.finalAmount;
+    if (baseAmount > 0) {
       const dueYear = q.nextYear ? year + 1 : year;
+      let methodText;
+      if (manualOverride !== null) {
+        methodText = 'Importo configurato';
+      } else if (q.deferredFromLabels.length > 0) {
+        methodText = `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)} + differito da ${q.deferredFromLabels.join(', ')}`;
+      } else {
+        methodText = `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`;
+      }
       pushDueRow(q.dueMonth, q.dueDay, 'Imposta di bollo fatture elettroniche',
-        `${q.label} ${year}`, finalAmount, 'altro',
-        manualOverride !== null ? 'Importo configurato' : `${q.count} fatt. > ${fmt(BOLLO_SOGLIA)} × ${fmt(BOLLO_IMPORTO)}`,
+        `${q.label} ${year}`, baseAmount, 'altro',
+        methodText,
         '', { dueYear, key: `bollo_q${qi + 1}_${year}`, certainty: 'fixed', fiscalYear: year });
     }
+  }
+  const bolloDeferredCount = currentBolloConsolidated.filter(q => q.deferred).length;
+  if (bolloDeferredCount > 0) {
+    notes.push(`Bollo FE: ${bolloDeferredCount} trimestre/i sotto soglia ${fmt(BOLLO_DIFFERIMENTO_SOGLIA)} (L. 73/2022) accorpato/i alla scadenza successiva.`);
   }
   const profileInailTasso = parseFloat(getProfileFiscalData().inailTasso) || 0;
   const autoInailCurrent = profileInailTasso > 0 ? calcInailPremio(year, profileInailTasso) : 0;
   const autoInailNext = profileInailTasso > 0 ? calcInailPremio(year + 1, profileInailTasso) : 0;
   const inailCurrentAmount = manualInailCurrent !== null ? manualInailCurrent : autoInailCurrent;
   const inailNextAmount = manualInailNext !== null ? manualInailNext : autoInailNext;
+  const inailHintMissing = 'Imposta il tasso in Profilo P.IVA oppure override manuale in Impostazioni.';
+  const inailCurrentHint = (profileInailTasso === 0 && manualInailCurrent === null) ? inailHintMissing : '';
+  const inailNextHint = (profileInailTasso === 0 && manualInailNext === null) ? inailHintMissing : '';
   if (inailCurrentAmount > 0) {
     pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year}`, inailCurrentAmount, 'altro',
       manualInailCurrent !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year))}`,
-      '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year });
+      '', { dueYear: year, key: `inail_${year}`, certainty: 'fixed', fiscalYear: year, hint: inailCurrentHint });
+  } else if (inailCurrentHint) {
+    const dueCurrent = buildRolledDueDate(year, 2, 16);
+    rows.push({
+      due: dueCurrent, title: 'Autoliquidazione INAIL', competence: `Rif. ${year}`,
+      fiscalYear: year, amount: 0, low: 0, high: 0, kind: 'altro',
+      method: 'Tasso non impostato', note: '',
+      status: getScheduleStatus(dueCurrent.date), key: `inail_${year}`,
+      certainty: 'fixed', hint: inailCurrentHint
+    });
   }
   if (inailNextAmount > 0) {
     pushDueRow(2, 16, 'Autoliquidazione INAIL', `Rif. ${year + 1}`, inailNextAmount, 'altro',
       manualInailNext !== null ? 'Importo configurato' : `Calcolato: ${profileInailTasso.toFixed(2)} ‰ su ${fmt(getInailMinimale(year + 1))}`,
-      '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1 });
+      '', { key: `inail_${year + 1}`, certainty: 'fixed', fiscalYear: year + 1, hint: inailNextHint });
+  } else if (inailNextHint) {
+    const dueNext = buildRolledDueDate(year + 1, 2, 16);
+    rows.push({
+      due: dueNext, title: 'Autoliquidazione INAIL', competence: `Rif. ${year + 1}`,
+      fiscalYear: year + 1, amount: 0, low: 0, high: 0, kind: 'altro',
+      method: 'Tasso non impostato', note: '',
+      status: getScheduleStatus(dueNext.date), key: `inail_${year + 1}`,
+      certainty: 'fixed', hint: inailNextHint
+    });
   }
 
   const autoCurrentImpostaSaldo = currentApplied ? currentApplied.tasse - impostaAcconti.total : 0;
@@ -4910,68 +4800,6 @@ function buildHistoricalOrdinarySummaryForYear(year) {
   };
 }
 
-function buildMethodAccontiPanel(schedule, comparison) {
-  const engine = getTaxEngine();
-  const previousSettings = getYearDataFor(currentYear - 1);
-  const transition = engine ? engine.buildTransitionDiagnostics({
-    year: currentYear,
-    currentSettings: S(),
-    previousSettings: previousSettings ? previousSettings.settings : null
-  }) : null;
-  if (schedule.isClosedYear) {
-    return `<div class="panel"><h3>Metodo vista ${helpPill('Negli anni gia chiusi mostro un consuntivo di competenza. Storico e previsionale si usano solo per stimare anni ancora aperti.')}</h3>
-      <div class="scad-note-list">
-        <div class="scad-note">Per il ${currentYear} mostro un consuntivo di competenza: saldo ${currentYear} e voci collegate che possono scadere nel ${currentYear + 1}.</div>
-        ${transition && transition.isRegimeTransition ? `<div class="scad-note">Transizione ${transition.previousRegime} -> ${transition.currentRegime}: il confronto con l anno precedente va letto come storico prudenziale, non come base perfettamente rappresentativa del nuovo regime.</div>` : ''}
-      </div>
-    </div>`;
-  }
-
-  const transitionNotes = comparison && comparison.transition && comparison.transition.isRegimeTransition
-    ? `<div class="scad-note">Primo anno forfettario dopo ${comparison.transition.previousRegime}: lo storico e prudenziale ma puo sovrastimare la liquidita da mettere da parte.</div>`
-    : '';
-  return `<div class="panel"><h3>Metodo acconti ${helpPill('Storico = usa il dovuto dell anno precedente. Previsionale = usa una base stimata dell anno corrente. Il previsionale e utile solo se ti aspetti un calo importante o vuoi evitare sovra-acconti.')}</h3>
-    <div class="scad-note-list">
-      <div class="scad-note"><b>Storico</b>: calcola gli acconti del ${currentYear} partendo dal dovuto del ${currentYear - 1}. E il metodo piu prudente.</div>
-      <div class="scad-note"><b>Previsionale</b>: usa una base stimata del ${currentYear}. Ha senso solo se il reddito atteso cambia molto rispetto all anno prima.</div>
-      <div class="scad-note">Nel primo ciclo completo forfettario puoi vedere saldo + acconti piu alti del previsto: non e un errore, ma l effetto del primo anno in cui si chiude l anno precedente e si anticipa il successivo.</div>
-      ${transitionNotes}
-    </div>
-  </div>`;
-}
-
-function buildFiscozenComparisonPanel(schedule) {
-  const external = getExternalFiscalData();
-  const engine = getTaxEngine();
-  if (!engine || !external || !external.loaded || !external.futureEntries || external.futureEntries.length === 0) return '';
-  const matrix = engine.buildYearFamilyComparisonMatrix({
-    paid: external.paidEntries || [],
-    future: external.futureEntries || [],
-    schedule: buildScheduleComparisonRows(schedule.rows),
-    threshold: 50
-  }).filter(item => item.year === currentYear);
-  if (matrix.length === 0) return '';
-
-  let h = `<div class="panel"><h3>Confronto Fiscozen ${helpPill('Confronto automatico tra scadenze Fiscozen, pagamenti storici importati e scadenziario dell app per l anno di pagamento selezionato.')}</h3>`;
-  h += `<table class="mini-compare-table"><thead><tr><th>Voce</th><th>Pagato</th><th>Futuro</th><th>App</th><th>Delta</th></tr></thead><tbody>`;
-  for (const item of matrix) {
-    h += `<tr>
-      <td>${item.family}</td>
-      <td>${fmt(item.Fiscozen_paid)}</td>
-      <td>${fmt(item.Fiscozen_future)}</td>
-      <td>${fmt(item.App_schedule)}</td>
-      <td class="${item.flagged ? 'delta-neg' : 'delta-pos'}">${fmt(item.Delta)}</td>
-    </tr>`;
-  }
-  h += `</tbody></table>`;
-  const flagged = matrix.filter(item => item.flagged);
-  if (flagged.length > 0) {
-    h += `<div class="scad-note-list" style="margin-top:10px">${flagged.map(item => `<div class="scad-note">${item.family}: ${item.comment || 'delta oltre soglia'}</div>`).join('')}</div>`;
-  }
-  h += `</div>`;
-  return h;
-}
-
 const SCADENZIARIO_OVERRIDE_KEYS = [
   'scadenziarioPrevisionaleImposta',
   'scadenziarioPrevisionaleContributi',
@@ -4981,7 +4809,6 @@ const SCADENZIARIO_OVERRIDE_KEYS = [
   'scadenziarioAccontoContributi',
   'scadenziarioDirittoCamerale',
   'scadenziarioBolloPrecedenteQ4',
-  'scadenziarioBolloCorrente123',
   'scadenziarioBolloCorrenteQ4',
   'scadenziarioInailCorrente',
   'scadenziarioInailSuccessivo',
@@ -4999,11 +4826,6 @@ function setScadenziarioView(view) {
 
 function toggleScadenziarioHistoricalYears() {
   scadenziarioUiState.showHistoricalYears = !scadenziarioUiState.showHistoricalYears;
-  renderScadenziario();
-}
-
-function toggleScadenziarioEmptyYears() {
-  scadenziarioUiState.showEmptyYears = !scadenziarioUiState.showEmptyYears;
   renderScadenziario();
 }
 
@@ -5099,7 +4921,7 @@ function mapScheduleRowToScadenziario(rowItem, year) {
   const scadEngine = getScadenziarioEngine();
   const paymentEvents = rowItem && rowItem.key ? getPaymentEventsForScheduleKey(rowItem.key) : [];
   if (scadEngine && typeof scadEngine.normalizeLegacyScheduleRow === 'function') {
-    return scadEngine.normalizeLegacyScheduleRow(rowItem, {
+    const normalized = scadEngine.normalizeLegacyScheduleRow(rowItem, {
       year,
       paymentEvents,
       now: new Date(),
@@ -5124,10 +4946,13 @@ function mapScheduleRowToScadenziario(rowItem, year) {
       supportsPartialPayment: true,
       paymentMode: 'partial_allowed',
       note: rowItem && rowItem.note ? rowItem.note : '',
+      hint: rowItem && rowItem.hint ? rowItem.hint : '',
       warnings: [],
       due: rowItem && rowItem.due ? rowItem.due : null,
       legacyRow: rowItem
     });
+    if (rowItem && rowItem.hint && normalized && !normalized.hint) normalized.hint = rowItem.hint;
+    return normalized;
   }
   const mapped = {
     id: rowItem && rowItem.key ? rowItem.key : `sched_${year}_${Math.random().toString(36).slice(2, 8)}`,
@@ -5154,6 +4979,7 @@ function mapScheduleRowToScadenziario(rowItem, year) {
     paymentMode: 'partial_allowed',
     paymentEvents,
     note: rowItem && rowItem.note ? rowItem.note : '',
+    hint: rowItem && rowItem.hint ? rowItem.hint : '',
     warnings: [],
     due: rowItem && rowItem.due ? rowItem.due : null,
     legacyRow: rowItem
@@ -5426,16 +5252,16 @@ function getScadenziarioExplanation(row) {
   return '';
 }
 
-function renderScadenziarioPaymentEvents(row) {
+function renderScadenziarioPaymentEvents(row, extraActions) {
   if (!row) return '';
   const dueIso = row.dueDate || '';
   if (row.source !== 'calculated' || !row.scheduleKey) {
-    if (!row.paymentEvents || row.paymentEvents.length === 0) return `<div class="scad-sub">Nessun versamento registrato.</div>`;
+    if (!row.paymentEvents || row.paymentEvents.length === 0) return `<div class="scad-sub">Nessun versamento registrato.</div>${extraActions ? `<div class="scad-row-actions">${extraActions}</div>` : ''}`;
     return `<div class="scad-payment-history">${row.paymentEvents.map(event => `
       <div class="scad-payment-tag">
         <span>${event.paymentDate ? formatPaymentDateDisplay(event.paymentDate) : 'Storico'}</span>
         <b>${fmt(event.amount)}</b>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}</div>${extraActions ? `<div class="scad-row-actions">${extraActions}</div>` : ''}`;
   }
 
   const residual = row.paymentStatus ? Math.max(0, row.paymentStatus.residualAmount) : row.amountDue;
@@ -5444,6 +5270,7 @@ function renderScadenziarioPaymentEvents(row) {
       ${(row.paymentEvents || []).length > 0 ? 'Aggiungi quota' : 'Segna pagato'}
     </button>
     ${row.paymentEvents && row.paymentEvents.length > 0 ? `<button class="scad-link-btn" onclick="reopenPaidScheduleItem('${row.scheduleKey.replace(/'/g, "\\'")}')">Annulla tutto</button>` : ''}
+    ${extraActions || ''}
   </div>`;
 
   if (row.paymentEvents && row.paymentEvents.length > 0) {
@@ -5455,7 +5282,7 @@ function renderScadenziarioPaymentEvents(row) {
           <span class="payment-date-meta">Cassa ${event.cashYear}</span>
         </button>
         <input type="number" value="${event.amount || ''}" step="0.01" onchange="setPagamentoImporto(${event.anno}, ${event._idx}, this.value)">
-        <button class="btn-del" title="Elimina pagamento" onclick="removePagamento(${event.anno}, ${event._idx})">&times;</button>
+        <button class="btn-del" title="Elimina pagamento" aria-label="Elimina pagamento" onclick="removePagamento(${event.anno}, ${event._idx})">&times;</button>
       </div>`;
     }
     h += `</div>`;
@@ -5475,8 +5302,6 @@ function renderScadenziarioRowsTable(rows, options) {
     <th style="text-align:left">Voce</th>
     <th>Importo</th>
     <th>Versamenti</th>
-    <th>Stato</th>
-    <th>Timing</th>
   </tr></thead><tbody>`;
   for (const row of rows) {
     const timing = getScadenziarioTimingChip(row);
@@ -5488,33 +5313,35 @@ function renderScadenziarioRowsTable(rows, options) {
     const f24Key = row && row.source === 'calculated' ? getF24GuideKey(row) : null;
     const f24SafeId = 'f24guide_' + String(row && (row.scheduleKey || row.id || '')).replace(/[^a-zA-Z0-9_]/g, '_');
     const f24GuideHtml = f24Key ? renderF24Guide(f24Key, row) : '';
+    const f24Button = f24Key ? `<button class="f24-btn" onclick="toggleF24Guide('${String(row.scheduleKey || row.id || '').replace(/'/g, "\\'")}')">F24?</button>` : '';
     h += `<tr>
       <td data-label="Data">${row.due && row.due.label ? row.due.label : (row.dueDate ? formatPaymentDateDisplay(row.dueDate) : `Anno ${row.dueYear}`)}</td>
       <td data-label="Voce">
         <div class="scad-main">${row.title}</div>
+        <div class="scad-voce-chips">
+          <span class="scad-chip ${row.paymentStatus.tone}">${row.paymentStatus.label}</span>
+          <span class="scad-chip ${timing.cls}">${timing.label}</span>
+        </div>
         <div class="scad-sub">${row.competenceLabel || row.competence || `Competenza ${row.competenceYear}`}</div>
         ${explanation ? `<div class="scad-sub">${explanation}</div>` : ''}
         ${crossYearMeta}
+        ${row.hint ? `<div style="font-size:.72rem;color:var(--color-warning);margin-top:4px">⚠ ${escapeHtml(row.hint)}</div>` : ''}
       </td>
       <td data-label="Importo">
         <div>${fmt(row.amountDue)}</div>
         ${rangeHtml}
       </td>
-      <td data-label="Versamenti">${renderScadenziarioPaymentEvents(row)}${f24Key ? `<div class="scad-f24-inline"><button class="f24-btn" onclick="toggleF24Guide('${String(row.scheduleKey || row.id || '').replace(/'/g, "\\'")}')">F24?</button></div>` : ''}</td>
-      <td data-label="Stato"><span class="scad-chip ${row.paymentStatus.tone}">${row.paymentStatus.label}</span></td>
-      <td data-label="Timing"><span class="scad-chip ${timing.cls}">${timing.label}</span></td>
+      <td data-label="Versamenti">${renderScadenziarioPaymentEvents(row, f24Button)}</td>
     </tr>`;
     if (f24GuideHtml) {
-      h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="6">${f24GuideHtml}</td></tr>`;
+      h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="4">${f24GuideHtml}</td></tr>`;
     }
   }
   h += `</tbody><tfoot><tr>
     <td data-label="Data">Totale</td>
-    <td data-label="Voce">${opts.totalLabel || 'Totale sezione'}</td>
+    <td data-label="Voce">${opts.totalLabel || 'Totale sezione'}${totals.residualAmount > 0 ? '' : ' <span class="scad-chip ok">In pari</span>'}</td>
     <td data-label="Importo">${fmt(totals.amountDue)}</td>
-    <td data-label="Versamenti">${totals.amountPaid > 0 ? fmt(totals.amountPaid) : ''}</td>
-    <td data-label="Stato">${totals.residualAmount > 0 ? fmt(totals.residualAmount) : '<span class="scad-chip ok">In pari</span>'}</td>
-    <td data-label="Timing"></td>
+    <td data-label="Versamenti">${totals.amountPaid > 0 ? fmt(totals.amountPaid) : ''}${totals.residualAmount > 0 ? ` <span class="scad-sub">Residuo ${fmt(totals.residualAmount)}</span>` : ''}</td>
   </tr></tfoot></table>`;
   return h;
 }
@@ -5640,20 +5467,25 @@ function renderScadenziarioYearCard(meta) {
   };
   const badgeTone = meta.classification === 'forfettario' ? 'ok' : (meta.classification === 'misto' ? 'warn' : 'info');
   const isFullyPaid = split.open.length === 0 && split.archived.length > 0;
-  const defaultOpen = meta.isSelectedYear || (!isFullyPaid && split.open.length > 0);
+  const residuo = meta.totals.residualAmount || 0;
+  const residuoChip = isFullyPaid
+    ? '<span class="scad-chip ok">Tutto pagato</span>'
+    : (residuo > 0
+      ? `<span class="scad-chip warn">Residuo ${fmt(residuo)}</span>`
+      : `<span class="scad-chip info">Dovuto ${fmt(meta.totals.amountDue || 0)}</span>`);
+  const yearOpen = scadenziarioUiState.openYears && scadenziarioUiState.openYears.has(meta.year);
+  const archivedOpen = scadenziarioUiState.openArchived && scadenziarioUiState.openArchived.has(meta.year);
   let h = `<section class="panel scad-year-card ${meta.isSelectedYear ? 'is-current' : ''}">
-    <details class="scad-year-collapse" ${defaultOpen ? 'open' : ''}>
+    <details class="scad-year-collapse" data-year="${meta.year}"${yearOpen ? ' open' : ''} ontoggle="onScadenziarioYearToggle(this)">
       <summary class="scad-year-header" style="cursor:pointer;list-style:none">
-        <div>
-          <div class="scad-year-title">Anno ${meta.year}${isFullyPaid ? ' <span style="font-size:.7rem;color:var(--color-success);font-weight:500">— tutto pagato</span>' : ''}</div>
-          <div class="scad-year-sub">${meta.isTrailingSettlementYear
-            ? `Pagamenti nel ${meta.year} riferiti alla competenza ${meta.trailingSourceYear}`
-            : (meta.classification === 'forfettario' ? 'Vista principale per competenza fiscale' : 'Storico visibile su richiesta')}</div>
+        <div class="scad-year-header-main">
+          <div class="scad-year-title">Anno ${meta.year}</div>
+          <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
+          ${meta.isSelectedYear ? '<span class="scad-chip info">Selezionato</span>' : ''}
+          ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
         </div>
         <div class="scad-year-badges">
-          <span class="scad-chip ${badgeTone}">${meta.classification === 'forfettario' ? 'Forfettario' : (meta.classification === 'misto' ? 'Misto' : 'Ordinario')}</span>
-          ${meta.isSelectedYear ? '<span class="scad-chip info">Anno selezionato</span>' : ''}
-          ${meta.totals.crossYearCount > 0 ? `<span class="scad-chip warn">${meta.totals.crossYearCount} cross-year</span>` : ''}
+          ${residuoChip}
         </div>
       </summary>
       <div class="scad-year-stats">
@@ -5668,7 +5500,7 @@ function renderScadenziarioYearCard(meta) {
         ${renderScadenziarioRowsTable(split.open, { totalLabel: `Aperte ${meta.year}`, emptyLabel: 'Nessuna voce aperta per questo anno.' })}
       </div>
       <div class="scad-section">
-        <details class="scad-collapsible">
+        <details class="scad-collapsible" data-archived-year="${meta.year}"${archivedOpen ? ' open' : ''} ontoggle="onScadenziarioArchivedToggle(this)">
           <summary><span>Pagate / archiviate</span><span class="scad-collapsible-meta">${split.archived.length} voci</span></summary>
           <div class="scad-collapsible-body">
             ${renderScadenziarioRowsTable(split.archived, { totalLabel: `Pagate ${meta.year}`, emptyLabel: 'Nessuna voce completamente chiusa.' })}
@@ -5676,14 +5508,27 @@ function renderScadenziarioYearCard(meta) {
         </details>
       </div>`;
   if (meta.bundle && Array.isArray(meta.bundle.credits) && meta.bundle.credits.length > 0) {
-    h += `<div class="scad-section"><div class="scad-section-head"><h3>Crediti / eccedenze</h3><span>${meta.bundle.credits.length} voci</span></div>
-      <div class="scad-credit-list">${meta.bundle.credits.map(credit => `<div class="scad-credit-item">
-        <div><b>${credit.title}</b><div class="scad-sub">${credit.competence}</div></div>
-        <div class="scad-credit-value">${fmt(credit.amount)}</div>
-      </div>`).join('')}</div>
+    h += `<div class="scad-section">
+      <details class="scad-collapsible" open>
+        <summary><span>Crediti / eccedenze</span><span class="scad-collapsible-meta">${meta.bundle.credits.length} voci</span></summary>
+        <div class="scad-collapsible-body">
+          <div class="scad-credit-list">${meta.bundle.credits.map(credit => `<div class="scad-credit-item">
+            <div><b>${credit.title}</b><div class="scad-sub">${credit.competence}</div></div>
+            <div class="scad-credit-value">${fmt(credit.amount)}</div>
+          </div>`).join('')}</div>
+        </div>
+      </details>
     </div>`;
   }
-  h += `<div class="scad-section"><div class="scad-section-head"><h3>Note e warning</h3><span>${meta.classification}</span></div>${renderScadenziarioNotes(meta)}</div>`;
+  const notesHtml = renderScadenziarioNotes(meta);
+  if (notesHtml) {
+    h += `<div class="scad-section">
+      <details class="scad-collapsible" open>
+        <summary><span>Note e warning</span><span class="scad-collapsible-meta">${meta.classification}</span></summary>
+        <div class="scad-collapsible-body">${notesHtml}</div>
+      </details>
+    </div>`;
+  }
   h += `</details></section>`;
   return h;
 }
@@ -5788,9 +5633,33 @@ function renderScadenziarioCashView(metas) {
   return h;
 }
 
+function onScadenziarioYearToggle(el) {
+  if (!el) return;
+  const year = parseInt(el.getAttribute('data-year'), 10);
+  if (!Number.isFinite(year)) return;
+  if (!scadenziarioUiState.openYears) scadenziarioUiState.openYears = new Set();
+  if (el.open) scadenziarioUiState.openYears.add(year);
+  else scadenziarioUiState.openYears.delete(year);
+}
+function onScadenziarioArchivedToggle(el) {
+  if (!el) return;
+  const year = parseInt(el.getAttribute('data-archived-year'), 10);
+  if (!Number.isFinite(year)) return;
+  if (!scadenziarioUiState.openArchived) scadenziarioUiState.openArchived = new Set();
+  if (el.open) scadenziarioUiState.openArchived.add(year);
+  else scadenziarioUiState.openArchived.delete(year);
+}
+
 function renderScadenziario() {
   const el = document.getElementById('scadenziarioGrid');
   if (!el) return;
+  if (!scadenziarioUiState.openYears) scadenziarioUiState.openYears = new Set();
+  if (!scadenziarioUiState.openArchived) scadenziarioUiState.openArchived = new Set();
+  // First render: default-open the currently selected year so the user isn't greeted by fully-collapsed cards
+  if (!scadenziarioUiState._initialized) {
+    scadenziarioUiState.openYears.add(currentYear);
+    scadenziarioUiState._initialized = true;
+  }
   const allMetas = collectRelevantFiscalYears({
     includeHistoricalYears: true,
     includeEmptyYears: scadenziarioUiState.showEmptyYears
@@ -5812,358 +5681,10 @@ function renderScadenziario() {
   } else {
     nextHtml += displayedMetas.map(meta => renderScadenziarioYearCard(meta)).join('');
   }
+  nextHtml += `<div class="scad-pagamenti-wrap" style="grid-column:1/-1">${buildPagamentiSection({ embedded: true, compact: true })}</div>`;
   el.innerHTML = nextHtml;
-  return;
-
-  if (S().regime !== 'forfettario') {
-    const ordinaryHistory = buildHistoricalOrdinarySummaryForYear(currentYear);
-    if (ordinaryHistory && ordinaryHistory.entries.length > 0) {
-      let h = `<div class="panel" style="grid-column:1/-1"><h3>Storico ${currentYear}</h3>
-        <div style="font-size:.88rem;color:var(--text2);line-height:1.5">${ordinaryHistory.note}</div>
-        <div class="row highlight"><label>Totale pagamenti storici rilevati nel ${currentYear + 1}</label><div class="val">${fmt(ordinaryHistory.total)}</div></div>
-        <table class="scad-table"><thead><tr><th style="text-align:left">Data</th><th style="text-align:left">Voce</th><th>Importo</th></tr></thead><tbody>`;
-      for (const entry of ordinaryHistory.entries) {
-        const description = entry.isAggregateBundle
-          ? `F24 storico con ${entry.bundleCount} sottovoci: ${(entry.children || []).map(child => child.label).join(', ')}`
-          : (entry.label || entry.description || entry.family);
-        h += `<tr>
-          <td data-label="Data">${entry.dueDate || '—'}</td>
-          <td data-label="Voce"><div class="scad-main">${entry.label || 'Pagamento storico'}</div><div class="scad-sub">${description}</div></td>
-          <td data-label="Importo">${fmt(entry.paidAmount || entry.amount)}</td>
-        </tr>`;
-      }
-      h += `</tbody></table></div>`;
-      el.innerHTML = h;
-      return;
-    }
-    el.innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Scadenziario</h3>
-      <div style="font-size:.88rem;color:var(--text2);line-height:1.5">
-        Lo scadenziario automatico e disponibile solo per il regime forfettario. Per il ${currentYear} ordinario non ho ancora abbastanza storico importato per costruire il riepilogo del commercialista.</div>
-    </div>`;
-    return;
-  }
-
-  const schedule = buildForfettarioScheduleForYear(currentYear);
-  const totalDue = schedule.rows.reduce((sum, row) => sum + row.amount, 0);
-  const totalLow = schedule.rows.reduce((sum, row) => sum + row.low, 0);
-  const totalHigh = schedule.rows.reduce((sum, row) => sum + row.high, 0);
-  const hasRange = totalLow !== totalHigh;
-  const dueThisYear = schedule.rows.filter(row => row.due.year === currentYear).reduce((sum, row) => sum + row.amount, 0);
-  const remainingThisYear = schedule.rows.filter(row => row.due.year === currentYear && row.status.cls !== 'danger').reduce((sum, row) => sum + row.amount, 0);
-  const dueNextYear = schedule.rows.filter(row => row.due.year > currentYear).reduce((sum, row) => sum + row.amount, 0);
-  const overdueTotal = schedule.rows.filter(row => row.status.cls === 'danger').reduce((sum, row) => sum + row.amount, 0);
-  const nearTotal = schedule.rows.filter(row => row.status.cls === 'warn').reduce((sum, row) => sum + row.amount, 0);
-  const nextDue = schedule.rows.find(row => row.status.cls !== 'danger');
-  const creditsTotal = schedule.credits.reduce((sum, credit) => sum + credit.amount, 0);
-  const allPagamenti = getPagamenti();
-  const engine = getTaxEngine();
-  const comparison = buildForfettarioMethodComparisonForYear(currentYear, { includeEstimates: true });
-  const totalPaid = schedule.rows.reduce((sum, row) => {
-    if (!row.key) return sum;
-    const p = allPagamenti.find(p => p.scheduleKey === row.key);
-    return sum + (p ? p.importo : 0);
-  }, 0);
-  const residuoDaPagare = ceil2(totalDue - totalPaid);
-
-  let h = '';
-
-  // Banner primo utilizzo: mancano i dati anno precedente
-  if (schedule.transitionFromNonForfettario && !schedule.isClosedYear) {
-    h += `<div class="status-box ok" style="grid-column:1/-1;margin-bottom:8px"><div class="status-icon">&#9432;</div><div class="status-text">
-      Il ${currentYear - 1} era ${getYearDataFor(currentYear - 1)?.settings?.regime || 'non forfettario'}: per questo anno non genero acconti storici del forfettario sul ${currentYear}. Lo scadenziario parte da saldo e contributi del nuovo ciclo.
-    </div></div>`;
-  } else if (!schedule.prevApplied && !schedule.firstYearManualUsed && !schedule.isClosedYear) {
-    h += `<div class="status-box warn" style="grid-column:1/-1;margin-bottom:8px"><div class="status-icon">&#9888;</div><div class="status-text">
-      Non risultano dati dell'anno precedente. Compila i dati nella sezione &laquo;Opzioni avanzate &gt; Dati anno precedente&raquo; per calcoli piu precisi di saldo e acconti.
-    </div></div>`;
-  }
-
-  h += buildMethodAccontiPanel(schedule, comparison);
-
-  h += `<div class="panel"><h3>${schedule.isClosedYear ? 'Consuntivo' : 'Simulazione'}</h3>`;
-  if (schedule.isClosedYear) {
-    h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5">
-      Il ${currentYear} e un anno gia chiuso, quindi qui mostro il consuntivo. Le modalita storico e previsionale servono solo per anni ancora aperti, quando devi stimare gli acconti futuri.</div>`;
-  } else {
-    h += `<div class="settings-group">
-      <label>Metodo acconti</label>
-      <select onchange="saveTextSetting('scadenziarioMetodoAcconti', this.value); recalcAll()">
-        <option value="storico" ${schedule.accontoMethod === 'storico' ? 'selected' : ''}>Storico</option>
-        <option value="previsionale" ${schedule.accontoMethod === 'previsionale' ? 'selected' : ''}>Previsionale</option>
-      </select>
-    </div>`;
-  }
-  if (!schedule.isClosedYear && schedule.accontoMethod === 'previsionale') {
-    h += `<div class="settings-group">
-      <label>Base previsionale imposta sostitutiva (EUR)</label>
-      <input type="number" step="0.01" value="${S().scadenziarioPrevisionaleImposta}" placeholder="${fmt(schedule.currentApplied.tasse)}"
-        onchange="saveOptionalNumberSetting('scadenziarioPrevisionaleImposta', this.value); recalcAll()">
-      <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-        Lascia vuoto per usare la stima automatica del ${currentYear}: ${fmt(schedule.currentApplied.tasse)}.</div>
-    </div>`;
-    h += `<div class="settings-group">
-      <label>Base previsionale contributi (EUR)</label>
-      <input type="number" step="0.01" value="${S().scadenziarioPrevisionaleContributi}" placeholder="${fmt(schedule.forecastContributi.amount)}"
-        onchange="saveOptionalNumberSetting('scadenziarioPrevisionaleContributi', this.value); recalcAll()">
-      <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-        Per Artigiani/Commercianti indica solo la parte saldo/acconti variabile. Le rate fisse restano separate.</div>
-    </div>`;
-  } else if (!schedule.isClosedYear) {
-    h += `<div style="font-size:.82rem;color:var(--text2);line-height:1.5">
-      In modalita storico gli acconti si basano sui dovuti dell'anno precedente. Passa a previsionale solo quando vuoi confrontare o correggere la liquidita futura.</div>`;
-  }
-  h += `</div>`;
-
-  if (!schedule.isClosedYear && schedule.projectionRange && schedule.projectionRange.variancePct > 0 && schedule.projectionRange.estimatedGross > 0) {
-    h += `<div class="panel"><h3>Scenario Annuale</h3>`;
-    h += row('Lordo base stimato', fmt(schedule.projectionRange.baseGross), 'highlight');
-    h += row('Lordo possibile', `${fmt(schedule.projectionRange.lowGross)} - ${fmt(schedule.projectionRange.highGross)}`);
-    h += row('Tasse+contributi base', fmt(schedule.projectionRange.baseDue));
-    h += row('Tasse+contributi possibili', `${fmt(schedule.projectionRange.lowDue)} - ${fmt(schedule.projectionRange.highDue)}`, '', 'negative');
-    h += `<div style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-top:8px">
-      Il range si applica solo ai mesi ancora stimati (${fmt(schedule.projectionRange.estimatedGross)} di lordo), non alle fatture gia inserite o alle scadenze manuali.</div>`;
-    h += `</div>`;
-  }
-
-  if (comparison && !schedule.isClosedYear) {
-    h += `<div class="panel"><h3>Storico vs Previsionale</h3>`;
-    h += row('Metodo attivo', comparison.selectedMethod === 'previsionale' ? 'Previsionale' : 'Storico', 'highlight');
-    h += row('Metodo piu prudente', comparison.prudential.method === 'previsionale' ? 'Previsionale' : 'Storico');
-    h += row('Metodo piu leggero sulla liquidita', comparison.liquidity.method === 'previsionale' ? 'Previsionale' : 'Storico');
-    h += row('Acconti imposta storico', fmt(comparison.historical.taxAcconti.total), '', 'negative');
-    h += row('Acconti imposta previsionale', fmt(comparison.previsionale.taxAcconti.total), '', 'negative');
-    h += row('Contributi deducibili storico', fmt(comparison.historical.deductibleContributionsPaid));
-    h += row('Contributi deducibili previsionale', fmt(comparison.previsionale.deductibleContributionsPaid));
-    h += `</div>`;
-  }
-
-  h += buildFiscozenComparisonPanel(schedule);
-
-  h += buildPagamentiSection({ embedded: true, compact: true });
-
-  h += `<div class="panel"><h3>Riepilogo Scadenze</h3>`;
-  h += row(`Residuo da oggi al 31/12/${currentYear}`, fmt(remainingThisYear), 'highlight');
-  h += row(`Scadenze con data nel ${currentYear}`, fmt(dueThisYear));
-  if (dueNextYear > 0) h += row(`Scadenze con data nel ${currentYear + 1}`, fmt(dueNextYear));
-  h += row(`Totale competenza ${currentYear}`, fmt(totalDue) + (hasRange ? ` <span class="scad-range">(${fmt(totalLow)} – ${fmt(totalHigh)})</span>` : ''));
-  h += row('Gia pagato', fmt(totalPaid), '', totalPaid > 0 ? 'positive' : '');
-  h += row('Residuo da pagare', fmt(residuoDaPagare), 'highlight', residuoDaPagare > 0 ? 'negative' : 'positive');
-  h += row('Scaduto', fmt(overdueTotal), '', overdueTotal > 0 ? 'negative' : 'positive');
-  h += row('Entro 30 giorni', fmt(nearTotal), '', nearTotal > 0 ? 'negative' : '');
-  h += row('Gestione previdenziale', getInpsModeLabel(schedule.currentApplied.inpsMode));
-  h += row('Metodo vista', schedule.uiMethodLabel);
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Prossima Scadenza</h3>`;
-  if (nextDue) {
-    h += row('Data', nextDue.due.label, 'highlight');
-    h += row('Voce', nextDue.title);
-    h += row('Competenza', nextDue.competence);
-    const nextRange = (nextDue.low !== nextDue.high) ? ` <span class="scad-range">(${fmt(nextDue.low)} – ${fmt(nextDue.high)})</span>` : '';
-    h += row('Importo stimato', fmt(nextDue.amount) + nextRange, '', nextDue.status.cls === 'warn' ? 'negative' : '');
-  } else {
-    h += `<div style="font-size:.85rem;color:var(--text2)">Nessuna scadenza futura nell'orizzonte del ${currentYear}.</div>`;
-  }
-  h += `</div>`;
-
-  h += `<div class="panel"><h3>Metodo</h3><div class="scad-note-list">`;
-  h += schedule.notes.map(note => `<div class="scad-note">${note}</div>`).join('');
-  if (comparison && !schedule.isClosedYear) h += comparison.warnings.map(note => `<div class="scad-note">${note}</div>`).join('');
-  h += `<div class="scad-note">Usa "Segna pagato" per collegare un versamento effettuato a una scadenza. Il pagamento viene registrato anche nella sezione Versamenti registrati.</div>`;
-  h += `</div></div>`;
-
-  if (creditsTotal > 0) {
-    h += `<div class="panel"><h3>Crediti Stimati</h3>`;
-    h += row('Totale crediti stimati', fmt(creditsTotal), 'highlight', 'positive');
-    for (const credit of schedule.credits) h += row(`${credit.title} - ${credit.competence}`, fmt(credit.amount), '', 'positive');
-    h += `</div>`;
-  }
-
-  h += `<div class="panel" style="grid-column:1/-1"><h3>${schedule.uiTitle}</h3>`;
-  if (schedule.rows.length === 0) {
-    h += `<div style="font-size:.88rem;color:var(--text2);padding:18px 0;text-align:center">Nessuna scadenza stimata disponibile per il ${currentYear}.</div>`;
-  } else {
-    h += `<table class="scad-table"><thead><tr>
-      <th style="text-align:left">Data</th>
-      <th style="text-align:left">Voce</th>
-      <th>Metodo</th>
-      <th>Importo</th>
-      <th>Pagato</th>
-      <th>Stato</th>
-      <th>Timing</th>
-    </tr></thead><tbody>`;
-    for (const rowItem of schedule.rows) {
-      const rangeHtml = (rowItem.low !== rowItem.high)
-        ? `<div class="scad-range">(${fmt(rowItem.low)} – ${fmt(rowItem.high)})</div>` : '';
-      const linkedPay = rowItem.key ? allPagamenti.find(p => p.scheduleKey === rowItem.key) : null;
-      const paymentState = engine ? engine.buildInstallmentStatus(rowItem, linkedPay) : { label: rowItem.certainty === 'estimated' ? 'Stimato' : 'Da confermare', tone: rowItem.certainty === 'estimated' ? 'warn' : 'info' };
-      const explanation = engine ? engine.buildInstallmentExplanation(rowItem) : rowItem.note;
-      let pagatoHtml;
-      if (linkedPay) {
-        const delta = ceil2(linkedPay.importo - rowItem.amount);
-        const keyEsc = rowItem.key.replace(/'/g, "\\'");
-        pagatoHtml = `<span style="color:var(--green)">${fmt(linkedPay.importo)}</span>`;
-        if (delta !== 0) pagatoHtml += `<div class="scad-range">(${delta > 0 ? '+' : ''}${fmt(delta)})</div>`;
-        pagatoHtml += `<button class="scad-undo-btn" onclick="removePagamentoByScheduleKey('${keyEsc}')" title="Annulla pagamento">&times;</button>`;
-      } else if (rowItem.key) {
-        const escaped = rowItem.key.replace(/'/g, "\\'");
-        const dueIso = `${rowItem.due.year}-${pad2(rowItem.due.date.getMonth() + 1)}-${pad2(rowItem.due.date.getDate())}`;
-        pagatoHtml = `<button class="scad-pay-btn" onclick="addPagamentoFromSchedule('${escaped}','${dueIso}','${rowItem.kind}','${rowItem.title.replace(/'/g, "\\'")}','${rowItem.competence.replace(/'/g, "\\'")}',${rowItem.amount})">Segna</button>`;
-      } else {
-        pagatoHtml = '';
-      }
-      // Bottone guida F24
-      const f24Key = getF24GuideKey(rowItem.key);
-      const f24Btn = f24Key ? `<button class="f24-btn" onclick="toggleF24Guide('${rowItem.key.replace(/'/g, "\\'")}')">F24?</button>` : '';
-      const f24SafeId = 'f24guide_' + (rowItem.key || '').replace(/[^a-zA-Z0-9_]/g, '_');
-      const f24GuideHtml = f24Key ? renderF24Guide(f24Key, rowItem) : '';
-
-      h += `<tr>
-        <td data-label="Data">${rowItem.due.label}</td>
-        <td data-label="Voce">
-          <div class="scad-main">${rowItem.title}</div>
-          <div class="scad-sub">${rowItem.competence}${rowItem.note ? ' - ' + rowItem.note : ''}</div>
-          ${explanation ? `<div class="scad-sub">${explanation}</div>` : ''}
-        </td>
-        <td data-label="Metodo"><span class="scad-chip info">${rowItem.method}</span></td>
-        <td data-label="Importo" style="color:${rowItem.status.cls === 'danger' ? 'var(--red)' : 'var(--yellow)'}">${fmt(rowItem.amount)}${rangeHtml}</td>
-        <td data-label="Pagato">${pagatoHtml}${f24Btn}</td>
-        <td data-label="Stato"><span class="scad-chip ${paymentState.tone}">${paymentState.label}</span></td>
-        <td data-label="Timing"><span class="scad-chip ${rowItem.status.cls}">${rowItem.status.label}</span></td>
-      </tr>`;
-      if (f24GuideHtml) {
-        h += `<tr class="f24-guide-row" id="${f24SafeId}" style="display:none"><td colspan="7">${f24GuideHtml}</td></tr>`;
-      }
-    }
-    const footerRange = hasRange ? `<div class="scad-range">(${fmt(totalLow)} – ${fmt(totalHigh)})</div>` : '';
-    h += `</tbody><tfoot><tr>
-      <td data-label="Data">Totale</td>
-      <td data-label="Voce">${schedule.isClosedYear ? `Totale competenza ${currentYear}` : `Scadenze stimate ${currentYear}`}</td>
-      <td data-label="Metodo"></td>
-      <td data-label="Importo">${fmt(totalDue)}${footerRange}</td>
-      <td data-label="Pagato">${totalPaid > 0 ? `<span style="color:var(--green)">${fmt(totalPaid)}</span>` : ''}</td>
-      <td data-label="Stato"></td>
-      <td data-label="Timing"></td>
-    </tr></tfoot></table>`;
-  }
-  h += `</div>`;
-
-  h += `<div class="panel" style="grid-column:1/-1"><details class="scad-collapsible">
-    <summary><span>Opzioni avanzate</span><span class="scad-collapsible-meta">Override annuali e tributi extra</span></summary>
-    <div class="scad-collapsible-body">
-      <div class="scad-advanced-grid">
-        ${schedule.isClosedYear ? '' : `<div class="scad-advanced-block">
-          <h4>Simulazione</h4>
-          <div class="settings-group">
-            <label>Range sui mesi ancora stimati (%)</label>
-            <input type="number" step="0.1" min="0" value="${S().scadenziarioRangePct}" onchange="saveSetting('scadenziarioRangePct', this.value); recalcAll()">
-            <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-              Aggiunge un intervallo ai mesi non ancora coperti da fatture reali.
-            </div>
-          </div>
-        </div>`}
-        <div class="scad-advanced-block">
-          <h4>Allineamento manuale</h4>
-          <div class="settings-group">
-            <label>Saldo imposta sostitutiva anno precedente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioSaldoImposta}" placeholder="auto"
-              onchange="saveOptionalNumberSetting('scadenziarioSaldoImposta', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Totale acconti imposta anno corrente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioAccontoImposta}" placeholder="auto"
-              onchange="saveOptionalNumberSetting('scadenziarioAccontoImposta', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Saldo contributi anno precedente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioSaldoContributi}" placeholder="auto"
-              onchange="saveOptionalNumberSetting('scadenziarioSaldoContributi', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Totale acconti contributi anno corrente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioAccontoContributi}" placeholder="auto"
-              onchange="saveOptionalNumberSetting('scadenziarioAccontoContributi', this.value); recalcAll()">
-          </div>
-          <div style="font-size:.78rem;color:var(--text2);line-height:1.5">
-            Usali solo quando vuoi allineare il prospetto a un dato gia confermato da Fiscozen o commercialista.
-          </div>
-        </div>
-        <div class="scad-advanced-block">
-          <h4>Tributi extra</h4>
-          <div class="settings-group">
-            <label>Diritto annuale Camera di Commercio (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioDirittoCamerale}" placeholder="${getInpsMode(S()) === 'artigiani_commercianti' ? '53,00' : '0,00'}"
-              onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Override bollo FE 4o trimestre anno precedente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioBolloPrecedenteQ4}" placeholder="auto dalle fatture"
-              onchange="saveOptionalNumberSetting('scadenziarioBolloPrecedenteQ4', this.value); recalcAll()">
-            <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
-              Il bollo viene calcolato automaticamente dalle fatture (2€ per fattura > 77,47€). Inserisci solo per sovrascrivere.
-            </div>
-          </div>
-          <div class="settings-group">
-            <label>Override bollo FE 4o trimestre anno corrente (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioBolloCorrenteQ4}" placeholder="auto dalle fatture"
-              onchange="saveOptionalNumberSetting('scadenziarioBolloCorrenteQ4', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Autoliquidazione INAIL febbraio ${currentYear} (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioInailCorrente}" placeholder="es. 93,00"
-              onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
-            <div style="margin-top:4px;color:var(--text2);font-size:.72rem">Importo dall'autoliquidazione INAIL (tipicamente ~93 EUR per artigiani). Inserisci per vederlo nello scadenziario.</div>
-          </div>
-          <div class="settings-group">
-            <label>Autoliquidazione INAIL febbraio ${currentYear + 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().scadenziarioInailSuccessivo}" placeholder="es. 93,00"
-              onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
-          </div>
-        </div>
-        <div class="scad-advanced-block">
-          <h4>Dati anno precedente (primo utilizzo)</h4>
-          <div class="settings-group">
-            <label>Fatturato lordo ${currentYear - 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().primoAnnoFatturatoPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
-              onchange="saveOptionalNumberSetting('primoAnnoFatturatoPrec', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Imposta sostitutiva totale ${currentYear - 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().primoAnnoImpostaPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
-              onchange="saveOptionalNumberSetting('primoAnnoImpostaPrec', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Acconti imposta gia versati per il ${currentYear - 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().primoAnnoAccontiImpostaPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
-              onchange="saveOptionalNumberSetting('primoAnnoAccontiImpostaPrec', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Contributi variabili ${currentYear - 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().primoAnnoContribVariabiliPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
-              onchange="saveOptionalNumberSetting('primoAnnoContribVariabiliPrec', this.value); recalcAll()">
-          </div>
-          <div class="settings-group">
-            <label>Acconti contributi gia versati per il ${currentYear - 1} (EUR)</label>
-            <input type="number" step="0.01" value="${S().primoAnnoAccontiContribPrec}" placeholder="0,00"
-              ${schedule.prevApplied ? 'disabled' : ''}
-              onchange="saveOptionalNumberSetting('primoAnnoAccontiContribPrec', this.value); recalcAll()">
-          </div>
-          <div style="font-size:.78rem;color:var(--text2);line-height:1.5">
-            ${schedule.prevApplied
-              ? 'I dati dell\'anno precedente sono gia presenti nel sistema: questi campi sono disabilitati.'
-              : 'Compila questi campi solo se e il tuo primo anno di utilizzo del software e non hai lo storico dell\'anno precedente salvato.'}
-          </div>
-        </div>
-      </div>
-    </div>
-  </details></div>`;
-
-  el.innerHTML = h;
 }
+
 
 let pickerMonth = 0, pickerDay = 0;
 
@@ -6256,70 +5777,143 @@ function renderCalendar() {
 }
 
 // ═══════════════════ Render: Fatture ═══════════════════
+
+// Build one fattura table row (shared between single-row and multi-row month)
+function _renderFatturaRow(f, m, fi, nFatt, stim) {
+  const isFirst = fi === 0;
+  const isLast = fi === nFatt - 1;
+  const imp = f.importo || 0;
+  const hasPag = f.pagMese && f.pagAnno;
+  const isDiffYear = hasPag && f.pagAnno !== currentYear;
+  const isNC = f.tipoDocumento === 'TD04';
+  const isStornata = f.stato === 'stornata';
+  const isLegacy = f.origine === 'legacy-migrated' || !f.origine; // no origin = legacy store fallback
+  const hasId = !!f.id;
+
+  let rowClass = '';
+  if (isNC) rowClass += ' fatt-row-nc';
+  if (isStornata) rowClass += ' fatt-row-stornata';
+  if (!isLegacy && hasId) rowClass += ' fatt-row-readonly';
+
+  // Description: for legacy rows use f.desc; for others use first riga desc + cliente
+  const desc = f.desc || '';
+
+  // Import cell
+  let importoCell;
+  if (!isLegacy && hasId) {
+    // Read-only display for wizard / manuale / ocr-import rows
+    const impFormatted = fmt(Math.abs(imp));
+    importoCell = `<span class="fatt-input-importo" style="${isNC ? 'color:var(--color-error)' : ''}">${isNC ? '−' : ''}${impFormatted}</span>`;
+    if (isStornata && window.FattureSelectors) {
+      const fullFatt = window.FattureSelectors.all(currentProfile).find(x => x.id === f.id);
+      if (fullFatt) {
+        const netto = window.FattureSelectors.getNettoEffettivo(fullFatt);
+        importoCell += `<div class="fatt-row-stornata-netto">Netto eff.: ${fmt(netto)}</div>`;
+      }
+    }
+  } else {
+    const dispImp = isNC ? -Math.abs(imp) : imp;
+    importoCell = `<input type="number" value="${dispImp || ''}" placeholder="—"
+      onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" class="fatt-input-importo"
+      style="${isNC ? 'color:var(--color-error)' : ''}">`;
+  }
+
+  // Desc cell
+  let descCell;
+  if (!isLegacy && hasId) {
+    const ncPrefix = isNC ? 'NC — ' : '';
+    descCell = `<span class="fatt-input-desc" title="${escapeHtml ? escapeHtml(desc) : desc}">${ncPrefix}${desc || '—'}</span>`;
+  } else {
+    descCell = `<input type="text" value="${desc}" placeholder="—"
+      onchange="setFatturaDesc(${m},${fi},this.value)" class="fatt-input-desc">`;
+  }
+
+  // Payment cell
+  const pagCellDisabled = imp <= 0;
+  const pagCell = `<div class="pag-cell">
+    <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
+      <option value="">Mese...</option>
+      ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}" ${f.pagMese === (i+1) ? 'selected' : ''}>${ms}</option>`).join('')}
+    </select>
+    <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno || ''}" placeholder="${currentYear}" min="2020" max="2040"
+      onchange="setPagAnno(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
+    <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${pagCellDisabled ? 'disabled' : ''}>Oggi</button>
+    ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
+  </div>`;
+
+  // Actions cell
+  let actionsHtml = '';
+  if (isLast) actionsHtml += `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi" aria-label="Aggiungi fattura">+</button>`;
+  if (!isLegacy && hasId) {
+    actionsHtml += `<button class="btn-open-fatt" onclick="window.openFatturaModal && window.openFatturaModal('${f.id}')" title="Apri fattura">Apri</button>`;
+  } else if (nFatt > 1) {
+    actionsHtml += `<button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi" aria-label="Rimuovi fattura">&times;</button>`;
+  }
+
+  return `<tr class="${!isFirst ? 'fatt-subrow' : ''}${rowClass}">
+    <td data-label="Mese">${isFirst ? MONTHS[m-1] : ''}</td>
+    <td data-label="Importo">${importoCell}</td>
+    <td data-label="Desc">${descCell}</td>
+    <td data-label="Stimato" style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
+    <td data-label="Tassato nel">${pagCell}</td>
+    <td data-label="" class="fatt-actions">${actionsHtml}</td></tr>`;
+}
+
 function renderFatture() {
   const table = document.getElementById('fattureTable');
   if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+  // Banner warning hard-delete (modalità test)
+  const fattureTab = document.getElementById('tab-fatture');
+  if (fattureTab) {
+    const existing = fattureTab.querySelector('.fatture-banner-warning');
+    const active = (parseInt((data.settings || {}).devHardDelete, 10) || 0) === 1;
+    if (active && !existing) {
+      const banner = document.createElement('div');
+      banner.className = 'fatture-banner-warning';
+      banner.textContent = '\u26A0 Hard-delete attivo — modalità test';
+      const panel = fattureTab.querySelector('.panel');
+      if (panel) panel.insertBefore(banner, panel.firstChild);
+      else fattureTab.insertBefore(banner, fattureTab.firstChild);
+    } else if (!active && existing) {
+      existing.remove();
+    }
+  }
   let h = `<thead><tr><th>Mese</th><th>Importo</th><th>Desc</th><th>Stimato</th><th>Tassato nel</th><th></th></tr></thead><tbody>`;
   let tF = 0, tS = 0;
 
   for (let m = 1; m <= 12; m++) {
     const stim = getMonthStimato(m);
-    const fatture = getFatture(m);
+    const fatture = getFattureIssued(m);
     const nFatt = fatture.length;
-    const totalFatt = fatture.reduce((s, f) => s + f.importo, 0);
+    const totalFatt = fatture.reduce((s, f) => s + (f.importo || 0), 0);
     tF += totalFatt; tS += stim;
 
     if (nFatt <= 1) {
-      const f = fatture[0] || { importo: 0, pagMese: null, pagAnno: null, desc: '' };
-      const hasPag = f.pagMese && f.pagAnno;
-      const isDiffYear = hasPag && f.pagAnno !== currentYear;
-
-      h += `<tr><td data-label="Mese">${MONTHS[m-1]}</td>
-        <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
-          onchange="setFatturaImporto(${m},0,this.value);recalcAll()" class="fatt-input-importo"></td>
-        <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
-          onchange="setFatturaDesc(${m},0,this.value)" class="fatt-input-desc"></td>
-        <td data-label="Stimato" style="color:var(--text2)">${fmt(stim)}</td>
-        <td data-label="Tassato nel"><div class="pag-cell">
-          <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
-            <option value="">Mese...</option>
-            ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
-          </select>
-          <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-            onchange="setPagAnno(${m},0,this.value)" ${f.importo<=0?'disabled':''}>
-          <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
-          ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
-        </div></td>
-        <td data-label=""><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura">+</button></td></tr>`;
+      const f = fatture[0] || { importo: 0, pagMese: null, pagAnno: null, desc: '', origine: 'legacy-migrated' };
+      if (nFatt === 0) {
+        // No fattura: show empty editable row (legacy-compatible)
+        h += `<tr><td data-label="Mese">${MONTHS[m-1]}</td>
+          <td data-label="Importo"><input type="number" value="" placeholder="—"
+            onchange="setFatturaImporto(${m},0,this.value);recalcAll()" class="fatt-input-importo"></td>
+          <td data-label="Desc"><input type="text" value="" placeholder="—"
+            onchange="setFatturaDesc(${m},0,this.value)" class="fatt-input-desc"></td>
+          <td data-label="Stimato" style="color:var(--text2)">${fmt(stim)}</td>
+          <td data-label="Tassato nel"><div class="pag-cell">
+            <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" disabled>
+              <option value="">Mese...</option>
+              ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}">${ms}</option>`).join('')}
+            </select>
+            <input type="number" class="pag-anno fatt-input-anno" value="" placeholder="${currentYear}" min="2020" max="2040"
+              onchange="setPagAnno(${m},0,this.value)" disabled>
+            <button class="btn-oggi" onclick="setPagOggi(${m},0)" title="Oggi" disabled>Oggi</button>
+          </div></td>
+          <td data-label=""><button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi fattura" aria-label="Aggiungi fattura">+</button></td></tr>`;
+      } else {
+        h += _renderFatturaRow(f, m, 0, 1, stim);
+      }
     } else {
       for (let fi = 0; fi < nFatt; fi++) {
-        const f = fatture[fi];
-        const hasPag = f.pagMese && f.pagAnno;
-        const isDiffYear = hasPag && f.pagAnno !== currentYear;
-        const isFirst = fi === 0;
-        const isLast = fi === nFatt - 1;
-
-        h += `<tr class="${!isFirst?'fatt-subrow':''}">
-          <td data-label="Mese">${isFirst ? MONTHS[m-1] : ''}</td>
-          <td data-label="Importo"><input type="number" value="${f.importo||''}" placeholder="—"
-            onchange="setFatturaImporto(${m},${fi},this.value);recalcAll()" class="fatt-input-importo"></td>
-          <td data-label="Desc"><input type="text" value="${f.desc||''}" placeholder="—"
-            onchange="setFatturaDesc(${m},${fi},this.value)" class="fatt-input-desc"></td>
-          <td data-label="Stimato" style="color:var(--text2)">${isFirst ? fmt(stim) : ''}</td>
-          <td data-label="Tassato nel"><div class="pag-cell">
-            <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
-              <option value="">Mese...</option>
-              ${MONTHS_SHORT.map((ms,i) => `<option value="${i+1}" ${f.pagMese===(i+1)?'selected':''}>${ms}</option>`).join('')}
-            </select>
-            <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno||''}" placeholder="${currentYear}" min="2020" max="2040"
-              onchange="setPagAnno(${m},${fi},this.value)" ${f.importo<=0?'disabled':''}>
-            <button class="btn-oggi" onclick="setPagOggi(${m},${fi})" title="Oggi" ${f.importo<=0?'disabled':''}>Oggi</button>
-            ${isDiffYear ? `<span class="pag-warn">&rarr; ${f.pagAnno}</span>` : ''}
-          </div></td>
-          <td data-label="" class="fatt-actions">
-            ${isLast ? `<button class="btn-add-fatt" onclick="addFattura(${m})" title="Aggiungi">+</button>` : ''}
-            <button class="btn-del-fatt" onclick="removeFattura(${m},${fi})" title="Rimuovi">&times;</button>
-          </td></tr>`;
+        h += _renderFatturaRow(fatture[fi], m, fi, nFatt, stim);
       }
       h += `<tr class="fatt-total-row"><td data-label=""></td>
         <td data-label="" colspan="2" style="font-weight:600;font-size:.78rem;color:var(--accent)">Totale mese: ${fmt(totalFatt)}</td>
@@ -6343,10 +5937,10 @@ function renderFatture() {
         &mdash; Totale: <b>${fmt(crossTot)}</b></p></div></div>`;
   }
 
-  // Deferred invoices info
+  // Deferred invoices info (emesse nell'anno ma incassate in altro anno)
   const deferred = [];
   for (let m = 1; m <= 12; m++) {
-    for (const f of getFatture(m)) {
+    for (const f of getFattureIssued(m)) {
       if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
         deferred.push({ mese: m, importo: f.importo, pagAnno: f.pagAnno, desc: f.desc });
       }
@@ -6362,8 +5956,9 @@ function renderFatture() {
         &mdash; Totale: <b>${fmt(defTot)}</b></p></div></div>`;
   }
 
-  const crossTotAll = getCrossYearInvoices().reduce((s, i) => s + i.importo, 0);
-  const tFTotal = tF + crossTotAll; // include cross-year invoices in yearly total
+  // tF ora è la somma per mese di EMISSIONE (issuedMonth), quindi già rappresenta
+  // le fatture emesse nell'anno. Niente più somma con cross-year paid-in.
+  const tFTotal = tF;
   const lim = S().limiteForfettario, pct = lim > 0 ? Math.min(tFTotal/lim*100, 100) : 0;
   document.getElementById('incassoSection').innerHTML = crossHtml + `
     <div class="row" style="margin-top:16px"><label>Fatturato ${currentYear}</label><span class="val">${fmt(tFTotal)}</span></div>
@@ -6390,8 +5985,12 @@ function setPagAnno(month, idx, val) {
 }
 
 function setPagOggi(month, idx) {
-  const today = new Date();
-  setFatturaPagamento(month, idx, today.getMonth() + 1, today.getFullYear());
+  // "Oggi" = data emissione oggi; l'incasso stimato = oggi + giorniIncasso.
+  // Imposta pagMese/pagAnno sul mese/anno dell'incasso stimato.
+  const giorni = parseFloat(S().giorniIncasso) || 30;
+  const expected = new Date();
+  expected.setDate(expected.getDate() + giorni);
+  setFatturaPagamento(month, idx, expected.getMonth() + 1, expected.getFullYear());
   recalcAll();
 }
 
@@ -6400,14 +5999,37 @@ function setPagOggi(month, idx) {
 // Find all fatture across years for the current profile, sorted newest first
 function getAllFattureForBudget() {
   const results = [];
+
+  if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+    const all = window.FattureSelectors.all(currentProfile);
+    // Group by (pagAnno, pagMese) — only non-bozza with a pagamento date
+    const byKey = {};
+    for (const f of all) {
+      if (f.stato === 'bozza') continue;
+      const pa = Number(f.pagAnno);
+      const pm = Number(f.pagMese);
+      if (!pa || !pm) continue;
+      const key = pa + '_' + pm;
+      if (!byKey[key]) byKey[key] = { year: pa, month: pm, lordo: 0 };
+      byKey[key].lordo += window.FattureSelectors.getImportoSigned(f);
+    }
+    for (const key in byKey) {
+      const { year: y, month: mo, lordo } = byKey[key];
+      if (lordo <= 0) continue;
+      const rate = y === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(y);
+      results.push({ year: y, month: mo, lordo, netto: lordo * (1 - rate), rate });
+    }
+    results.sort((a, b) => b.year - a.year || b.month - a.month);
+    return results;
+  }
+
+  // Legacy fallback: iterate yearData.fatture across stored years
   const yearsToCheck = [];
   for (let y = currentYear + 1; y >= currentYear - 5; y--) yearsToCheck.push(y);
-
   for (const y of yearsToCheck) {
     const yd = y === currentYear ? data : loadYearData(y);
     if (!yd || !yd.fatture) continue;
     const rate = y === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(y);
-
     for (let m = 12; m >= 1; m--) {
       const raw = yd.fatture[m];
       if (!raw) continue;
@@ -6418,8 +6040,6 @@ function getAllFattureForBudget() {
       }
     }
   }
-
-  // Sort: newest first (year desc, month desc)
   results.sort((a, b) => b.year - a.year || b.month - a.month);
   return results;
 }
@@ -6429,23 +6049,29 @@ function getBudgetNettoMensile() {
   const baseM = data.budgetBaseMonth;
 
   if (baseY && baseM) {
-    // User selected a specific month
-    const yd = baseY === currentYear ? data : loadYearData(baseY);
-    if (yd && yd.fatture) {
-      const raw = yd.fatture[baseM];
-      const arr = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
-      const total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
-      if (total > 0) {
-        const rate = baseY === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(baseY);
-        return { netto: total * (1 - rate), lordo: total, rate, year: baseY, month: baseM, source: 'manual' };
+    // User selected a specific month — prefer selectors, then legacy
+    let total = 0;
+    if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+      const fatture = window.FattureSelectors.getByMonth(currentProfile, baseY, baseM);
+      total = fatture.reduce((s, f) => s + window.FattureSelectors.getImportoSigned(f), 0);
+    } else {
+      const yd = baseY === currentYear ? data : loadYearData(baseY);
+      if (yd && yd.fatture) {
+        const raw = yd.fatture[baseM];
+        const arr = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
+        total = arr.reduce((s, f) => s + (parseFloat(typeof f === 'number' ? f : f.importo) || 0), 0);
       }
+    }
+    if (total > 0) {
+      const rate = baseY === currentYear ? getEffectiveTaxRate() : getEffectiveTaxRateForYear(baseY);
+      return { netto: total * (1 - rate), lordo: total, rate, year: baseY, month: baseM, source: 'manual' };
     }
   }
 
   // Auto: find latest fattura
-  const all = getAllFattureForBudget();
-  if (all.length > 0) {
-    const latest = all[0];
+  const allFatture = getAllFattureForBudget();
+  if (allFatture.length > 0) {
+    const latest = allFatture[0];
     return { netto: latest.netto, lordo: latest.lordo, rate: latest.rate, year: latest.year, month: latest.month, source: 'auto' };
   }
 
@@ -6524,7 +6150,7 @@ function renderBudget() {
   h += `<div style="margin:16px 0 12px;font-size:.88rem;color:var(--text2)">
     Netto mensile: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
 
-  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
+  h += `<div class="budget-header"><span>Voce</span><span>Importo mensile (€)</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
 
   // Calculate auto-fill: items with auto=true and no manual importo get the remaining split equally
   let totManual = 0, autoCount = 0;
@@ -6544,13 +6170,13 @@ function renderBudget() {
     h += `<div class="budget-row budget-row-5">
       <input type="text" value="${b.nome||''}" placeholder="es. Affitto, Cibo..."
         onchange="data.budget[${i}].nome=this.value;saveData();renderBudget()">
-      <input type="number" value="${isAuto?'':val||''}" placeholder="${isAuto?fmt(autoAmount):'0'}" step="0.01"
+      <input type="number" value="${isAuto?'':val||''}" placeholder="${isAuto?(autoAmount?autoAmount.toFixed(2):'0'):'0'}" step="0.01"
         onchange="budgetSetImporto(${i},this.value)">
       <input type="number" value="${pct?pct.toFixed(1):''}" placeholder="%" step="0.1" min="0" max="100"
         onchange="budgetSetPercent(${i},this.value)" style="text-align:center">
       <label class="budget-auto-check"><input type="checkbox" ${b.auto?'checked':''}
         onchange="data.budget[${i}].auto=this.checked;if(this.checked)data.budget[${i}].importo=0;saveData();renderBudget()"></label>
-      <button class="btn-del" onclick="data.budget.splice(${i},1);saveData();renderBudget()">&times;</button>
+      <button class="btn-del" onclick="data.budget.splice(${i},1);saveData();renderBudget()" title="Rimuovi voce budget" aria-label="Rimuovi voce budget">&times;</button>
     </div>`;
   }
 
@@ -6593,18 +6219,18 @@ function renderBudget() {
       const { val, nome, isAuto } = budgetVals[i];
       if (val <= 0) continue;
       const pct = (val / nettoMensile * 100).toFixed(1);
-      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px">
+      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px;font-variant-numeric:tabular-nums">
         <span style="width:12px;height:12px;border-radius:3px;background:${colors[i%colors.length]}${isAuto?';opacity:.6':''};flex-shrink:0"></span>
         <span style="color:var(--text2)">${nome || 'Voce '+(i+1)}${isAuto?' (auto)':''}</span>
-        <span style="margin-left:auto;font-weight:600">${fmt(val)}</span>
-        <span style="color:var(--text2);font-size:.75rem">(${pct}%)</span></div>`;
+        <span style="margin-left:auto;font-weight:600;min-width:100px;text-align:right">${fmt(val)}</span>
+        <span style="color:var(--text2);font-size:.75rem;min-width:60px;text-align:right">(${pct}%)</span></div>`;
     }
     if (rimanente > 0) {
-      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px">
+      h += `<div style="display:flex;align-items:center;gap:8px;font-size:.8rem;margin-bottom:4px;font-variant-numeric:tabular-nums">
         <span style="width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,.15);flex-shrink:0"></span>
         <span style="color:var(--text2)">Rimanente</span>
-        <span style="margin-left:auto;font-weight:600;color:var(--green)">${fmt(rimanente)}</span>
-        <span style="color:var(--text2);font-size:.75rem">(${(rimanente/nettoMensile*100).toFixed(1)}%)</span></div>`;
+        <span style="margin-left:auto;font-weight:600;color:var(--green);min-width:100px;text-align:right">${fmt(rimanente)}</span>
+        <span style="color:var(--text2);font-size:.75rem;min-width:60px;text-align:right">(${(rimanente/nettoMensile*100).toFixed(1)}%)</span></div>`;
     }
     h += `</div>`;
   }
@@ -6616,68 +6242,24 @@ function renderBudget() {
 // ────────────────────────────────────────────────────────────────────────────────
 // Render: Clienti
 // ────────────────────────────────────────────────────────────────────────────────
-function renderClienteField(cliente, key, label, opts = {}) {
-  const full = opts.full ? ' cliente-field-full' : '';
-  const type = opts.type || 'text';
-  const value = cliente[key] ?? '';
-  const onChange = `updateClienteField(this.closest('.cliente-card').dataset.clientId, '${key}', this.value)`;
-  if (opts.type === 'textarea') {
-    return `<div class="cliente-field${full}">
-      <label>${label}</label>
-      <textarea onchange="${onChange}">${escapeHtml(value)}</textarea>
-    </div>`;
-  }
-  return `<div class="cliente-field${full}">
-    <label>${label}</label>
-    <input type="${type}" value="${escapeHtml(value)}" onchange="${onChange}">
+function renderClienteTableRow(cliente) {
+  const id = escapeHtml(cliente.id);
+  const nome = escapeHtml(cliente.nome || 'Senza nome');
+  const piva = escapeHtml(cliente.partitaIva || '—');
+  const citta = escapeHtml(cliente.citta || '—');
+  return `<div class="clienti-table-row" data-client-id="${id}" onclick="openClienteModal('${id}')">
+    <div class="nome">${nome}</div>
+    <div class="piva">${piva}</div>
+    <div class="citta">${citta}</div>
+    <div class="chevron" aria-hidden="true">&rsaquo;</div>
   </div>`;
-}
-
-function renderClienteCard(cliente) {
-  const summary = cliente.nome || 'Nuovo cliente';
-  const chips = [
-    cliente.partitaIva ? `P.IVA ${escapeHtml(cliente.partitaIva)}` : '',
-    cliente.codiceSDI ? `SDI ${escapeHtml(cliente.codiceSDI)}` : '',
-    cliente.pec ? 'PEC' : '',
-    cliente.nazione && cliente.nazione !== 'IT' ? escapeHtml(cliente.nazione) : 'IT'
-  ].filter(Boolean);
-  return `<details class="cliente-card" data-client-id="${escapeHtml(cliente.id)}">
-    <summary class="cliente-card-summary">
-      <div class="cliente-card-title">
-        <strong>${escapeHtml(summary)}</strong>
-        <span>${escapeHtml(cliente.codiceFiscale || cliente.indirizzo || 'Cliente salvato')}</span>
-      </div>
-      <div class="cliente-card-badges">
-        ${chips.map(chip => `<span class="cliente-chip">${chip}</span>`).join('')}
-      </div>
-    </summary>
-    <div class="cliente-card-body">
-      <div class="cliente-grid">
-        ${renderClienteField(cliente, 'nome', 'Nome / ragione sociale', { full: true })}
-        ${renderClienteField(cliente, 'partitaIva', 'Partita IVA')}
-        ${renderClienteField(cliente, 'codiceFiscale', 'Codice fiscale')}
-        ${renderClienteField(cliente, 'codiceSDI', 'Codice SDI')}
-        ${renderClienteField(cliente, 'pec', 'PEC', { full: true })}
-        ${renderClienteField(cliente, 'indirizzo', 'Indirizzo', { full: true })}
-        ${renderClienteField(cliente, 'cap', 'CAP')}
-        ${renderClienteField(cliente, 'citta', 'Città')}
-        ${renderClienteField(cliente, 'provincia', 'Provincia')}
-        ${renderClienteField(cliente, 'nazione', 'Nazione')}
-        ${renderClienteField(cliente, 'note', 'Note', { type: 'textarea', full: true })}
-      </div>
-      <div class="cliente-card-footer">
-        <div class="cliente-card-hint">Le modifiche vengono salvate automaticamente nel profilo corrente.</div>
-        <button class="btn-del cliente-delete-btn" type="button" onclick="deleteCliente(this.closest('.cliente-card').dataset.clientId)">Elimina</button>
-      </div>
-    </div>
-  </details>`;
 }
 
 function renderClienti() {
   const el = document.getElementById('clientiContent');
   if (!el) return;
   if (!currentProfile) {
-    el.innerHTML = `<div class="cliente-empty">Accedi per gestire l'anagrafica clienti.</div>`;
+    el.innerHTML = `<div class="clienti-empty">Accedi per gestire l'anagrafica clienti.</div>`;
     return;
   }
   const activeEl = document.activeElement;
@@ -6698,11 +6280,17 @@ function renderClienti() {
     </div>
   </div>`;
   if (filtered.length === 0) {
-    h += `<div class="cliente-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
+    h += `<div class="clienti-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
   } else {
-    h += `<div class="clienti-grid">`;
+    h += `<div class="clienti-table">`;
+    h += `<div class="clienti-table-header">
+      <div>Nome</div>
+      <div>P.IVA</div>
+      <div>Citta</div>
+      <div></div>
+    </div>`;
     for (const cliente of filtered) {
-      h += renderClienteCard(cliente);
+      h += renderClienteTableRow(cliente);
     }
     h += `</div>`;
   }
@@ -6740,7 +6328,7 @@ function renderSpese() {
       <input type="number" value="${sp.deducibilita||''}" step="0.01" min="0" max="1" placeholder="0-1" onchange="data.spese[${i}].deducibilita=this.value;saveData();recalcAll()">
       <input type="number" value="${sp.anni||1}" min="1" onchange="data.spese[${i}].anni=this.value;saveData();recalcAll()">
       <span style="font-size:.85rem;color:var(--green)">${fmt(annua)}</span>
-      <button class="btn-del" onclick="data.spese.splice(${i},1);saveData();recalcAll()">&times;</button>
+      <button class="btn-del" onclick="data.spese.splice(${i},1);saveData();recalcAll()" title="Rimuovi spesa" aria-label="Rimuovi spesa">&times;</button>
     </div>`;
   }
   h += `<button class="btn-add" onclick="data.spese.push({titolo:'',costo:0,deducibilita:1,anni:1});saveData();renderSpese()">+ Aggiungi spesa</button>`;
@@ -6764,6 +6352,7 @@ function renderSpese() {
 // ═══════════════════ Recalc All ═══════════════════
 function recalcAll() {
   renderCalcolo();
+  renderRiepilogo();
   renderCalendar();
   renderFatture();
   renderAccantonamento();
@@ -6771,26 +6360,59 @@ function recalcAll() {
   renderBudget();
   renderClienti();
   if (S().regime === 'ordinario') renderSpese();
-  renderProfiloFiscale();
-  if (quadroLMState.open) renderQuadroLMModal();
 }
 
 // ═══════════════════ Tab navigation ═══════════════════
 function switchToTab(tab) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sb-item[data-tab]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  const navBtn = document.querySelector(`nav button[data-tab="${tab}"]`);
+  const navBtn = document.querySelector(`.sb-item[data-tab="${tab}"]`);
   if (navBtn) navBtn.classList.add('active');
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.classList.add('active');
-  // highlight header settings btn when on settings tab
-  const sBtn = document.getElementById('settingsBtn');
-  if (sBtn) sBtn.classList.toggle('active', tab === 'settings');
+  try { localStorage.setItem('calcoliPIVA_activeTab', tab); } catch (_) {}
+  // mount Dichiarazione wizard when switching to that tab
+  if (tab === 'dichiarazione' && window.DichiarazioneUI) {
+    window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
+  }
+  // render card A (fatture emesse) when switching to fatture tab
+  // (lo storico ora vive nel modale, aperto on-demand)
+  if (tab === 'fatture') {
+    // Migrazione legacy one-shot per-anno (unificazione store)
+    if (window.FattureMigration && typeof window.FattureMigration.migrateLegacyYear === 'function') {
+      try {
+        for (let y = 2020; y <= new Date().getFullYear() + 1; y++) {
+          const yd = loadYearData(y);
+          if (yd && yd.fatture && !yd._fattureMigratedAt) {
+            const res = window.FattureMigration.migrateLegacyYear(currentProfile, y, yd);
+            if (res.migrated > 0) console.log('[fatture-migration] anno', y, '→', res.migrated, 'righe migrate');
+            yd._fattureMigratedAt = new Date().toISOString();
+            saveYearData(y, yd);
+          }
+        }
+      } catch (err) { console.warn('[fatture-migration] errore', err); }
+    }
+    if (typeof window.renderFattureDocsSection === 'function') {
+      window.renderFattureDocsSection();
+    }
+  }
+  if (tab === 'profilo-personale') renderProfiloPersonale();
+  else if (tab === 'profilo-piva') renderProfiloPiva();
+  else if (tab === 'riepilogo') renderRiepilogo();
+  // Chiudi drawer mobile dopo cambio tab
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    closeSidebar();
+  }
   window.scrollTo(0, 0);
 }
-document.getElementById('nav').addEventListener('click', e => {
-  if (e.target.tagName !== 'BUTTON') return;
-  switchToTab(e.target.dataset.tab);
+
+function openDichiarazione() {
+  switchToTab('dichiarazione');
+}
+document.querySelector('.sidebar')?.addEventListener('click', e => {
+  const btn = e.target.closest('.sb-item[data-tab]');
+  if (!btn) return;
+  switchToTab(btn.dataset.tab);
 });
 
 // ═══════════════════ Mobile nav labels ═══════════════════
@@ -6803,19 +6425,22 @@ const NAV_LABELS = {
   budget:         { full: 'Budget', short: 'Budget' },
   clienti:        { full: 'Clienti', short: 'Clienti' },
   spese:          { full: 'Spese', short: 'Spese' },
+  dichiarazione:  { full: 'Dichiarazione', short: 'Dichiar.' },
   settings:       { full: 'Impostazioni', short: 'Impost.' }
 };
 function updateNavLabels() {
-  const mobile = window.innerWidth <= 768;
-  document.querySelectorAll('nav button[data-tab]').forEach(btn => {
+  // Con la sidebar, l'etichetta sta dentro .sb-label (mantiene l'icona accanto)
+  document.querySelectorAll('.sb-item[data-tab]').forEach(btn => {
     const tab = btn.dataset.tab;
     const lbl = NAV_LABELS[tab];
     if (!lbl) return;
+    const labelEl = btn.querySelector('.sb-label');
+    if (!labelEl) return;
     if (tab === 'calcolo') {
       const regime = S().regime === 'forfettario' ? 'Forfettario' : 'Ordinario';
-      btn.textContent = mobile ? 'Regime' : 'Regime ' + regime;
+      labelEl.textContent = 'Regime ' + regime;
     } else {
-      btn.textContent = mobile ? lbl.short : lbl.full;
+      labelEl.textContent = lbl.full;
     }
   });
 }
@@ -6836,6 +6461,7 @@ function exportData() {
 }
 
 function importData(e) {
+  clearYearDataCache();
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
@@ -7068,10 +6694,295 @@ function seedPeruData() {
 
 // ═══════════════════ Init ═══════════════════
 document.getElementById('yearDisplay').textContent = currentYear;
-updateProfileBadge();
+updateProfileAvatar();
 if (checkSession()) {
   loadProfileFiscalData();
   loadData();
   recalcAll();
   loadProfileExternalFiscalData(currentProfile).then(() => recalcAll());
 }
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('profileMenu');
+  const btn = document.getElementById('profileAvatar');
+  if (!menu || menu.hidden) return;
+  if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+  closeProfileMenu();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  // Don't close the dropdown when ESC is meant for an open modal — let the modal's own handler win.
+  const ocrModal = document.getElementById('ocrPagamentoModal');
+  if (ocrModal && ocrModal.classList.contains('open')) return;
+
+  // 1) Profile menu dropdown aperto → chiudilo
+  const profileMenu = document.getElementById('profileMenu');
+  if (profileMenu && !profileMenu.hidden) {
+    closeProfileMenu();
+    return;
+  }
+
+  // 2) Drawer mobile aperto → chiudilo + restituisci focus a ☰
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    closeSidebar();
+    document.getElementById('navToggle')?.focus();
+    return;
+  }
+});
+
+// ═══════════════════ Profilo (C4) ═══════════════════
+
+function renderProfiloField(label, opts) {
+  const o = opts || {};
+  const ns = o.namespace || 'anagrafica';
+  const key = o.key || '';
+  const mode = o.mode || 'text';
+  const settings = S();
+  const source = ns === 'settings' ? settings : (settings[ns] || {});
+  const rawVal = source[key];
+  const isSelect = mode === 'select';
+  const displayValue = isSelect && Array.isArray(o.options)
+    ? ((o.options.find(op => String(op.value) === String(rawVal ?? ''))?.label) || (rawVal ?? '-'))
+    : (rawVal !== undefined && rawVal !== null && String(rawVal) !== '' ? rawVal : '-');
+  const fieldId = `pf-${ns}-${key}`;
+  const onclick = `enterProfiloEdit('${ns}','${key}','${mode}', this)`;
+  const optsAttr = o.options ? ` data-options='${escapeHtml(JSON.stringify(o.options))}'` : '';
+  return `<div class="profilo-row">
+    <span class="profilo-label">${escapeHtml(label)}</span>
+    <span class="profilo-value" id="${fieldId}" tabindex="0" role="button"
+          data-ns="${ns}" data-key="${key}" data-mode="${mode}"${optsAttr}
+          onclick="${onclick}"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();${onclick}}">${escapeHtml(String(displayValue))}</span>
+  </div>`;
+}
+
+function saveProfiloField(ns, key, value) {
+  if (ns === 'anagrafica') saveAnagraficaField(key, value);
+  else if (ns === 'attivita') saveAttivitaField(key, value);
+  else {
+    const trimmed = String(value ?? '').trim();
+    const isNumeric = trimmed !== '' && /^-?[\d.,]+$/.test(trimmed);
+    if (isNumeric) saveSetting(key, value);
+    else saveTextSetting(key, value);
+  }
+}
+
+function enterProfiloEdit(ns, key, mode, el) {
+  if (!el || el.classList.contains('editing')) return;
+  const settings = S();
+  const source = ns === 'settings' ? settings : (settings[ns] || {});
+  const current = source[key] ?? '';
+  el.classList.add('editing');
+  const finish = (newVal) => {
+    saveProfiloField(ns, key, newVal);
+    if (typeof recalcAll === 'function') recalcAll();
+    rerenderProfiloTabs();
+  };
+  let editorHtml;
+  if (mode === 'select') {
+    const opts = el.dataset.options ? JSON.parse(el.dataset.options) : [];
+    editorHtml = `<select>${opts.map(o =>
+      `<option value="${escapeHtml(String(o.value))}" ${String(o.value)===String(current)?'selected':''}>${escapeHtml(o.label)}</option>`
+    ).join('')}</select>`;
+  } else {
+    const inputType = mode === 'number' ? 'number' : 'text';
+    editorHtml = `<input type="${inputType}" value="${escapeHtml(String(current))}">`;
+  }
+  el.replaceChildren();
+  el.insertAdjacentHTML('afterbegin', editorHtml);
+  const field = el.firstElementChild;
+  field.focus();
+  if (field.tagName === 'INPUT') field.select();
+  if (mode === 'select') {
+    field.addEventListener('change', () => finish(field.value));
+    field.addEventListener('blur', () => finish(field.value));
+  } else {
+    field.addEventListener('blur', () => finish(field.value));
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); field.blur(); }
+      else if (e.key === 'Escape') { rerenderProfiloTabs(); }
+    });
+  }
+}
+
+function rerenderProfiloTabs() {
+  if (document.getElementById('tab-profilo-personale')?.classList.contains('active')) renderProfiloPersonale();
+  if (document.getElementById('tab-profilo-piva')?.classList.contains('active')) renderProfiloPiva();
+}
+
+function renderProfiloPersonale() {
+  const host = document.getElementById('profilo-personale-content');
+  if (!host) return;
+  const html = `
+    <div class="profilo-page">
+      <h2 class="profilo-title">Profilo personale</h2>
+      <p class="profilo-subtitle">Dati anagrafici e di fatturazione. Clicca un valore per modificarlo.</p>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Anagrafica</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Nome', { namespace: 'anagrafica', key: 'nome' })}
+          ${renderProfiloField('Cognome', { namespace: 'anagrafica', key: 'cognome' })}
+          ${renderProfiloField('Codice fiscale', { namespace: 'anagrafica', key: 'codiceFiscale' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Residenza</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Indirizzo', { namespace: 'anagrafica', key: 'residenzaVia' })}
+          ${renderProfiloField('CAP', { namespace: 'anagrafica', key: 'residenzaCap' })}
+          ${renderProfiloField('Citta', { namespace: 'anagrafica', key: 'residenzaComune' })}
+          ${renderProfiloField('Provincia', { namespace: 'anagrafica', key: 'residenzaProv' })}
+          ${renderProfiloField('Nazione', { namespace: 'anagrafica', key: 'nazione' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Fatturazione</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('IBAN', { namespace: 'anagrafica', key: 'iban' })}
+          ${renderProfiloField('Modalita pagamento', { namespace: 'anagrafica', key: 'modalitaPagamento' })}
+        </div>
+      </section>
+    </div>
+  `;
+  host.replaceChildren();
+  host.insertAdjacentHTML('afterbegin', html);
+}
+
+function renderProfiloPiva() {
+  const host = document.getElementById('profilo-piva-content');
+  if (!host) return;
+  const s = S();
+  const inpsMode = s.inpsMode || 'artigiani_commercianti';
+  const inpsModeOptions = [
+    { value: 'artigiani_commercianti', label: 'Artigiani / Commercianti' },
+    { value: 'gestione_separata', label: 'Gestione Separata' }
+  ];
+  const inpsCategoriaOptions = [
+    { value: 'artigiano', label: 'Artigiano' },
+    { value: 'commerciante', label: 'Commerciante' }
+  ];
+  const tipoGestSepOptions = [
+    { value: 'senza_altra_copertura', label: 'Senza altra copertura previdenziale' },
+    { value: 'con_altra_copertura', label: 'Con altra copertura previdenziale' }
+  ];
+  const agevolazioneOptions = [
+    { value: 0, label: 'No' }, { value: 1, label: 'Si' }
+  ];
+
+  let previdenzaRows = renderProfiloField('Gestione previdenziale', {
+    namespace: 'settings', key: 'inpsMode', mode: 'select', options: inpsModeOptions
+  });
+  if (inpsMode === 'artigiani_commercianti') {
+    previdenzaRows += renderProfiloField('Categoria INPS', {
+      namespace: 'settings', key: 'inpsCategoria', mode: 'select', options: inpsCategoriaOptions
+    });
+  } else if (inpsMode === 'gestione_separata') {
+    previdenzaRows += renderProfiloField('Tipologia Gestione Separata', {
+      namespace: 'settings', key: 'inpsTipoGestSep', mode: 'select', options: tipoGestSepOptions
+    });
+  }
+
+  const html = `
+    <div class="profilo-page">
+      <h2 class="profilo-title">Profilo P.IVA</h2>
+      <p class="profilo-subtitle">Dati fiscali dell'attivita. Clicca un valore per modificarlo.</p>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Attivita</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Partita IVA', { namespace: 'attivita', key: 'partitaIva' })}
+          ${renderProfiloField('Codice ATECO', { namespace: 'attivita', key: 'codiceAteco' })}
+          ${renderProfiloField('Descrizione attivita', { namespace: 'attivita', key: 'descrizioneAttivita' })}
+          ${renderProfiloField('Note', { namespace: 'attivita', key: 'note' })}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Previdenza</h3>
+        <div class="profilo-rows">
+          ${previdenzaRows}
+        </div>
+      </section>
+
+      <section class="profilo-group">
+        <h3 class="profilo-group-head">Agevolazioni</h3>
+        <div class="profilo-rows">
+          ${renderProfiloField('Agevolazione start-up', { namespace: 'attivita', key: 'agevolazioneStartUp', mode: 'select', options: agevolazioneOptions })}
+          ${renderProfiloField('Primo anno agevolato', { namespace: 'attivita', key: 'primoAnnoAgevolato', mode: 'select', options: agevolazioneOptions })}
+        </div>
+      </section>
+    </div>
+  `;
+  host.replaceChildren();
+  host.insertAdjacentHTML('afterbegin', html);
+}
+
+// ═══ App confirm modal ═══
+// Drop-in replacement for window.confirm(), DOM-based, themed.
+// Call styles:
+//   showAppConfirm(message, cb)                           → legacy: cb() only on confirm
+//   showAppConfirm({ title, message, okLabel, danger })   → returns Promise<boolean>
+function showAppConfirm(optsOrMsg, cbMaybe) {
+  let opts;
+  if (typeof optsOrMsg === 'string') { opts = { message: optsOrMsg }; }
+  else { opts = optsOrMsg || {}; }
+  const title = opts.title || 'Conferma';
+  const message = opts.message || '';
+  const okLabel = opts.okLabel || 'Conferma';
+  const cancelLabel = opts.cancelLabel || 'Annulla';
+  const danger = opts.danger !== false;
+
+  let root = document.getElementById('appConfirmBackdrop');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'appConfirmBackdrop';
+    root.className = 'app-confirm-backdrop';
+    root.innerHTML = '<div class="app-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="appConfirmTitle">' +
+      '<h3 id="appConfirmTitle" class="app-confirm-title"></h3>' +
+      '<p class="app-confirm-msg"></p>' +
+      '<div class="app-confirm-actions">' +
+        '<button type="button" class="btn-add profile-secondary-btn" data-role="cancel"></button>' +
+        '<button type="button" class="btn-add" data-role="ok"></button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(root);
+  }
+  const titleEl = root.querySelector('#appConfirmTitle');
+  const msgEl = root.querySelector('.app-confirm-msg');
+  const okBtn = root.querySelector('[data-role="ok"]');
+  const cancelBtn = root.querySelector('[data-role="cancel"]');
+  titleEl.textContent = title;
+  msgEl.textContent = message;
+  okBtn.textContent = okLabel;
+  cancelBtn.textContent = cancelLabel;
+  okBtn.classList.toggle('btn-add-danger', !!danger);
+
+  return new Promise(resolve => {
+    function cleanup(value) {
+      root.classList.remove('open');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      root.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      if (typeof cbMaybe === 'function' && value) cbMaybe();
+      resolve(value);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') cleanup(false);
+      else if (e.key === 'Enter') cleanup(true);
+    }
+    okBtn.onclick = () => cleanup(true);
+    cancelBtn.onclick = () => cleanup(false);
+    root.onclick = (e) => { if (e.target === root) cleanup(false); };
+    document.addEventListener('keydown', onKey);
+    root.classList.add('open');
+    setTimeout(() => okBtn.focus(), 0);
+  });
+}
+window.showAppConfirm = showAppConfirm;
+window.getAppData = function() { return data; };

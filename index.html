@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Calcoli P.IVA</title>
+<title>Lira — Partita IVA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%235DAA8A'/><text x='50%25' y='54%25' font-family='Satoshi,Inter,sans-serif' font-size='20' font-weight='700' fill='%2315110D' text-anchor='middle' dominant-baseline='middle'>%E2%82%AC</text></svg>">
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -20,7 +22,8 @@
 
 <div id="loginScreen" class="login-overlay">
   <div class="login-box">
-    <h2>Calcoli P.IVA</h2>
+    <h2>Lira</h2>
+    <p class="login-tagline">Per la tua Partita IVA</p>
     <p>Inserisci la password per accedere</p>
     <input type="password" id="loginPassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">Entra</button>
@@ -28,42 +31,150 @@
   </div>
 </div>
 
-<header>
-  <div class="header-brand">
-    <h1>Calcoli Partita IVA</h1>
-    <button id="profileBadge" class="profile-trigger" type="button" onclick="openProfileFiscalModal()" aria-haspopup="dialog" aria-controls="profileFiscalModal" title="Apri il profilo fiscale">
-      <span class="profile-trigger-kicker">Profilo fiscale</span>
-      <span id="profileBadgeName" class="profile-trigger-name"></span>
-    </button>
-  </div>
-  <div class="header-right">
-    <div id="syncStatus" class="sync-indicator"></div>
-    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()" title="Cambia tema">&#9790;</button>
-    <button id="logoutBtn" class="logout-btn" onclick="doLogout()">Logout</button>
-    <button id="settingsBtn" class="settings-header-btn" onclick="switchToTab('settings')" title="Impostazioni">&#9881;</button>
-    <div class="year-selector">
-    <button onclick="changeYear(-1)">&lt;</button>
-    <span id="yearDisplay">2026</span>
-    <button onclick="changeYear(1)">&gt;</button>
-    </div>
-  </div>
-</header>
+<!-- ═══ Topbar mobile (visibile solo ≤768px) ═══ -->
+<div class="mobile-topbar" role="banner">
+  <button id="navToggle" class="nav-toggle" type="button"
+          aria-label="Apri menu" aria-controls="sidebar" aria-expanded="false"
+          onclick="toggleSidebar()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+  </button>
+  <div class="mobile-topbar-title">Lira</div>
+  <span id="syncStatusMobile" class="sync-indicator sync-indicator-mobile"></span>
+</div>
 
-<nav id="nav">
-  <button class="active" data-tab="calcolo">Regime Forfettario</button>
-  <button data-tab="accantonamento">Tasse Accantonate</button>
-  <button data-tab="scadenziario">Scadenziario</button>
-  <button data-tab="calendar">Calendario</button>
-  <button data-tab="fatture">Fatture</button>
-  <button data-tab="budget">Budget</button>
-  <button data-tab="clienti">Clienti</button>
-  <button data-tab="spese" style="display:none">Spese</button>
-  <button data-tab="settings">Impostazioni</button>
-</nav>
+<!-- ═══ Sidebar (permanente su desktop, drawer su mobile) ═══ -->
+<aside id="sidebar" class="sidebar" aria-label="Navigazione principale">
+  <div class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+  <div class="sidebar-panel">
+
+    <div class="sb-brand">
+      <div class="sb-logo" aria-hidden="true">€</div>
+      <div class="sb-brand-text">
+        <div class="sb-brand-name">Lira</div>
+        <div class="sb-brand-sub">
+          <span id="syncStatus" class="sync-indicator"></span>
+        </div>
+      </div>
+      <span class="year-selector sb-year">
+        <button onclick="changeYear(-1)" title="Anno precedente" aria-label="Anno precedente">&lt;</button>
+        <span id="yearDisplay" aria-live="polite">2026</span>
+        <button onclick="changeYear(1)" title="Anno successivo" aria-label="Anno successivo">&gt;</button>
+      </span>
+      <button class="nav-close" type="button" aria-label="Chiudi menu" onclick="closeSidebar()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+
+    <nav class="sb-nav" id="nav" role="navigation">
+      <div class="sb-section-label">Principale</div>
+      <button class="sb-item active" data-tab="calcolo" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sb-label">Regime Forfettario</span>
+      </button>
+      <button class="sb-item" data-tab="accantonamento" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 11h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Tasse Accantonate</span>
+      </button>
+      <button class="sb-item" data-tab="scadenziario" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 3v4M16 3v4M3 11h18M9 16l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Scadenziario</span>
+      </button>
+      <button class="sb-item" data-tab="calendar" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 3v4M16 3v4M3 11h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="sb-label">Calendario</span>
+      </button>
+
+      <div class="sb-section-label">Documenti</div>
+      <button class="sb-item" data-tab="fatture" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z M14 3v5h5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/></svg></span>
+        <span class="sb-label">Fatture</span>
+      </button>
+      <button class="sb-item" data-tab="budget" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3 3 0 100 6h5a3 3 0 110 6H6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Budget</span>
+      </button>
+      <button class="sb-item" data-tab="clienti" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M2 21a7 7 0 0114 0M17 11a3 3 0 100-6M22 21a6 6 0 00-4-5.7" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Clienti</span>
+      </button>
+      <button class="sb-item" data-tab="spese" type="button" style="display:none">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z M4 9h16" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></span>
+        <span class="sb-label">Spese</span>
+      </button>
+      <button class="sb-item" data-tab="dichiarazione" type="button">
+        <span class="sb-ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z M9 12h7M9 16h7M9 8h3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="sb-label">Dichiarazione</span>
+      </button>
+
+      <button class="sb-item" data-tab="profilo-personale" type="button" style="display:none">
+        <span class="sb-label">Profilo personale</span>
+      </button>
+      <button class="sb-item" data-tab="profilo-piva" type="button" style="display:none">
+        <span class="sb-label">Profilo P.IVA</span>
+      </button>
+      <button class="sb-item" data-tab="settings" type="button" style="display:none">
+        <span class="sb-label">Impostazioni</span>
+      </button>
+    </nav>
+
+    <div class="sb-spacer"></div>
+
+    <div class="sb-profile-wrap">
+      <div class="sb-profile-row">
+        <button id="profileAvatar" class="sb-profile" type="button"
+                aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu"
+                onclick="toggleProfileMenu()" title="">
+          <span id="profileAvatarInitials" class="sb-avatar">·</span>
+          <span class="sb-profile-info">
+            <span id="profileMenuName" class="sb-profile-name"></span>
+            <span id="profileMenuSubtitle" class="sb-profile-sub"></span>
+          </span>
+        </button>
+        <button class="sb-collapse-btn" type="button" aria-label="Comprimi/espandi barra laterale" title="Comprimi barra laterale" onclick="toggleSidebarCollapsed()">
+          <svg class="sb-collapse-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        </button>
+      </div>
+      <div id="profileMenu" class="profile-menu profile-menu-sidebar" role="menu" hidden>
+        <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('riepilogo');">
+          Riepilogo
+        </button>
+        <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('profilo-personale');">
+          Profilo personale
+        </button>
+        <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('profilo-piva');">
+          Profilo P.IVA
+        </button>
+        <button class="profile-menu-item" role="menuitem" type="button"
+                onclick="closeProfileMenu(); switchToTab('settings');">
+          Impostazioni
+        </button>
+        <div class="profile-menu-divider"></div>
+        <button class="profile-menu-item profile-menu-item-toggle" role="menuitem" type="button"
+                onclick="toggleTheme();">
+          <span>Tema</span>
+          <span id="profileMenuThemeLabel" class="profile-menu-toggle-state"></span>
+        </button>
+        <div class="profile-menu-divider"></div>
+        <button class="profile-menu-item profile-menu-item-danger" role="menuitem" type="button"
+                onclick="closeProfileMenu(); doLogout();">
+          Logout
+        </button>
+      </div>
+    </div>
+
+  </div>
+</aside>
 
 <div class="container">
   <div id="tab-calcolo" class="tab-content active">
     <div class="calc-grid" id="calcoloGrid"></div>
+  </div>
+
+  <div id="tab-riepilogo" class="tab-content">
+    <div class="calc-grid" id="riepilogoGrid"></div>
   </div>
 
   <div id="tab-accantonamento" class="tab-content">
@@ -79,16 +190,24 @@
   </div>
 
   <div id="tab-fatture" class="tab-content">
-    <div class="panel" style="max-width:900px">
+    <div class="panel">
       <h3>Fatture</h3>
       <div id="fattureDocsContent"></div>
-      <table class="fatture-table" id="fattureTable"></table>
+      <div class="manuali-card">
+        <div class="fatture-card-head">
+          <div class="fatture-card-title">Incassi manuali (mensili)</div>
+        </div>
+        <div class="manuali-note">
+          Per importi senza fattura formale. Temporaneo finché l'emissione in-app non sostituirà Fiscozen.
+        </div>
+        <table class="fatture-table" id="fattureTable"></table>
+      </div>
       <div class="incasso-section" id="incassoSection"></div>
     </div>
   </div>
 
   <div id="tab-budget" class="tab-content">
-    <div class="panel" style="max-width:700px">
+    <div class="panel">
       <h3>Budget Mensile</h3>
       <div id="budgetContent"></div>
     </div>
@@ -108,67 +227,123 @@
     </div>
   </div>
 
+  <div id="tab-dichiarazione" class="tab-content"></div>
+
   <div id="tab-settings" class="tab-content">
-    <div class="panel" style="max-width:560px">
+    <div class="panel">
       <h3>Impostazioni Annuali</h3>
-      <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:18px">
-        Qui restano solo le impostazioni operative dell'anno selezionato. I parametri fiscali strutturali del profilo si aprono cliccando sul tuo nome accanto a <b>Calcoli Partita IVA</b>.
+      <div style="font-size:.82rem;color:var(--color-text-muted);line-height:1.5;margin-bottom:18px">
+        Qui restano le impostazioni operative dell'anno selezionato. I dati stabili si gestiscono nelle tab <b>Profilo personale</b> e <b>Profilo P.IVA</b>.
       </div>
+
+      <div class="settings-subsection-title">Parametri fiscali (anno)</div>
       <div class="settings-group">
-        <label>Paga giornaliera (EUR) — impostabile anche dal Calendario</label>
-        <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
+        <label>Gruppo ATECO</label>
+        <select id="settAtecoGruppo" onchange="applyAtecoGruppo(this.value)"></select>
       </div>
-      <div class="settings-group">
-        <label>Anno con reddito da lavoro dipendente</label>
-        <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
-          <option value="0">No</option>
-          <option value="1">Si</option>
-        </select>
-        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-          Serve per segnalare correttamente gli anni misti e avvisare quando il metodo storico puo essere conservativo.
+      <div class="settings-grid-2">
+        <div class="settings-group">
+          <label>Coefficiente redditività (%)</label>
+          <input type="number" id="settCoefficiente" step="0.01" min="0" max="100"
+            onchange="saveSetting('coefficiente', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Aliquota imposta sostitutiva (%)</label>
+          <input type="number" id="settAliquotaSost" step="0.01" min="0" max="100"
+            onchange="saveSetting('impostaSostitutiva', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Limite forfettario</label>
+          <div style="padding:8px 10px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius-sm);font-size:12px;color:var(--color-text-muted)">
+            <b style="color:var(--color-text)">85.000 EUR</b> &mdash; D.L. 34/2023, art. 1 c. 54 (dal 2023)
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Usa parametri INPS ufficiali</label>
+          <select id="settUsaInpsUfficiale" onchange="saveSetting('usaInpsUfficiale', this.value); recalcAll()">
+            <option value="1">Sì (auto da anno)</option>
+            <option value="0">No (manuale)</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label>Riduzione contributi 35%</label>
+          <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
+          </select>
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Solo INPS Artigiani/Commercianti, solo per questo anno.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Anno con reddito da lavoro dipendente</label>
+          <select id="settDipendenteIncome" onchange="saveSetting('haRedditoDipendente', this.value); recalcAll()">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
+          </select>
         </div>
       </div>
-      <div class="settings-group">
-        <label>Riduzione contributi 35% per l'anno selezionato</label>
-        <select id="settRiduzione35" onchange="saveSetting('riduzione35', this.value); recalcAll()">
-          <option value="0">No</option>
-          <option value="1">Si</option>
-        </select>
-        <div style="margin-top:6px;color:var(--text2);font-size:.75rem">
-          Vale solo per questo anno e solo per INPS Artigiani / Commercianti. Non e un parametro globale del profilo fiscale.
+
+      <div class="settings-subsection-title">Operatività</div>
+      <div class="settings-grid-2">
+        <div class="settings-group">
+          <label>Paga giornaliera (EUR)</label>
+          <input type="number" id="settDailyRate" value="0" onchange="saveSetting('dailyRate', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Giorni medi per incasso fattura</label>
+          <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="setGiorniIncassoProfile(this.value)">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Impostazione di profilo, applicata a tutti gli anni.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Override INAIL anno corrente (EUR)</label>
+          <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
+            onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Il premio è calcolato dal tasso INAIL in Profilo P.IVA. Compila qui solo per sovrascrivere.
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Override INAIL anno successivo (EUR)</label>
+          <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
+            onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
+        </div>
+        <div class="settings-group">
+          <label>Diritto Camera di Commercio (EUR)</label>
+          <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
+            onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
+          <div style="margin-top:4px;color:var(--color-text-muted);font-size:.72rem">
+            Vuoto = valore standard 53 EUR (artigiani/commercianti).
+          </div>
         </div>
       </div>
-      <div class="settings-group">
-        <label>Giorni medi per incasso fattura</label>
-        <input type="number" id="settGiorniIncasso" value="30" min="0" max="120" onchange="saveSetting('giorniIncasso', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Override INAIL anno corrente (EUR)</label>
-        <input type="number" id="settInailCorrente" step="0.01" placeholder="auto dal tasso"
-          onchange="saveOptionalNumberSetting('scadenziarioInailCorrente', this.value); recalcAll()">
-        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
-          Se il tasso INAIL e configurato nel profilo fiscale, il premio viene calcolato automaticamente. Inserisci qui solo per sovrascrivere.
-        </div>
-      </div>
-      <div class="settings-group">
-        <label>Override INAIL anno successivo (EUR)</label>
-        <input type="number" id="settInailSuccessivo" step="0.01" placeholder="auto dal tasso"
-          onchange="saveOptionalNumberSetting('scadenziarioInailSuccessivo', this.value); recalcAll()">
-      </div>
-      <div class="settings-group">
-        <label>Diritto annuale Camera di Commercio (EUR)</label>
-        <input type="number" id="settDirittoCamerale" step="0.01" placeholder="default: 53,00"
-          onchange="saveOptionalNumberSetting('scadenziarioDirittoCamerale', this.value); recalcAll()">
-        <div style="margin-top:4px;color:var(--text2);font-size:.72rem">
-          Lascia vuoto per usare il valore standard (53 EUR artigiani/commercianti).
-        </div>
-      </div>
-      <div class="settings-group" style="margin-top:30px">
-        <button class="btn-add" onclick="exportData()" style="background:var(--blue)">Esporta dati (JSON)</button>
-        <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--accent2);margin-left:8px">Importa dati</button>
+
+      <div class="settings-subsection-title">Dati & backup</div>
+      <div class="settings-group" style="margin-top:12px">
+        <button class="btn-add" onclick="exportData()" style="background:var(--color-info)">Esporta dati (JSON)</button>
+        <button class="btn-add" onclick="document.getElementById('importFile').click()" style="background:var(--color-secondary);margin-left:8px">Importa dati</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
       </div>
+      <div class="settings-group" style="margin-top:12px">
+        <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="settDevHardDelete" style="margin-top:3px;"
+            onchange="saveBoolSetting('devHardDelete', this.checked); recalcAll()">
+          <span>
+            <b>Hard-delete fatture (solo test)</b><br>
+            <span style="color:var(--color-text-muted); font-size:.75rem;">&#9888; Disattivare prima del rilascio. Elimina fatture bypassando il workflow fiscale.</span>
+          </span>
+        </label>
+      </div>
     </div>
+  </div>
+
+  <div id="tab-profilo-personale" class="tab-content">
+    <div id="profilo-personale-content"></div>
+  </div>
+  <div id="tab-profilo-piva" class="tab-content">
+    <div id="profilo-piva-content"></div>
   </div>
 </div>
 
@@ -177,33 +352,75 @@
 <div id="pickerPopup" class="picker-popup"></div>
 <div id="paymentDateOverlay" class="picker-overlay" onclick="closePaymentDatePicker()"></div>
 <div id="paymentDatePopup" class="payment-date-popup"></div>
-<div id="profileFiscalModal" class="profile-modal" aria-hidden="true" onclick="if(event.target===this) closeProfileFiscalModal()">
-  <div class="profile-modal-panel" role="dialog" aria-modal="true" aria-labelledby="profileFiscalTitle">
-    <div id="profileFiscalContent"></div>
-  </div>
-</div>
 <div id="fatturaModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeFatturaModal==='function') closeFatturaModal()">
   <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="fatturaModalTitle">
     <div id="fatturaModalContent"></div>
   </div>
 </div>
+<div id="clienteModal" class="cliente-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeClienteModal==='function') closeClienteModal()"></div>
 <div id="ocrPagamentoModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this && typeof closeOcrPagamentoModal==='function') closeOcrPagamentoModal()">
   <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ocrPagamentoModalTitle">
     <div id="ocrPagamentoModalContent"></div>
   </div>
 </div>
-<div id="quadroLMModal" class="profile-modal app-modal" aria-hidden="true" onclick="if(event.target===this) closeQuadroLMModal()">
-  <div class="profile-modal-panel app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="quadroLMTitle">
-    <div id="quadroLMContent"></div>
+<div id="quickPayModal" class="qpay-overlay" aria-hidden="true" onclick="if(event.target===this) closeQuickPayModal()">
+  <div class="qpay-panel" role="dialog" aria-modal="true">
+    <div class="qpay-header">
+      <div class="qpay-title" id="qpayTitle"></div>
+      <div class="qpay-sub" id="qpaySub"></div>
+    </div>
+    <div class="qpay-body">
+      <label class="qpay-label">Importo versato (€)</label>
+      <input id="qpayAmount" type="number" class="qpay-input" min="0.01" step="0.01" placeholder="0,00" onkeydown="if(event.key==='Enter') confirmQuickPay()">
+    </div>
+    <div class="qpay-actions">
+      <button class="btn-ghost" onclick="closeQuickPayModal()">Annulla</button>
+      <button class="btn-primary" onclick="confirmQuickPay()">Conferma</button>
+    </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="ateco-coefficienti.js"></script>
 <script src="firebase-sync.js"></script>
 <script src="tax-engine.js"></script>
+<script src="dichiarazione-engine.js"></script>
+<script src="dichiarazione-exports.js"></script>
+<script src="dichiarazione-ui.js"></script>
 <script src="scadenziario-engine.js"></script>
 <script src="app.js"></script>
 <script src="clienti-feature.js"></script>
+<script src="clienti-autofill.js" defer></script>
 <script src="fatture-docs-feature.js"></script>
+<script src="fatture-selectors.js"></script>
+<script src="fatture-migration.js"></script>
+<script src="fatture-ocr.js"></script>
+<script src="fatture-storico.js"></script>
+<script src="fatture-xml-validator.js"></script>
+<script src="fatture-import-xml.js"></script>
+<input type="file" id="inputImportPdf" accept=".pdf" style="display:none">
+<input type="file" id="inputImportXml" accept=".xml" multiple style="display:none" onchange="window.FattureImportXml && window.FattureImportXml.handleFileInput(event)">
 <script src="ocr-pagamenti-feature.js"></script>
+
+<div id="archivioFattureModal" class="archivio-modal" role="dialog" aria-modal="true" aria-labelledby="archivioFattureTitle">
+  <div class="archivio-modal-body">
+    <div class="archivio-modal-head">
+      <h3 id="archivioFattureTitle" style="margin:0">Archivio fatture</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('inputImportXml').click()" title="Importa XML FatturaPA">Importa XML</button>
+      </div>
+      <button type="button" class="btn-icon" aria-label="Chiudi" onclick="window.FattureStorico.closeArchivioModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="archivio-modal-content">
+      <div class="archivio-modal-filters">
+        <select id="archivioAnnoSelect" class="input" aria-label="Filtro anno"></select>
+        <div id="archivioStatoFilter" class="fatture-filters" role="tablist" aria-label="Filtro stato archivio"></div>
+      </div>
+      <div id="archivioFattureList"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

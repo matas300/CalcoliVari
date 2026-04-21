@@ -9,6 +9,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - **style.css** — Dark theme, CSS variables, responsive (mobile bottom nav with safe-area support)
 - **firebase-sync.js** — Firebase Firestore sync module (bidirectional merge)
 - **tax-engine.js** — Standalone tax computation engine (forfettario scenarios, method comparison, Fiscozen integration)
+- **ateco-coefficienti.js** — Tabella ufficiale DM 23/1/2015 (9 gruppi ATECO con coefficiente 40-86%). Esposta come `window.ATECO_COEFFICIENTI`. Usata dal dropdown "Gruppo ATECO" nel profilo fiscale per autofillare il `coefficiente`.
 
 ## Key Concepts
 
@@ -27,7 +28,7 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
     contribFissi, minimaleInps, aliqContributi,
     riduzione35,              // 1 = apply 35% reduction
     haRedditoDipendente,      // 1 = mixed income year
-    giorniIncasso,
+    giorniIncasso,            // legacy; override da chiave profilo `calcoliPIVA_{profile}_giorniIncasso`
     limiteForfettario,
     scadenziarioMetodo,       // 'storico' | 'previsionale'
     scadenziarioSaldoImposta, scadenziarioAccontoImposta,
@@ -70,6 +71,13 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - `normalizeFiscozenFutureTaxes` / `normalizeFiscozenPaidTaxes`: Fiscozen API data normalization
 - `buildInstallmentStatus` / `buildInstallmentExplanation`: deadline status and tooltips
 - Exposed via `window.TaxEngine`
+
+### Doppia logica competenza vs cassa
+The forfettario engine has two parallel calculators with intentionally different semantics:
+- `calcForfettarioValues` (`app.js:1462`) — **per competenza**: deduces all 4 INPS fixed quarters of the current year + the full annual variable INPS, regardless of when paid.
+- `buildForfettarioScenario` (`tax-engine.js:528`) — **per cassa**: deduces only the INPS rates actually paid in-year (typically 3 fixed quarters of year N pagate in-year + the 4th of N-1 paid in February of N + variable saldo/acconti by cash flow).
+
+A small delta between the two views is **expected**, not a bug. Audit B1 documents a 15,18 € delta on the fixed component for an artigiano 2026 scenario (= `(4521,36 − 4460,64) / 4`, i.e. the difference between the 4th-quarter INPS fissi 2026 and 2025). The dashboard summary uses competenza; the scadenziario uses cassa. Whenever values seem to disagree, check first whether one is competenza and the other is cassa.
 
 ### Tabs
 1. **Regime Forfettario/Ordinario** — Main tax calculation summary with donut chart
@@ -138,36 +146,159 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 - `syncAllToCloud` collects keys before iterating to avoid race conditions
 - Export scoped to current profile; import filters keys by current profile prefix
 - Profile-scoped meta storage is supported too: `calcoliPIVA_{profile}_clienti` syncs separately from yearly docs and is merged with the same profile namespace.
+- `giorniIncasso` è profile-scoped via `PROFILE_META_KEYS`: letto/scritto da `getGiorniIncassoProfile()` / `setGiorniIncassoProfile()`. Al primo `applySettings` post-deploy, se l'anno corrente ha un valore ≠ 30, viene promosso alla chiave di profilo (migrazione one-shot idempotente).
 
-### Quadro LM
-- Accessed from the `Regime Forfettario` view with `openQuadroLMModal()`
-- Prefills LM1, LM2, LM22, LM27, LM34, LM35, LM40 and related fields from the yearly source of truth
-- Stores manual edits per year in `yearData.lmQuadro.overrides`
-- `saveQuadroLMDraft()` persists the current year snapshot, `exportQuadroLMPrint()` opens a print-friendly HTML view
-- No telematic XML or PDF generation: the feature is a compilation aid only
+### Dichiarazione Redditi PF
+- **Files**: `dichiarazione-engine.js`, `dichiarazione-ui.js`, `dichiarazione-exports.js`
+- **Replaces** the legacy Quadro LM modal (rimosso nel cleanup pre-launch 2026-04-18). La migrazione `yearData.lmQuadro.overrides` → `yearData.dichiarazione.overrides` in `ensureDataShape` resta attiva per recuperare dati storici.
+- **APIs**: `window.DichiarazioneEngine`, `window.DichiarazioneUI`, `window.DichiarazioneExports`
+
+#### Data Shape
+- `settings.anagrafica` — per-profile, stable: codice fiscale, nome, cognome, comune, etc.
+- `settings.attivita` — per-profile: P.IVA, codice ATECO, comune domicilio fiscale
+- `yearData.dichiarazione` — per-anno:
+  - `tipoDichiarazione` — `'ordinaria'` | `'correttiva'` | `'integrativa'`
+  - `flags` — `{ annoMisto, imposteEstere, altriCrediti }` (boolean toggles for conditional quadri)
+  - `contiEsteri` — array of foreign account records for Quadro RW
+  - `overrides` — per-rigo manual overrides (same structure as legacy `lmQuadro.overrides`)
+  - `statoCompilazione` — progress tracker per step
+  - `_confirmedWarnings` — set of suppressed validation warning keys
+
+#### Migration
+- On load, `ensureDataShape` silently migrates `yearData.lmQuadro.overrides` → `yearData.dichiarazione.overrides`
+- No data loss: migration is additive; legacy key is preserved until explicitly cleared
+
+#### Wizard
+- 12 steps, activated via `openDichiarazione()` or tab click
+- Steps 8 (`annoMisto`), 9 (`imposteEstere`), 10 (`altriCrediti`) are conditional on the corresponding flag
+- Progress is persisted in `yearData.dichiarazione.statoCompilazione`
+
+#### Engine Functions (`DichiarazioneEngine`)
+| Function | Description |
+|---|---|
+| `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
+| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
+| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: INPS sezione I (artigiani/commercianti) or sezione II (gestione separata) |
+| `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
+| `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
+| `buildQuadroRW(contiEsteri)` | Quadro RW: conti e investimenti esteri (one rigo per account) |
+| `buildCondizionali(input, yearData)` | Conditional quadri: quadroRN (annoMisto), quadroCE (imposteEstere) |
+| `buildDichiarazione(year, profile, input)` | Assembles all quadri into the full dichiarazione object |
+| `validateDichiarazione(dich)` | Returns `{ errors, warnings }` arrays; errors block export, warnings are confirmable |
+| `validateCodiceFiscale(cf)` | Validates CF format + check digit; case-insensitive |
+
+#### Exports (`DichiarazioneExports`)
+- **C2 — JSON + CSV zip**: `DichiarazioneExports.exportC2(dich)` — zips a structured JSON and a human-readable CSV of all righi values
+- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout
+
+#### Unit Tests
+- `test/dichiarazione-engine.test.js` — 39 tests covering all engine functions
+- Run with: `node test/run-tests.js`
 
 ### Color System
-- Canonical color CSS variables defined in `:root` (dark theme) and `html[data-theme="light"]`:
-  - **Charts**: `--color-chart-netto` (#2EAADC), `--color-chart-tasse` (#E94560), `--color-chart-contributi` (#F5A623)
-  - **Calendar day types**: `--color-cal-lavoro` (#4ECCA3), `--color-cal-ferie` (#F5A623), `--color-cal-festivo` (#E94560), `--color-cal-mezzagiornata` (#4A9EFF), `--color-cal-malattia` (#E67E22), `--color-cal-donazione` (#7C5CBF)
-- `getCSSVar(name)` helper in `app.js`: reads a CSS variable at runtime via `getComputedStyle` — use this in JS wherever a resolved color value is needed (e.g. SVG fills, canvas)
-- `DAY_TYPES` constant uses `var(--color-cal-*)` references; `drawDonut()` and `drawMiniBars()` call `getCSSVar()` at render time so colors update on theme switch
+
+Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (light). Mai hard-coded.
+
+**Palette — Espresso & Mint (palette C, restyling sub-progetto B 2026-04-18):**
+- **Surface scale**: `--color-bg` → `--color-surface` → `--color-surface-2` → `--color-surface-3` (dal più scuro/sfondo al più chiaro/elevato)
+- **Text scale**: `--color-text` (primario) → `--color-text-muted` (secondario, label) → `--color-text-faint` (terziario, placeholder)
+- **Accent**: `--color-primary` (mint, CTA), `--color-primary-hover`, `--color-secondary` (arancio caldo), `--color-tertiary` (rosa caldo)
+- **Stato**: `--color-success`, `--color-warning`, `--color-error`, `--color-info`
+- **Charts**: `--color-chart-netto` / `--color-chart-tasse` / `--color-chart-contributi` (allineati a primary/secondary/tertiary)
+- **Calendar day types**: `--color-cal-lavoro`, `--color-cal-ferie`, `--color-cal-festivo`, `--color-cal-mezzagiornata`, `--color-cal-malattia`, `--color-cal-donazione`
+
+**Token di sistema (Crisp & Tight):**
+- **Radii**: `--radius-xs` 4px (badge), `--radius-sm` 6px (btn, input), `--radius-md` 8px (card), `--radius-lg` 12px (modal), `--radius-pill` 999px
+- **Spacing scale**: `--space-1` 4px, `--space-2` 8px, `--space-3` 12px, `--space-4` 16px, `--space-5` 24px, `--space-6` 32px
+- **Shadows**: `--shadow-sm/md/lg` sono `none` (stile Crisp); usare `--shadow-modal` solo per modali
+- **Typography**: `--font-display` (Satoshi, valori prominenti), `--font-body` (Inter)
+
+**Componenti:**
+- Bottoni: piatti, no shadow, padding 7×14, raggio `--radius-sm`. CTA primaria = `--color-primary` su `--color-bg`. Ghost = transparent + bordo `--color-border`.
+- Input: `--color-bg` bg, bordo 1px `--color-border`, font 12px, focus `--color-primary` + alone 2px.
+- Badge stato: outline maiuscolo, `transparent` + `currentColor` border, font 10px letter-spacing .04em.
+- Card: `--color-surface` bg, `--color-border` 1px, raggio `--radius-md`, padding `--space-3 --space-4`, no shadow.
+- Modal: bg `--color-surface-3`, raggio `--radius-lg`, `--shadow-modal`. Header `--color-surface-2`.
+
+**Helper JS**: `getCSSVar(name)` in `app.js` legge una CSS variable a runtime via `getComputedStyle` — usarla in JS dove serve un colore risolto (es. SVG fill, canvas). `DAY_TYPES` usa `var(--color-cal-*)`; `drawDonut()` e `drawMiniBars()` chiamano `getCSSVar()` al render time così i colori si aggiornano al cambio tema.
 
 ### FatturaPA / SdI
 - **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
-- **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-matches a free-text payment method string to the correct FatturaPA `ModalitaPagamento` code (MP01–MP15); defaults to MP05 (bonifico)
-- **`showSdiUploadGuide(fileName)`**: after XML download, replaces the modal with a 4-step guide for manual upload to the AdE "Fatture e Corrispettivi" portal (`ivaservizi.agenziaentrate.gov.it/portale/...`); includes a direct portal button
+- **`buildFatturaElettronicaXml(draft, opts)`**: genera XML TD01 (fattura) o TD04 (nota di credito) a seconda di `opts.isNC`; quando isNC=true, applica segni negativi agli importi e inserisce `DatiFattureCollegate` con `IdDocumento`/`Data` dalla fattura originale
+- **`buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale)`**: wrapper per generazione NC
+- **XML audit fixes (11 punti conformità AdE v1.2):**
+  - `sanitizeProgressivoInvio` — max 10 char alfanumerici
+  - `isValidPartitaIvaIT` — 11 cifre IT
+  - `isValidCodiceFiscale` — 16 char + check digit
+  - `RegimeFiscale` da `settings.regime` (RF19 forfettario / RF01 ordinario)
+  - Natura riga (N2.2 forfettario / N1 escluse / N6 reverse charge) con `AliquotaIVA=0.00` sempre presente
+  - `applicaBolloSeDovuto` — soglia 77,47 € per `DatiBollo`
+  - Fattura a privato: `CodiceDestinatario=0000000`, CF cessionario obbligatorio
+  - `DatiRitenuta` con `TipoRitenuta`, `ImportoRitenuta`, `CausalePagamento` se `ritenuta > 0`
+  - Contributo integrativo su riga separata con propria `Natura`
+  - `DatiPagamento.ImportoPagamento` = totale lordo − ritenuta
+  - XSD element order in `DatiGeneraliDocumento`: Numero → DatiRitenuta → DatiBollo → ImportoTotaleDocumento → Causale
+- **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
+- **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
+- **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"
+- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`
 - No automated SdI submission — upload is always manual via the AdE portal
 
-### Invoice PDF (`buildInvoicePdfModern`)
-- Professional layout via jsPDF:
-  - Full-width teal header band with "FATTURA" label + invoice number badge
-  - Two-column issuer / client section (client in a rounded rect card)
-  - Meta bar: date, due date, payment method, IBAN
-  - Line-item table with teal header row and alternating soft rows
-  - Right-aligned summary box with highlighted total row
-  - Footer: payment info box + legal note box
-- Key palette constants (inside the function): `ACCENT=[60,143,145]`, `ACCENT_LIGHT=[232,244,244]`, `INK=[18,26,36]`, `MUTED=[96,112,128]`, `BORDER=[210,218,226]`, `SOFT=[245,248,251]`
+### Fatture: single source of truth (workflow redesign 2026-04-20)
+- **`fattureEmesse` è UNICA fonte della verità** per tutte le feature (dashboard, bollo trimestrale, budget, tasse accantonate, scadenziario, forfettario engine, cross-year). La vecchia struttura `data.fatture[m]` è considerata **legacy** e viene mantenuta solo come backup per la migrazione (read-only, non cancellata per permettere rollback).
+- **`FattureSelectors` è l'API canonica** per leggere le fatture. Mai più accesso diretto a `data.fatture[m]` dai consumer. API:
+  - `FattureSelectors.all(profile)` — tutte le fatture del profilo
+  - `FattureSelectors.getByMonth(profile, year, month)` — filtrate per mese di pagamento, esclude bozza
+  - `FattureSelectors.getByQuarter(profile, year, quarter)` — trimestre, include NC (segno negativo nei consumer)
+  - `FattureSelectors.getByPagAnno(profile, year)` — per forfettario per-cassa
+  - `FattureSelectors.getCrossYearPaidIn(profile, year)` — emesse in anno precedente ma incassate nell'anno corrente
+  - `FattureSelectors.getImportoSigned(f)` — importo con segno (NC negativi)
+  - `FattureSelectors.getNettoEffettivo(f)` — `importo − ncTotaleImporto` (per stornate parziali)
+- **Workflow stati**: `bozza → inviata → pagata`; ortogonale NC TD04 → `stornata` (se `tipoStorno='totale'` + NC `inviata`, oppure se somma NC parziali collegate ≥ totale originale → `ncTotaleImporto` traccia la somma). Fatture `inviata`/`pagata` NON si cancellano mai — solo tramite NC. `×` solo su `bozza`.
+- **`origine`** sul record fattura: `'wizard'` (creata dal wizard 3-step), `'legacy-migrated'` (promossa dalla vecchia struttura monthly), `'manuale'` (arricchita post-"completa dati" su una legacy), `'ocr-import'` (riservato al sub-progetto OCR futuro).
+- **Migrazione automatica**: al primo `switchToTab('fatture')` di un anno con `data.fatture[M]` popolato e senza `data._fattureMigratedAt`, ogni riga senza `invoiceId` viene promossa a fattura sintetica `origine='legacy-migrated'` stato `pagata`. Operazione **idempotente**: l'ID è deterministico `legacy_{year}_{M}_{idx}_{cents}` (dove `cents = Math.round(importo*100)`), quindi re-run non duplica. `data.fatture[M]` NON viene cancellato (rollback safety).
+- **Hard-delete dev toggle**: `settings.devHardDelete` (default false). Quando attivo, abilita un pulsante `🗑 Hard delete` in view-mode/archivio per bypassare il workflow (solo test). Banner giallo in cima al tab Fatture come warning. NON sincronizzato su Firebase (dev-only, resta locale). Tenere SEMPRE off in produzione.
+- **Bollo trimestrale**: la regola "operazione > 77,47 € richiede bollo" viene applicata **per-fattura** con `Math.abs(FattureSelectors.getImportoSigned(f)) > 77.47`. NC contate separatamente con segno negativo nell'imponibile di trimestre. `calcBolloPerQuarter` legge da `getByQuarter`, non più da `data.fatture[M]`.
+
+### Storico fatture e numerazione (sub-project 3)
+- **File**: `fatture-storico.js` (IIFE, espone `window.FattureStorico`)
+- **Storage key**: `calcoliPIVA_{profile}_fattureEmesse` (array di fatture); sync via `syncProfileMetaToCloud(profile, 'fattureEmesse')` (`PROFILE_META_KEYS` in `firebase-sync.js` già include `'fattureEmesse'`)
+- **API**: `load(profile)`, `save(profile, fatture)`, `nextProgressivo(anno, fatture)`, `formatNumero(anno, progressivo)`, `storageKey(profile)`, `renderStorico(annoFiltro)`, `renderAnnoFilter(selectedAnno)`
+- **Numerazione**: formato `YYYY/NNN` (zero-padded 3 cifre). `nextProgressivo` scansiona fatture dell'anno e ritorna `max(progressivo)+1`. Pre-filled al nuovo fattura, editabile come override manuale.
+- **Stati**: `bozza` | `inviata` | `pagata` | `annullata` (badge CSS `.badge-stato.{stato}` in `style.css`)
+- **Campi estesi** sull'oggetto fattura (tutti backwards-compatible): `stato`, `dataInvioSdi`, `dataPagamento`, `fatturaOriginaleId`, `tipoDocumento` (TD01/TD04), `annoProgressivo`, `progressivo`, `ritenuta`, `aliquotaRitenuta`, `tipoRitenuta`, `causaleRitenuta`
+- **Normalizzazione**: `window.normalizeInvoice(inv)` applica default ai campi mancanti al load; chiamata da `FattureStorico.load`
+- **UI storico** (`#storico-fatture` card in tab Fatture): tabella Numero/Data/Cliente/Importo/Tipo/Stato/Azioni, filtro anno, azioni contestuali per stato (Riapri/Annulla su bozza, Duplica ovunque, Segna inviata/pagata, Nota di credito su inviata/pagata)
+- **Hook tab**: `switchToTab()` in `app.js` chiama `FattureStorico.renderAnnoFilter()` + `renderStorico()` all'attivazione tab Fatture
+
+### Clienti (redesign tabella + modal)
+- **Vista principale**: tabella compatta `.clienti-table` (non più card grid). Colonne essenziali (nome, P.IVA, città, azioni); click riga apre il dettaglio.
+- **Dettaglio**: modal `#clienteModal` aperto via `openClienteModal(id)`, chiuso via `closeClienteModal()`. Sezioni interne: **P.IVA** (con autofill), **Anagrafica**, **Sede**, **Fatturazione Elettronica** (codice SDI, PEC), **Note**.
+- **Inline save**: ogni input nel modal salva al `change` via `updateClienteField(id, field, value)` → `saveClienti(profile, clienti)` + sync cloud. Nessun bottone "Salva" — il modal riflette sempre lo stato persistito.
+- **Storage** (invariato): `calcoliPIVA_{profile}_clienti` (array), normalizzato via `normalizeCliente`. Sync: `PROFILE_META_KEYS` in `firebase-sync.js` include `'clienti'`.
+- **Campi cliente**: `id, nome, partitaIva, codiceFiscale, codiceSDI, pec, indirizzo, cap, citta, provincia, nazione, note`.
+
+#### Autofill da P.IVA (`clienti-autofill.js`)
+- **Modulo**: IIFE che espone `window.ClientiAutofill`.
+- **API**:
+  - `lookupPartitaIva(piva) → { ok, data, error, code }` — codici errore: `INVALID_PIVA` | `NO_KEY` | `NOT_FOUND` | `NETWORK`
+  - `hasApiKey()`, `getApiKey()` — leggono da `GLOBAL_OPENAPI_KEY`
+- **Endpoint**: `https://imprese.openapi.it/advance/{piva}` con header `Authorization: Bearer {key}`.
+- **Mapping response** → `{ nome, cf, indirizzo, cap, citta, provincia, pec }`.
+- **Azione UI**: `autofillClienteFromPiva(id)` nel modal — **non sovrascrive** campi già compilati, riempie solo i vuoti. Feedback inline su errore (chiave mancante, P.IVA non trovata, network).
+- **API key**: costante globale `GLOBAL_OPENAPI_KEY` hardcoded in `clienti-autofill.js`, condivisa tra tutti i profili. Non esposta nell'UI. Per aggiornarla: editare il file e ridistribuire. Placeholder `'__OPENAPI_KEY_PLACEHOLDER__'` → `hasApiKey()` ritorna false.
+
+### Invoice PDF (`buildInvoicePdfMinimal`)
+- Layout minimalista A4 portrait, margini 20 mm, font Helvetica (built-in jsPDF):
+  - Header testo "FATTURA N. YYYY/NNN" + Data, senza bande colore; "NOTA DI CREDITO" per TD04
+  - Due colonne EMITTENTE / DESTINATARIO (no card colorate)
+  - Tabella righe: Descrizione / Q.tà / P.Unit. / Totale
+  - Riepilogo allineato a destra con unica linea ACCENT teal sopra TOTALE (bold 14pt)
+  - TD04: importi in rosso (`NEGATIVE`)
+  - Footer payment info + nota legale franchigia IVA art. 1 c. 58 L. 190/2014
+  - Multi-pagina con header ripetuto se righe > ~20
+- Palette: `INK=[18,26,36]`, `MUTED=[100,116,139]`, `BORDER=[226,232,240]`, `ACCENT=[60,143,145]`, `NEGATIVE=[220,53,69]`
+- Costruttore: `window.jspdf.jsPDF` (bundle caricato via html2pdf)
 
 ## Conventions
 - Italian UI language throughout

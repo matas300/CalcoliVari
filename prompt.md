@@ -265,7 +265,7 @@ LM24 - Reddito (LM22 * LM23 / 100)
 LM25 - Perdite pregresse (0 normalmente)
 LM26 - Reddito netto (LM24 - LM25)
 LM27 - Contributi previdenziali versati (INPS dell'anno)
-LM28 - Reddito al netto contributi (LM26 - LM27)
+LM28 - Reddito al netto contributi (LM26 - LM27)  
 LM29 - Imposta sostitutiva dovuta (LM28 * aliquota %)
 LM30 - Aliquota (5% o 15%)
 LM34 - Imposta sostitutiva a debito
