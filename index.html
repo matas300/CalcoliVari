@@ -399,8 +399,9 @@
 <script src="fatture-xml-validator.js"></script>
 <script src="fatture-import-xml.js"></script>
 <script src="fatture-import-nuove.js"></script>
+<script src="fatture-import-legacy.js"></script>
 <input type="file" id="inputImportPdf" accept=".pdf" style="display:none">
-<input type="file" id="inputImportXml" accept=".xml" multiple style="display:none" onchange="window.FattureImportXml && window.FattureImportXml.handleFileInput(event)">
+<input type="file" id="inputImportXml" accept=".xml" multiple style="display:none" onchange="window.FattureImportLegacy && window.FattureImportLegacy.handleFileInput(event)">
 <input type="file" id="inputImportXmlNuove" accept=".xml" multiple style="display:none" onchange="window.FattureImportNuove && window.FattureImportNuove.handleFileInput(event)">
 <script src="ocr-pagamenti-feature.js"></script>
 
