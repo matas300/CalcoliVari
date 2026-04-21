@@ -1097,7 +1097,8 @@ async function autofillClienteFromPiva(id) {
       ['cap', 'cap'],
       ['citta', 'citta'],
       ['provincia', 'provincia'],
-      ['pec', 'pec']
+      ['pec', 'pec'],
+      ['codiceSDI', 'codiceSDI']
     ];
     let applied = 0, skipped = 0, available = 0;
     for (const [srcKey, targetField] of mapping) {

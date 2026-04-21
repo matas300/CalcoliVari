@@ -31,12 +31,17 @@
   }
 
   function pickAddress(d) {
-    // IT-start ritorna address come oggetto con registeredOffice/sub-fields.
     var addr = d.address || {};
     var reg = addr.registeredOffice || addr.registered_office || (d.address ? addr : d);
+    // streetName di IT-start è già completo ("VIA MILANO 150"); fallback a street+streetNumber.
+    var full = (reg.streetName || '').toString().trim();
+    if (!full) {
+      var base = (reg.street || reg.toponimo || reg.via || reg.indirizzo || '').toString().trim();
+      var num = (reg.streetNumber || reg.street_number || reg.civico || '').toString().trim();
+      full = base + (base && num ? ' ' + num : '');
+    }
     return {
-      street: (reg.streetName || reg.street || reg.toponimo || reg.via || reg.indirizzo || '').toString().trim(),
-      streetNumber: (reg.streetNumber || reg.street_number || reg.civico || '').toString().trim(),
+      street: full,
       zip: (reg.zipCode || reg.zip_code || reg.zip || reg.cap || '').toString().trim(),
       city: (reg.town || reg.city || reg.comune || reg.citta || '').toString().trim(),
       province: (reg.province || reg.provincia || '').toString().trim().toUpperCase()
@@ -44,19 +49,21 @@
   }
 
   function normalizeResponse(raw) {
-    // openapi.com avvolge la risposta in { success, data: {...} }.
-    var d = (raw && raw.data) || raw || {};
+    // openapi.com ritorna { success, data: [{...}] } (array); fallback a data oggetto o raw root.
+    var payload = raw || {};
+    var d = payload.data;
+    if (Array.isArray(d)) d = d[0] || {};
+    else if (!d || typeof d !== 'object') d = payload;
     var a = pickAddress(d);
-    var indirizzo = a.street;
-    if (indirizzo && a.streetNumber) indirizzo += ' ' + a.streetNumber;
     return {
       nome: (d.companyName || d.denominazione || d.ragione_sociale || d.nome || '').toString().trim(),
       cf: (d.taxCode || d.codice_fiscale || d.cf || '').toString().trim(),
-      indirizzo: indirizzo.trim(),
+      indirizzo: a.street,
       cap: a.zip,
       citta: a.city,
       provincia: a.province,
-      pec: (d.pec || d.email_pec || '').toString().trim()
+      pec: (d.pec || d.email_pec || '').toString().trim(),
+      codiceSDI: (d.sdiCode || d.codice_sdi || '').toString().trim().toUpperCase()
     };
   }
 
