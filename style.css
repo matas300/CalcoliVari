@@ -3398,6 +3398,15 @@ body.sidebar-collapsed .sb-profile-row { flex-direction: column; gap: 4px; }
   z-index: 60;
 }
 
+/* Sidebar collassata: il menu profilo esce dalla sidebar (60px) e si apre a destra */
+body.sidebar-collapsed .sb-profile-wrap .profile-menu.profile-menu-sidebar {
+  left: calc(100% + 8px);
+  right: auto;
+  bottom: 0;
+  width: 220px;
+  min-width: 220px;
+}
+
 .mobile-topbar { display: none; }
 
 /* ═══════════════════ Mobile ═══════════════════ */
