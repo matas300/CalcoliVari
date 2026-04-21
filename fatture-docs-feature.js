@@ -280,7 +280,7 @@
       pagAnno: Number.isFinite(Number(raw.pagAnno)) ? Number(raw.pagAnno) : null,
 
       // Origine record (wizard | manuale | legacy-migrated | ocr-import)
-      origine: (['wizard','manuale','legacy-migrated','ocr-import'].indexOf(raw.origine) >= 0) ? raw.origine : 'wizard',
+      origine: (['wizard','manuale','legacy-migrated','ocr-import','xml-import'].indexOf(raw.origine) >= 0) ? raw.origine : 'wizard',
 
       // PDF allegato (hook per OCR futuro)
       pdfAllegato: (raw.pdfAllegato && typeof raw.pdfAllegato.dataUrl === 'string')

@@ -397,13 +397,18 @@
 <script src="fatture-ocr.js"></script>
 <script src="fatture-storico.js"></script>
 <script src="fatture-xml-validator.js"></script>
+<script src="fatture-import-xml.js"></script>
 <input type="file" id="inputImportPdf" accept=".pdf" style="display:none">
+<input type="file" id="inputImportXml" accept=".xml" multiple style="display:none" onchange="window.FattureImportXml && window.FattureImportXml.handleFileInput(event)">
 <script src="ocr-pagamenti-feature.js"></script>
 
 <div id="archivioFattureModal" class="archivio-modal" role="dialog" aria-modal="true" aria-labelledby="archivioFattureTitle">
   <div class="archivio-modal-body">
     <div class="archivio-modal-head">
       <h3 id="archivioFattureTitle" style="margin:0">Archivio fatture</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('inputImportXml').click()" title="Importa XML FatturaPA">Importa XML</button>
+      </div>
       <button type="button" class="btn-icon" aria-label="Chiudi" onclick="window.FattureStorico.closeArchivioModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
