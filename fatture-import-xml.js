@@ -1,13 +1,11 @@
-/* Fatture Import XML — onboarding retroattivo da file FatturaPA (SdI, Fiscozen, ecc.)
+/* Fatture Import XML — parser puro FatturaPA + match cliente + dedup.
  *
  * API:
- *  - parseXml(xmlText) → fattura draft (throw su XML non valido)
- *  - importXmlStrings(arr) → { imported, skipped, errors }
- *  - handleFileInput(event) → letto dal <input type="file">: parsa + salva + render
+ *  - parseXml(xmlText) → draft fattura (throw su XML invalido)
+ *  - matchCliente(snapshot, existingClienti) → { mode:'existing'|'new', cliente|draft }
+ *  - dedupKey(draft) → string
  *
- * Dedupe: (annoProgressivo, progressivo, tipoDocumento) — re-import stesso file skipped.
- * Stato default: 'inviata' (file XML = già trasmesso a SdI). L'utente può poi segnare pagata.
- * Origine: 'xml-import'.
+ * I flow UI (legacy/nuove) vivono in fatture-import-legacy.js / fatture-import-nuove.js.
  */
 (function (root) {
   'use strict';
@@ -31,24 +29,22 @@
     return Number.isFinite(n) ? n : 0;
   }
 
+  function norm(v) {
+    return String(v || '').trim().toUpperCase();
+  }
+
   function parseNumero(numeroXml) {
-    // Accetta formati: "3/2026", "NC/3/2025", "2026/003", "FT-12/2025"
     var s = String(numeroXml || '').trim();
     var m = s.match(/(\d+)\s*\/\s*(\d{4})$/);
     if (m) return { progressivo: parseInt(m[1], 10), anno: parseInt(m[2], 10) };
     m = s.match(/(\d{4})\s*\/\s*(\d+)$/);
     if (m) return { anno: parseInt(m[1], 10), progressivo: parseInt(m[2], 10) };
-    // fallback: nessun parse, progressivo=0 (l'utente può correggere)
     return { progressivo: 0, anno: 0 };
   }
 
   function parseXml(xmlText) {
-    if (typeof xmlText !== 'string' || !xmlText.trim()) {
-      throw new Error('XML vuoto');
-    }
-    if (typeof DOMParser !== 'function') {
-      throw new Error('DOMParser non disponibile in questo ambiente');
-    }
+    if (typeof xmlText !== 'string' || !xmlText.trim()) throw new Error('XML vuoto');
+    if (typeof DOMParser !== 'function') throw new Error('DOMParser non disponibile');
     var doc = new DOMParser().parseFromString(xmlText, 'application/xml');
     var err = doc.getElementsByTagName('parsererror')[0];
     if (err) throw new Error('XML non valido: ' + (err.textContent || '').slice(0, 200));
@@ -71,20 +67,18 @@
     var annoProgressivo = parsed.anno || (dataIso ? parseInt(dataIso.slice(0, 4), 10) : new Date().getFullYear());
     var progressivo = parsed.progressivo || 0;
 
-    // Cessionario → clienteSnapshot
     var cess = firstChild(header, 'CessionarioCommittente');
     var cessDati = firstChild(cess, 'DatiAnagrafici');
     var cessAnag = firstChild(cessDati, 'Anagrafica');
     var cessIva = firstChild(cessDati, 'IdFiscaleIVA');
     var cessSede = firstChild(cess, 'Sede');
-    var denom = text(cessAnag, 'Denominazione');
-    var nomeCli = text(cessAnag, 'Nome');
-    var cognomeCli = text(cessAnag, 'Cognome');
     var clienteSnapshot = {
-      denominazione: denom,
-      nome: nomeCli,
-      cognome: cognomeCli,
+      denominazione: text(cessAnag, 'Denominazione'),
+      nome: text(cessAnag, 'Nome'),
+      cognome: text(cessAnag, 'Cognome'),
       partitaIva: text(cessIva, 'IdCodice'),
+      idPaese: text(cessIva, 'IdPaese'),
+      idCodice: text(cessIva, 'IdCodice'),
       codiceFiscale: text(cessDati, 'CodiceFiscale'),
       indirizzo: text(cessSede, 'Indirizzo'),
       cap: text(cessSede, 'CAP'),
@@ -93,20 +87,14 @@
       nazione: text(cessSede, 'Nazione') || 'IT'
     };
 
-    // Righe
     var lineNodes = body.getElementsByTagName('DettaglioLinee');
     var righe = [];
     for (var i = 0; i < lineNodes.length; i++) {
       var ln = lineNodes[i];
-      var prezzoUnit = num(text(ln, 'PrezzoUnitario'));
-      var qta = num(text(ln, 'Quantita')) || 1;
-      var desc = text(ln, 'Descrizione');
-      // TD04: importi nel XML sono positivi ma il documento è una NC — teniamo positivi nel draft
-      // (il segno negativo viene applicato a runtime via getImportoSigned)
       righe.push({
-        descrizione: desc,
-        quantita: Math.abs(qta),
-        prezzoUnitario: Math.abs(prezzoUnit),
+        descrizione: text(ln, 'Descrizione'),
+        quantita: Math.abs(num(text(ln, 'Quantita')) || 1),
+        prezzoUnitario: Math.abs(num(text(ln, 'PrezzoUnitario'))),
         iva: num(text(ln, 'AliquotaIVA'))
       });
     }
@@ -114,7 +102,6 @@
       righe.push({ descrizione: '(importata senza righe dettaglio)', quantita: 1, prezzoUnitario: Math.abs(totaleDoc), iva: 0 });
     }
 
-    // Pagamento
     var datiPag = firstChild(body, 'DatiPagamento');
     var dettPag = firstChild(datiPag, 'DettaglioPagamento');
     var modalita = text(dettPag, 'ModalitaPagamento');
@@ -131,8 +118,6 @@
       annoProgressivo: annoProgressivo,
       progressivo: progressivo,
       tipoDocumento: tipoDoc === 'TD04' ? 'TD04' : 'TD01',
-      stato: 'inviata',
-      dataInvioSdi: dataIso || null,
       clienteId: '',
       clienteSnapshot: clienteSnapshot,
       righe: righe,
@@ -143,84 +128,64 @@
       modalitaPagamento: modalita || '',
       iban: iban || '',
       scadenzaPagamento: scadenza || '',
-      origine: 'xml-import'
+      totaleDocumento: Math.abs(totaleDoc)
     };
   }
 
-  function _getProfile() {
-    if (typeof root.getProfile === 'function') return root.getProfile();
-    return (root.sessionStorage && root.sessionStorage.getItem('calcoliPIVA_profile')) || 'Mattia';
+  function matchCliente(snapshot, existing) {
+    existing = existing || [];
+    var p = norm(snapshot && snapshot.partitaIva);
+    if (p) {
+      for (var i = 0; i < existing.length; i++) {
+        if (norm(existing[i].partitaIva) === p) return { mode: 'existing', cliente: existing[i] };
+      }
+    }
+    var cf = norm(snapshot && snapshot.codiceFiscale);
+    if (cf) {
+      for (var j = 0; j < existing.length; j++) {
+        if (norm(existing[j].codiceFiscale) === cf) return { mode: 'existing', cliente: existing[j] };
+      }
+    }
+    var idP = norm(snapshot && snapshot.idPaese);
+    var idC = norm(snapshot && snapshot.idCodice);
+    if (idP && idC) {
+      for (var k = 0; k < existing.length; k++) {
+        if (norm(existing[k].idPaese) + norm(existing[k].idCodice) === idP + idC) {
+          return { mode: 'existing', cliente: existing[k] };
+        }
+      }
+    }
+
+    var nome = (snapshot && snapshot.denominazione) ||
+      (((snapshot && snapshot.nome) || '') + ' ' + ((snapshot && snapshot.cognome) || '')).trim() ||
+      '(senza nome)';
+    var rand = Math.random().toString(36).slice(2, 8);
+    return {
+      mode: 'new',
+      draft: {
+        id: 'cli_' + Date.now() + '_' + rand,
+        nome: nome,
+        partitaIva: (snapshot && snapshot.partitaIva) || '',
+        codiceFiscale: (snapshot && snapshot.codiceFiscale) || '',
+        idPaese: (snapshot && snapshot.idPaese) || '',
+        idCodice: (snapshot && snapshot.idCodice) || '',
+        indirizzo: (snapshot && snapshot.indirizzo) || '',
+        cap: (snapshot && snapshot.cap) || '',
+        citta: (snapshot && snapshot.citta) || '',
+        provincia: (snapshot && snapshot.provincia) || '',
+        nazione: (snapshot && snapshot.nazione) || 'IT',
+        pec: '',
+        codiceSDI: '',
+        note: ''
+      }
+    };
   }
 
-  function _dedupKey(f) {
+  function dedupKey(f) {
     return (f.tipoDocumento || 'TD01') + '|' + (f.annoProgressivo || 0) + '|' + (f.progressivo || 0) + '|' + (f.numero || '');
   }
 
-  function importXmlStrings(arr) {
-    var profile = _getProfile();
-    var store = root.FattureStorico;
-    if (!store || typeof store.load !== 'function' || typeof store.save !== 'function') {
-      return { imported: 0, skipped: 0, errors: [{ file: '(n/a)', message: 'FattureStorico non disponibile' }] };
-    }
-    var existing = store.load(profile);
-    var seen = Object.create(null);
-    existing.forEach(function (f) { seen[_dedupKey(f)] = true; });
-
-    var imported = 0, skipped = 0, errors = [];
-    (arr || []).forEach(function (entry) {
-      try {
-        var xmlText = typeof entry === 'string' ? entry : entry.xml;
-        var label = typeof entry === 'string' ? '' : (entry.name || '');
-        var draft = parseXml(xmlText);
-        var key = _dedupKey(draft);
-        if (seen[key]) { skipped++; return; }
-        seen[key] = true;
-        existing.push(draft);
-        imported++;
-      } catch (err) {
-        errors.push({ file: (entry && entry.name) || '(xml)', message: (err && err.message) || String(err) });
-      }
-    });
-
-    if (imported > 0) store.save(profile, existing);
-    return { imported: imported, skipped: skipped, errors: errors };
-  }
-
-  function handleFileInput(event) {
-    var input = event && event.target;
-    var files = input && input.files ? Array.from(input.files) : [];
-    if (!files.length) return;
-
-    Promise.all(files.map(function (file) {
-      return file.text().then(function (xml) { return { name: file.name, xml: xml }; });
-    })).then(function (entries) {
-      var res = importXmlStrings(entries);
-      var msg = 'Importate ' + res.imported + ' fatture';
-      if (res.skipped) msg += ' (skip ' + res.skipped + ' duplicate)';
-      if (res.errors.length) msg += ' — ' + res.errors.length + ' errori';
-      if (typeof root.showToast === 'function') {
-        root.showToast(msg, res.errors.length ? 'error' : 'success');
-      } else if (typeof root.alert === 'function') {
-        root.alert(msg);
-      }
-      if (res.errors.length) console.warn('[FattureImportXml] errori:', res.errors);
-      if (input) input.value = '';
-      // Re-render archivio se aperto
-      if (root.FattureStorico && typeof root.FattureStorico.renderStorico === 'function') {
-        var sel = document.getElementById('archivioAnnoSelect');
-        if (root.FattureStorico.renderAnnoFilter) root.FattureStorico.renderAnnoFilter();
-        root.FattureStorico.renderStorico(Number(sel && sel.value) || new Date().getFullYear());
-      }
-      if (typeof root.recalcAll === 'function') root.recalcAll();
-    }).catch(function (err) {
-      console.error('[FattureImportXml] lettura file fallita:', err);
-      if (typeof root.alert === 'function') root.alert('Errore lettura file: ' + ((err && err.message) || err));
-    });
-  }
-
-  root.FattureImportXml = {
-    parseXml: parseXml,
-    importXmlStrings: importXmlStrings,
-    handleFileInput: handleFileInput
-  };
+  var api = { parseXml: parseXml, matchCliente: matchCliente, dedupKey: dedupKey };
+  root.FattureImportXml = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -100,14 +100,6 @@ global.DOMParser.prototype.parseFromString = function (xml) {
 };
 global.window.DOMParser = global.DOMParser;
 
-// Stub FattureStorico + localStorage
-var _store = [];
-global.window.FattureStorico = {
-  load: function () { return _store.slice(); },
-  save: function (profile, list) { _store = list.slice(); }
-};
-global.window.getProfile = function () { return 'TestProfile'; };
-
 require('../fatture-import-xml.js');
 
 var FI = global.window.FattureImportXml;
@@ -163,8 +155,8 @@ describe('FattureImportXml', function () {
   test('module esposto con API attesa', function () {
     expect(typeof FI).toBe('object');
     expect(typeof FI.parseXml).toBe('function');
-    expect(typeof FI.importXmlStrings).toBe('function');
-    expect(typeof FI.handleFileInput).toBe('function');
+    expect(typeof FI.matchCliente).toBe('function');
+    expect(typeof FI.dedupKey).toBe('function');
   });
 
   test('parseXml throw su input vuoto', function () {
@@ -179,8 +171,6 @@ describe('FattureImportXml', function () {
     expect(draft.annoProgressivo).toBe(2026);
     expect(draft.progressivo).toBe(3);
     expect(draft.tipoDocumento).toBe('TD01');
-    expect(draft.stato).toBe('inviata');
-    expect(draft.origine).toBe('xml-import');
     expect(draft.data).toBe('2026-03-24');
   });
 
@@ -213,19 +203,58 @@ describe('FattureImportXml', function () {
     expect(draft.annoProgressivo).toBe(2025);
     expect(draft.progressivo).toBe(3);
   });
+});
 
-  test('importXmlStrings dedupe per (anno,progressivo,tipoDoc,numero)', function () {
-    _store = [];
-    var res = FI.importXmlStrings([SAMPLE_TD01, SAMPLE_TD01]);
-    expect(res.imported).toBe(1);
-    expect(res.skipped).toBe(1);
-    expect(res.errors.length).toBe(0);
+describe('FattureImportXml.matchCliente', function () {
+  var match = require('../fatture-import-xml').matchCliente || window.FattureImportXml.matchCliente;
+
+  test('match by P.IVA normalizzata', function () {
+    var existing = [{ id: 'c1', partitaIva: '12345678901', nome: 'ACME' }];
+    var r = match({ partitaIva: ' 12345678901 ' }, existing);
+    expect(r.mode).toBe('existing');
+    expect(r.cliente.id).toBe('c1');
   });
 
-  test('importXmlStrings su XML invalido → errore nel risultato', function () {
-    _store = [];
-    var res = FI.importXmlStrings(['<not-an-invoice/>', SAMPLE_TD01]);
-    expect(res.imported).toBe(1);
-    expect(res.errors.length).toBe(1);
+  test('match by CF se P.IVA vuota', function () {
+    var existing = [{ id: 'c2', codiceFiscale: 'RSSMRA80A01H501U' }];
+    var r = match({ codiceFiscale: 'rssmra80a01h501u' }, existing);
+    expect(r.mode).toBe('existing');
+    expect(r.cliente.id).toBe('c2');
+  });
+
+  test('match by idPaese+idCodice per esteri', function () {
+    var existing = [{ id: 'c3', idPaese: 'DE', idCodice: 'DE123' }];
+    var r = match({ idPaese: 'DE', idCodice: 'DE123' }, existing);
+    expect(r.mode).toBe('existing');
+    expect(r.cliente.id).toBe('c3');
+  });
+
+  test('miss → draft con dati snapshot', function () {
+    var r = match({ partitaIva: '99999999999', denominazione: 'Nuovo Srl', nazione: 'IT' }, []);
+    expect(r.mode).toBe('new');
+    expect(r.draft.partitaIva).toBe('99999999999');
+    expect(r.draft.nome).toBe('Nuovo Srl');
+  });
+
+  test('P.IVA vince anche se denominazione diverge', function () {
+    var existing = [{ id: 'c1', partitaIva: '12345678901', nome: 'ACME' }];
+    var r = match({ partitaIva: '12345678901', denominazione: 'Nome Diverso' }, existing);
+    expect(r.mode).toBe('existing');
+    expect(r.cliente.id).toBe('c1');
+  });
+});
+
+describe('FattureImportXml.dedupKey', function () {
+  var dk = require('../fatture-import-xml').dedupKey || window.FattureImportXml.dedupKey;
+
+  test('chiave include tipoDoc, anno, progressivo, numero', function () {
+    expect(dk({ tipoDocumento: 'TD01', annoProgressivo: 2025, progressivo: 3, numero: '3/2025' }))
+      .toBe('TD01|2025|3|3/2025');
+  });
+
+  test('TD04 distinto da TD01 con stesso progressivo', function () {
+    var a = dk({ tipoDocumento: 'TD01', annoProgressivo: 2025, progressivo: 1, numero: '1/2025' });
+    var b = dk({ tipoDocumento: 'TD04', annoProgressivo: 2025, progressivo: 1, numero: 'NC1/2025' });
+    expect(a === b).toBe(false);
   });
 });
