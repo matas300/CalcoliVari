@@ -138,6 +138,11 @@ describe('normalizeFatturaEmessa — origine', function () {
   test('origine invalida → wizard', function () {
     expect(norm({ origine: 'unknown' }).origine).toBe('wizard');
   });
+
+  test('normalizeFatturaEmessa preserva origine xml-import-legacy', function () {
+    var n = norm({ id: 'x', origine: 'xml-import-legacy', righe: [] });
+    expect(n.origine).toBe('xml-import-legacy');
+  });
 });
 
 // ─── ncIds ────────────────────────────────────────────────────────────────────
