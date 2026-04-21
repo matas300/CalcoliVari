@@ -95,6 +95,7 @@ const PROFILE_SYNC_FIELDS = [
   'inailTasso'
 ];
 let currentProfile = sessionStorage.getItem('currentProfile') || null;
+window.getProfile = function() { return currentProfile; };
 let clientiUiState = { search: '' };
 let externalFiscalState = {
   profile: null,
@@ -2058,10 +2059,15 @@ function _saveFattureEmesse(profile, list) {
   localStorage.setItem(key, JSON.stringify(list));
 }
 
-// Helper: get id of fattura at position (month, idx) in the unified store
+// Helper: get id of fattura at position (month, idx) in the Fatture tab grid.
+// Il tab raggruppa per mese di EMISSIONE (issuedMonth), quindi idx riferisce
+// la posizione nella lista filtrata per issuedMonth — non pagMese.
 function _getFatturaIdAt(month, idx) {
   if (!window.FattureSelectors) return null;
-  const rows = window.FattureSelectors.getByMonth(currentProfile, currentYear, month);
+  const byIssued = typeof window.FattureSelectors.getByIssuedMonth === 'function'
+    ? window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month)
+    : null;
+  const rows = byIssued || window.FattureSelectors.getByMonth(currentProfile, currentYear, month);
   return rows[idx] ? rows[idx].id : null;
 }
 
@@ -2088,6 +2094,36 @@ function getFatture(month) {
   }
   // Fallback to legacy store (pre-migration)
   return getFattureFromYearData(data, month);
+}
+
+// getFattureIssued: come getFatture ma filtrata per mese di EMISSIONE (issuedMonth).
+// Usata dal tab Fatture per raggruppare le fatture nel mese in cui sono state fatte.
+function getFattureIssued(month) {
+  if (window.FattureSelectors && typeof window.FattureSelectors.getByIssuedMonth === 'function') {
+    return window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month).map(f => {
+      const imp = window.FattureSelectors.getImportoSigned(f);
+      const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+      const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
+      return {
+        importo: imp,
+        pagMese: f.pagMese || null,
+        pagAnno: f.pagAnno || null,
+        desc: cliente ? `${f.numero || ''} - ${cliente}`.trim().replace(/^-\s*/, '') : desc,
+        id: f.id,
+        origine: f.origine,
+        stato: f.stato,
+        tipoDocumento: f.tipoDocumento
+      };
+    });
+  }
+  return getFattureFromYearData(data, month);
+}
+
+// Id lookup per posizione nel tab Fatture (raggruppato per issuedMonth).
+function _getFatturaIdAtIssued(month, idx) {
+  if (!window.FattureSelectors || typeof window.FattureSelectors.getByIssuedMonth !== 'function') return null;
+  const rows = window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month);
+  return rows[idx] ? rows[idx].id : null;
 }
 
 function setFatturaImporto(month, idx, val) {
@@ -5847,7 +5883,7 @@ function renderFatture() {
 
   for (let m = 1; m <= 12; m++) {
     const stim = getMonthStimato(m);
-    const fatture = getFatture(m);
+    const fatture = getFattureIssued(m);
     const nFatt = fatture.length;
     const totalFatt = fatture.reduce((s, f) => s + (f.importo || 0), 0);
     tF += totalFatt; tS += stim;
@@ -5901,10 +5937,10 @@ function renderFatture() {
         &mdash; Totale: <b>${fmt(crossTot)}</b></p></div></div>`;
   }
 
-  // Deferred invoices info
+  // Deferred invoices info (emesse nell'anno ma incassate in altro anno)
   const deferred = [];
   for (let m = 1; m <= 12; m++) {
-    for (const f of getFatture(m)) {
+    for (const f of getFattureIssued(m)) {
       if (f.importo > 0 && f.pagAnno && f.pagAnno !== currentYear) {
         deferred.push({ mese: m, importo: f.importo, pagAnno: f.pagAnno, desc: f.desc });
       }
@@ -5920,8 +5956,9 @@ function renderFatture() {
         &mdash; Totale: <b>${fmt(defTot)}</b></p></div></div>`;
   }
 
-  const crossTotAll = getCrossYearInvoices().reduce((s, i) => s + i.importo, 0);
-  const tFTotal = tF + crossTotAll; // include cross-year invoices in yearly total
+  // tF ora è la somma per mese di EMISSIONE (issuedMonth), quindi già rappresenta
+  // le fatture emesse nell'anno. Niente più somma con cross-year paid-in.
+  const tFTotal = tF;
   const lim = S().limiteForfettario, pct = lim > 0 ? Math.min(tFTotal/lim*100, 100) : 0;
   document.getElementById('incassoSection').innerHTML = crossHtml + `
     <div class="row" style="margin-top:16px"><label>Fatturato ${currentYear}</label><span class="val">${fmt(tFTotal)}</span></div>

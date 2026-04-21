@@ -1393,12 +1393,27 @@
     const errors = [];
     const profile = getProfileFiscalData();
     if (!String(profile.partitaIva || '').replace(/\D/g, '')) errors.push('Partita IVA del profilo mancante — configurala nel profilo fiscale.');
+    if (!String(profile.indirizzo || '').trim()) errors.push('Indirizzo del cedente mancante nell\'anagrafica profilo.');
+    if (!String(profile.cap || '').trim()) errors.push('CAP del cedente mancante nell\'anagrafica profilo.');
+    if (!String(profile.citta || '').trim()) errors.push('Comune del cedente mancante nell\'anagrafica profilo.');
     if (!draft.numero) errors.push('Numero fattura mancante.');
     if (!draft.data) errors.push('Data fattura mancante.');
     const totals = computeDraftTotals(draft);
     if (totals.subtotal <= 0) errors.push('Importo totale della fattura pari a zero.');
     const cliente = draft.clienteSnapshot;
-    if (!cliente || !cliente.nome) errors.push('Cliente non selezionato o senza ragione sociale.');
+    if (!cliente || !cliente.nome) {
+      errors.push('Cliente non selezionato o senza ragione sociale.');
+    } else {
+      if (!String(cliente.indirizzo || '').trim()) errors.push('Indirizzo del cliente mancante.');
+      if (!String(cliente.cap || '').trim()) errors.push('CAP del cliente mancante.');
+      if (!String(cliente.citta || '').trim()) errors.push('Comune del cliente mancante.');
+      const nazCli = String(cliente.nazione || 'IT').toUpperCase();
+      if (nazCli === 'IT') {
+        const hasPivaIT = isValidPartitaIvaIT(String(cliente.partitaIva || '').replace(/\s+/g, ''));
+        const hasCF = isValidCodiceFiscale(String(cliente.codiceFiscale || '').trim());
+        if (!hasPivaIT && !hasCF) errors.push('Cliente IT senza P.IVA valida né CF valido: SdI rifiuterà.');
+      }
+    }
     return { errors };
   }
 
@@ -1419,41 +1434,55 @@
     const cliente = draft.clienteSnapshot || {};
     const totals = computeDraftTotals(draft);
 
-    // Fix #4 — RegimeFiscale dinamico da settings
-    const regimeFiscale = (window.settings?.regime === 'ordinario') ? 'RF01' : 'RF19';
+    // Regime fiscale — letto da data.settings (module-scoped), fallback RF19 forfettario
+    const regimeUtente = (typeof data !== 'undefined' && data && data.settings && data.settings.regime) || 'forfettario';
+    const regimeFiscale = (regimeUtente === 'ordinario') ? 'RF01' : 'RF19';
 
-    // Fix #1 — ProgressivoInvio sanitizzato (max 10 alfanum)
+    // ProgressivoInvio sanitizzato (max 10 alfanum)
     const progressivo = sanitizeProgressivoInvio(draft.numero || draft.id || '');
 
     const piva = String(profile.partitaIva || '').replace(/\s+/g, '');
-
-    // Fix #3 — validazione P.IVA cedente
     if (piva && !isValidPartitaIvaIT(piva)) {
       console.warn('P.IVA cedente non valida (non 11 cifre):', piva);
     }
 
-    // Fix #2 — validazione CF cedente con warning
     const cfCedente = String(profile.codiceFiscale || '').trim();
     if (cfCedente && !isValidCodiceFiscale(cfCedente)) {
       console.warn('CF cedente non valido:', cfCedente);
       if (typeof showToast === 'function') showToast('Attenzione: CF cedente non valido (verifica anagrafica)');
     }
 
-    // Fix #8 — CodiceDestinatario: privato senza P.IVA → 0000000
+    // Cliente — nazione, P.IVA, CF
     const clientePivaRaw = String(cliente.partitaIva || '').replace(/\s+/g, '');
     const clientePivaValida = isValidPartitaIvaIT(clientePivaRaw);
-    const codiceSDI = clientePivaValida
-      ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
-      : String(cliente.codiceSDI || '').trim() || '0000000';
-
-    // Split profile name into Nome/Cognome (natural person)
-    const nameParts = String(profile.nome || currentProfile).trim().split(/\s+/);
-    const profileCognome = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
-    const profileNome = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : '';
-
-    // Client identification (Fix #3 + Fix #8)
-    const clientePiva = clientePivaRaw; // already computed above (spaces stripped)
+    const cliNaz = String(cliente.nazione || 'IT').slice(0, 2).toUpperCase() || 'IT';
+    const clienteEstero = cliNaz !== 'IT';
+    const clientePiva = clientePivaRaw;
     const clienteCF = String(cliente.codiceFiscale || '').trim();
+
+    // CodiceDestinatario:
+    //  - cliente estero → XXXXXXX (convenzione FatturaPA per operazioni transfrontaliere)
+    //  - cliente IT con SDI valorizzato → quello
+    //  - cliente IT privato o senza SDI → 0000000
+    const codiceSDI = clienteEstero
+      ? 'XXXXXXX'
+      : (clientePivaValida
+          ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
+          : String(cliente.codiceSDI || '').trim() || '0000000');
+
+    // Cedente Nome/Cognome dal profilo fiscale (campi già separati in getProfileFiscalData)
+    const profileNome = String(profile.nome || '').replace(String(profile.cognome || ''), '').trim()
+      || String(profile.nome || '').trim().split(/\s+/).slice(0, -1).join(' ');
+    const profileCognome = String(profile.cognome || '').trim()
+      || String(profile.nome || currentProfile).trim().split(/\s+/).slice(-1)[0];
+
+    // Natura + riferimento normativo (forfettario)
+    //  - cliente IT → N2.2 + art. 1 c. 54-89 L. 190/2014
+    //  - cliente estero → N2.1 (operazioni non soggette art. 7-7septies DPR 633/72)
+    const naturaLinea = clienteEstero ? 'N2.1' : 'N2.2';
+    const riferimentoNormativo = clienteEstero
+      ? 'Operazioni non soggette a IVA ai sensi degli articoli da 7 a 7-septies del DPR 633/1972'
+      : "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
 
     // Imponibile = sum of all lines + contributo integrativo (bollo excluded)
     const imponibile = round2(totals.subtotal + totals.contributoIntegrativo);
@@ -1472,7 +1501,7 @@
       <PrezzoUnitario>${fmtXmlNum(pu)}</PrezzoUnitario>
       <PrezzoTotale>${fmtXmlNum(tot)}</PrezzoTotale>
       <AliquotaIVA>0.00</AliquotaIVA>
-      <Natura>N2.2</Natura>
+      <Natura>${naturaLinea}</Natura>
     </DettaglioLinee>`;
     });
 
@@ -1485,7 +1514,7 @@
       <PrezzoUnitario>${fmtXmlNum(totals.contributoIntegrativo)}</PrezzoUnitario>
       <PrezzoTotale>${fmtXmlNum(round2(totals.contributoIntegrativo * sign))}</PrezzoTotale>
       <AliquotaIVA>0.00</AliquotaIVA>
-      <Natura>N2.2</Natura>
+      <Natura>${naturaLinea}</Natura>
     </DettaglioLinee>`);
     }
 
@@ -1532,17 +1561,20 @@
     const scadenzaXml = draft.scadenzaPagamento
       ? `\n        <DataScadenzaPagamento>${xmlEscape(draft.scadenzaPagamento)}</DataScadenzaPagamento>` : '';
 
-    // Client sede (can be empty — AdE requires Indirizzo+CAP+Comune+Nazione)
-    const cliInd = xmlEscape(String(cliente.indirizzo || 'N/D').slice(0, 60));
-    const cliCap = String(cliente.cap || '00000').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
-    const cliCom = xmlEscape(String(cliente.citta || 'N/D').slice(0, 60));
-    const cliProv = String(cliente.provincia || '').slice(0, 2).trim();
-    const cliNaz = String(cliente.nazione || 'IT').slice(0, 2).toUpperCase();
+    // Client sede — validateFatturaForXml garantisce non-empty per clienti IT.
+    // Per estero: se provincia/cap mancanti, usiamo fallback minimali conformi XSD
+    // (CAP "00000" accettato da SdI per nazioni ≠ IT).
+    const cliInd = xmlEscape(String(cliente.indirizzo || '').slice(0, 60));
+    const cliCap = clienteEstero
+      ? (String(cliente.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5) || '00000')
+      : String(cliente.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
+    const cliCom = xmlEscape(String(cliente.citta || '').slice(0, 60));
+    const cliProv = clienteEstero ? '' : String(cliente.provincia || '').slice(0, 2).trim().toUpperCase();
     const cliProvXml = cliProv ? `\n        <Provincia>${xmlEscape(cliProv)}</Provincia>` : '';
 
-    const cedInd = xmlEscape(String(profile.indirizzo || 'N/D').slice(0, 60));
-    const cedCap = String(profile.cap || '00000').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
-    const cedCom = xmlEscape(String(profile.citta || 'N/D').slice(0, 60));
+    const cedInd = xmlEscape(String(profile.indirizzo || '').slice(0, 60));
+    const cedCap = String(profile.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
+    const cedCom = xmlEscape(String(profile.citta || '').slice(0, 60));
     const cedProv = String(profile.provincia || '').slice(0, 2).trim();
     const cedNaz = String(profile.nazione || 'IT').slice(0, 2).toUpperCase();
     const cedProvXml = cedProv ? `\n        <Provincia>${xmlEscape(cedProv)}</Provincia>` : '';
@@ -1550,18 +1582,31 @@
     const cfCedenteXml = profile.codiceFiscale
       ? `\n        <CodiceFiscale>${xmlEscape(profile.codiceFiscale)}</CodiceFiscale>` : '';
 
-    // Client fiscal ID — Fix #8: privato senza P.IVA → solo CodiceFiscale
+    // Client fiscal ID:
+    //  - estero con codice fiscale estero (in campo partitaIva) → IdFiscaleIVA con IdPaese=cliNaz, niente CF
+    //  - IT con P.IVA valida → IdFiscaleIVA IT + CodiceFiscale se presente
+    //  - IT privato → solo CodiceFiscale
     let cessionarioFiscaleXml = '';
-    if (clientePivaValida) {
-      const cliPaese = String(cliente.paese || 'IT').slice(0, 2).toUpperCase();
+    if (clienteEstero) {
+      // Estero: accetta piva "grezza" (non deve passare validazione IT)
+      const vatEstero = clientePivaRaw || clienteCF;
+      if (vatEstero) {
+        cessionarioFiscaleXml = `
+        <IdFiscaleIVA>
+          <IdPaese>${cliNaz}</IdPaese>
+          <IdCodice>${xmlEscape(vatEstero)}</IdCodice>
+        </IdFiscaleIVA>`;
+      } else {
+        console.warn('Cliente estero senza VAT né CF: XML potrebbe essere rifiutato da SdI');
+      }
+    } else if (clientePivaValida) {
       cessionarioFiscaleXml = `
-      <IdFiscaleIVA>
-        <IdPaese>${cliPaese}</IdPaese>
-        <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
-      </IdFiscaleIVA>`;
+        <IdFiscaleIVA>
+          <IdPaese>IT</IdPaese>
+          <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
+        </IdFiscaleIVA>`;
       if (clienteCF) cessionarioFiscaleXml += `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
     } else {
-      // Privato: solo CF
       if (!clienteCF) {
         console.warn('Cessionario privato senza CF: XML potrebbe essere rifiutato da SdI');
       }
@@ -1630,19 +1675,19 @@
 ${dettaglioLinee.join('\n')}
       <DatiRiepilogo>
         <AliquotaIVA>0.00</AliquotaIVA>
-        <Natura>N2.2</Natura>
+        <Natura>${naturaLinea}</Natura>
         <ImponibileImporto>${fmtXmlNum(round2(imponibile * sign))}</ImponibileImporto>
         <Imposta>0.00</Imposta>
-        <RiferimentoNormativo>Art. 1, commi 54-89, L. 190/2014</RiferimentoNormativo>
+        <RiferimentoNormativo>${xmlEscape(riferimentoNormativo)}</RiferimentoNormativo>
       </DatiRiepilogo>
-    </DatiBeniServizi>
+    </DatiBeniServizi>${clienteEstero ? '' : `
     <DatiPagamento>
       <CondizioniPagamento>TP02</CondizioniPagamento>
       <DettaglioPagamento>
         <ModalitaPagamento>${modalitaToCodiceMP(draft.modalitaPagamento)}</ModalitaPagamento>${scadenzaXml}
         <ImportoPagamento>${fmtXmlNum(round2((totals.total - (Number(draft.ritenuta) || 0)) * sign))}</ImportoPagamento>${ibanXml}
       </DettaglioPagamento>
-    </DatiPagamento>
+    </DatiPagamento>`}
   </FatturaElettronicaBody>
 </p:FatturaElettronica>`;
   }

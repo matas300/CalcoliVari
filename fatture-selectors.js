@@ -51,6 +51,13 @@
     });
   }
 
+  function getByIssuedMonth(profile, year, month) {
+    return all(profile).filter(function (f) {
+      if (f.stato === 'bozza') return false;
+      return Number(f.issuedYear) === Number(year) && Number(f.issuedMonth) === Number(month);
+    });
+  }
+
   function getByQuarter(profile, year, quarter) {
     var months = [quarter * 3 - 2, quarter * 3 - 1, quarter * 3];
     return all(profile).filter(function (f) {
@@ -82,6 +89,7 @@
     getImportoSigned: getImportoSigned,
     getNettoEffettivo: getNettoEffettivo,
     getByMonth: getByMonth,
+    getByIssuedMonth: getByIssuedMonth,
     getByQuarter: getByQuarter,
     getByPagAnno: getByPagAnno,
     getCrossYearPaidIn: getCrossYearPaidIn
