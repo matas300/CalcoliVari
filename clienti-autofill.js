@@ -1,5 +1,5 @@
 /* Clienti Autofill — lookup anagrafica cliente da P.IVA
- * Integrazione openapi.it (imprese.openapi.it/advance/{piva}).
+ * Integrazione openapi.com (company.openapi.com/IT-start/{piva}).
  * API key globale condivisa tra tutti i profili (hardcoded in questo file).
  *
  * API:
@@ -15,7 +15,7 @@
 
   // Chiave globale openapi.it — condivisa fra tutti i profili/utenti.
   // Sostituire il placeholder con la key reale dopo deploy.
-  var GLOBAL_OPENAPI_KEY = '__OPENAPI_KEY_PLACEHOLDER__';
+  var GLOBAL_OPENAPI_KEY = '69e7278d88ec1fa6250e18e7';
 
   function getApiKey() {
     return (GLOBAL_OPENAPI_KEY || '').trim();
@@ -23,23 +23,40 @@
 
   function hasApiKey() {
     var k = getApiKey();
-    return k.length > 0 && k !== '__OPENAPI_KEY_PLACEHOLDER__';
+    return k.length > 0 && !/^__.*_PLACEHOLDER__$/.test(k);
   }
 
   function isValidPivaIT(piva) {
     return typeof piva === 'string' && /^\d{11}$/.test(piva.trim());
   }
 
-  function normalizeResponse(raw) {
-    var d = (raw && raw.data) || raw || {};
+  function pickAddress(d) {
+    // IT-start ritorna address come oggetto con registeredOffice/sub-fields.
+    var addr = d.address || {};
+    var reg = addr.registeredOffice || addr.registered_office || (d.address ? addr : d);
     return {
-      nome: (d.denominazione || d.ragione_sociale || d.nome || '').trim(),
-      cf: (d.codice_fiscale || d.cf || '').trim(),
-      indirizzo: (d.indirizzo || d.address || '').trim(),
-      cap: (d.cap || '').trim(),
-      citta: (d.comune || d.citta || d.city || '').trim(),
-      provincia: (d.provincia || d.province || '').trim().toUpperCase(),
-      pec: (d.pec || d.email_pec || '').trim()
+      street: (reg.streetName || reg.street || reg.toponimo || reg.via || reg.indirizzo || '').toString().trim(),
+      streetNumber: (reg.streetNumber || reg.street_number || reg.civico || '').toString().trim(),
+      zip: (reg.zipCode || reg.zip_code || reg.zip || reg.cap || '').toString().trim(),
+      city: (reg.town || reg.city || reg.comune || reg.citta || '').toString().trim(),
+      province: (reg.province || reg.provincia || '').toString().trim().toUpperCase()
+    };
+  }
+
+  function normalizeResponse(raw) {
+    // openapi.com avvolge la risposta in { success, data: {...} }.
+    var d = (raw && raw.data) || raw || {};
+    var a = pickAddress(d);
+    var indirizzo = a.street;
+    if (indirizzo && a.streetNumber) indirizzo += ' ' + a.streetNumber;
+    return {
+      nome: (d.companyName || d.denominazione || d.ragione_sociale || d.nome || '').toString().trim(),
+      cf: (d.taxCode || d.codice_fiscale || d.cf || '').toString().trim(),
+      indirizzo: indirizzo.trim(),
+      cap: a.zip,
+      citta: a.city,
+      provincia: a.province,
+      pec: (d.pec || d.email_pec || '').toString().trim()
     };
   }
 
@@ -55,7 +72,7 @@
     if (!fetchImpl) {
       return Promise.resolve({ ok: false, code: 'NETWORK', error: 'fetch non disponibile' });
     }
-    return fetchImpl('https://imprese.openapi.it/advance/' + clean, {
+    return fetchImpl('https://company.openapi.com/IT-start/' + clean, {
       headers: { 'Authorization': 'Bearer ' + getApiKey() }
     }).then(function (res) {
       if (res.status === 404) {
