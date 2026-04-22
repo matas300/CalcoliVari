@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Preview banner ICS — dashboard</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .preview-frame {
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 24px;
+    background: var(--color-bg);
+  }
+  .preview-frame h1 { margin-top: 0; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; color: var(--color-text-muted); }
+  .fake-dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; margin-bottom: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+  .fake-dashboard-header .title { font-weight: 600; }
+  .fake-donut-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 24px; text-align: center; color: var(--color-text-muted); font-size: 14px; min-height: 120px; display: flex; align-items: center; justify-content: center; }
+
+  /* --- Banner ICS (vero componente da implementare) --- */
+  .ics-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 0 0 16px 0;
+    background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    border-left: 3px solid var(--color-warning);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-size: 13px;
+  }
+  .ics-banner .icon { font-size: 18px; flex-shrink: 0; }
+  .ics-banner .msg { flex: 1; line-height: 1.4; }
+  .ics-banner .msg strong { color: var(--color-warning); font-weight: 600; }
+  .ics-banner .msg .sub { display: block; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+  .ics-banner .actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .ics-banner button {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .ics-banner button.primary {
+    background: var(--color-warning);
+    color: var(--color-bg);
+    border-color: var(--color-warning);
+    font-weight: 600;
+  }
+  .ics-banner button.ghost {
+    background: transparent;
+    color: var(--color-text-muted);
+    border-color: var(--color-border);
+  }
+  .ics-banner button.ghost:hover { color: var(--color-text); }
+</style>
+</head>
+<body>
+
+<p style="color:var(--color-text-muted);font-size:13px;margin-bottom:24px;">
+  Preview del banner ICS — mostra come apparirebbe a gennaio, <em>prima</em> di qualsiasi altro contenuto della dashboard.
+</p>
+
+<div class="preview-frame">
+  <h1>Variante 1 — warning (gennaio anno corrente, non ancora scaricato)</h1>
+
+  <div class="fake-dashboard-header">
+    <span class="title">Dashboard 2026</span>
+    <span style="color:var(--color-text-muted);font-size:12px;">MattiaTest</span>
+  </div>
+
+  <div class="ics-banner" role="alert">
+    <span class="icon">📅</span>
+    <span class="msg">
+      <strong>Nuovo anno fiscale 2026.</strong>
+      Scarica il calendario scadenze e importalo in Google Calendar per ricevere i reminder automatici.
+      <span class="sub">1 import all'anno. Reminder 1 mese / 2 settimane / 1 settimana / 1 giorno prima di ogni scadenza.</span>
+    </span>
+    <span class="actions">
+      <button class="primary">Scarica .ics</button>
+      <button class="ghost">Nascondi</button>
+    </span>
+  </div>
+
+  <div class="fake-donut-card">[ qui ci sarà il tuo donut "Ripartizione del Lordo" ]</div>
+</div>
+
+
+<div class="preview-frame">
+  <h1>Variante 2 — compatta (stesso stile, una riga)</h1>
+
+  <div class="fake-dashboard-header">
+    <span class="title">Dashboard 2026</span>
+    <span style="color:var(--color-text-muted);font-size:12px;">MattiaTest</span>
+  </div>
+
+  <div class="ics-banner" role="alert" style="padding:8px 14px;">
+    <span class="icon">📅</span>
+    <span class="msg">
+      <strong>Nuovo anno 2026:</strong> scarica le scadenze fiscali per Google Calendar.
+    </span>
+    <span class="actions">
+      <button class="primary">Scarica .ics</button>
+      <button class="ghost">×</button>
+    </span>
+  </div>
+
+  <div class="fake-donut-card">[ qui ci sarà il tuo donut "Ripartizione del Lordo" ]</div>
+</div>
+
+
+<p style="color:var(--color-text-muted);font-size:12px;">
+  Nota: il banner sparisce automaticamente appena clicchi "Scarica .ics" (flag <code>calcoliPIVA_{profile}_icsExported_{year}</code>) oppure con "Nascondi"/×. Si ripresenta automaticamente il 1° gennaio dell'anno dopo.
+</p>
+
+</body>
+</html>
