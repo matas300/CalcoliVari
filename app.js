@@ -2,7 +2,8 @@
 const PROFILE_HASHES = {
   'd9b5e452afd6cdea8583147634c3f85a0ba60fc17ad5e6f069a99d3b4ec35194': 'Mattia',
   'cfaa4bd87a413b57e7e3b4a0d5b220aa500aa5d4f60faf938a8dad50e3def77d': 'Peru',
-  '83ebba2cb71eb1417fd5ccaa12155a3be83cb97bc6fd7ef28500d100d84f8019': 'Demo'
+  '83ebba2cb71eb1417fd5ccaa12155a3be83cb97bc6fd7ef28500d100d84f8019': 'Demo',
+  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08': 'MattiaTest'
 };
 const PROFILE_FISCAL_LIBRARY = {
   Mattia: {
@@ -82,6 +83,32 @@ const PROFILE_FISCAL_LIBRARY = {
     agevolazioneStartUp: 0,
     primoAnnoAgevolato: 0,
     note: ''
+  },
+  MattiaTest: {
+    nome: 'Mattia Test',
+    codiceFiscale: '',
+    partitaIva: '',
+    indirizzo: '',
+    cap: '',
+    citta: '',
+    provincia: '',
+    nazione: 'IT',
+    ateco: '62.10.00',
+    atecoDescrizione: 'Attivita di programmazione informatica',
+    iban: '',
+    modalitaPagamento: 'Bonifico bancario',
+    coefficiente: 67,
+    impostaSostitutiva: 15,
+    inpsMode: 'artigiani_commercianti',
+    inpsCategoria: 'artigiano',
+    inpsTipoGestSep: 'esclusivo',
+    usaInpsUfficiale: 1,
+    riduzione35: 0,
+    limiteForfettario: 85000,
+    inailTasso: 0,
+    agevolazioneStartUp: 0,
+    primoAnnoAgevolato: 0,
+    note: 'Profilo di test — usato per smoke test XML import e feature in sviluppo.'
   }
 };
 const PROFILE_SYNC_FIELDS = [
@@ -798,6 +825,7 @@ const FORFETTARIO_RULES = {
 };
 
 let currentYear = new Date().getFullYear();
+window.getCurrentYear = function () { return currentYear; };
 let data = {};
 
 function getActualCalendarYear() {
@@ -2365,10 +2393,14 @@ function getCrossYearInvoices() {
 }
 
 function getTotalAnnuo() {
+  const usingSelectors = typeof window !== 'undefined' && window.FattureSelectors && currentProfile;
   let t = 0;
   for (let m = 1; m <= 12; m++) t += getMonthEuro(m);
-  // Add cross-year invoices (from previous year, paid this year)
-  for (const inv of getCrossYearInvoices()) t += inv.importo;
+  // When FattureSelectors is unavailable, monthly buckets are issued-year scoped;
+  // cross-year invoices (issued prior year, paid this year) must be added explicitly.
+  if (!usingSelectors) {
+    for (const inv of getCrossYearInvoices()) t += inv.importo;
+  }
   return t;
 }
 
@@ -2456,20 +2488,26 @@ function getTotalAnnuoForYear(year, options) {
   const yearData = getYearDataFor(year);
   if (!yearData) return 0;
 
-  // When selectors available and no estimates needed: use per-cassa ricavi map for accuracy
+  // When selectors available and no estimates needed: use per-cassa ricavi map for accuracy.
+  // ricaviMap is built from getByPagAnno which already includes cross-year invoices
+  // (issued prior year, paid in this year), so do NOT re-add getCrossYearInvoicesForYear.
   if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile &&
       options && options.includeEstimates === false) {
     const ricaviMap = buildRicaviMeseFromSelectors(currentProfile, year);
-    const crossYear = getCrossYearInvoicesForYear(year);
     let total = 0;
     for (const m in ricaviMap) total += ricaviMap[m];
-    for (const inv of crossYear) total += inv.importo;
     return total;
   }
 
+  // Monthly buckets already include cross-year paid-in when FattureSelectors is available
+  // (getByMonth filters by pagAnno=year). Only add cross-year when falling back to legacy
+  // yearData.fatture (issued-year scoped).
+  const usingSelectors = typeof window !== 'undefined' && window.FattureSelectors && currentProfile;
   let total = 0;
   for (let m = 1; m <= 12; m++) total += getMonthEuroFromYearData(yearData, year, m, options);
-  for (const inv of getCrossYearInvoicesForYear(year)) total += inv.importo;
+  if (!usingSelectors) {
+    for (const inv of getCrossYearInvoicesForYear(year)) total += inv.importo;
+  }
   return total;
 }
 
@@ -2922,7 +2960,8 @@ function getCSSVar(name) {
 
 function fmt(n) {
   if (n === undefined || n === null || isNaN(n)) return '\u2014';
-  return ceil2(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
+  var v = ceil2(n) + 0;
+  return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
 }
 function fmtPct(n) { return (n * 100).toFixed(1) + '%'; }
 function row(label, val, cls, valCls) {

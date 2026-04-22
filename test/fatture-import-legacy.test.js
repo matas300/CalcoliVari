@@ -169,12 +169,13 @@ describe('FattureImportLegacy', function () {
     expect(!!rows[0].match).toBeTruthy();
   });
 
-  test('parseToRows: XML senza DataScadenzaPagamento → status=missing_pagamento, pagamento=""', function () {
+  test('parseToRows: XML senza DataScadenzaPagamento → default = data+1m, pagamentoAuto=true', function () {
     win.FattureStorico = { load: function () { return []; }, save: function () {} };
     win.getClienti = function () { return []; };
     var rows = win.FattureImportLegacy.parseToRows([{ name: 'b.xml', xml: SAMPLE_NO_SCAD }]);
-    expect(rows[0].status).toBe('missing_pagamento');
-    expect(rows[0].pagamento).toBe('');
+    expect(rows[0].status).toBe('ok');
+    expect(rows[0].pagamento).toBe('2026-04-24');
+    expect(rows[0].pagamentoAuto).toBe(true);
     expect(rows[0].selected).toBe(true);
   });
 
@@ -227,13 +228,13 @@ describe('FattureImportLegacy', function () {
     expect(clientiSaved && clientiSaved.length).toBe(1);
   });
 
-  test('importConfirmed: row missing_pagamento con pagamento vuoto → skipped + errore', function () {
+  test('importConfirmed: row con pagamento vuoto manualmente → skipped + errore', function () {
     win.FattureStorico = { load: function () { return []; }, save: function () {} };
     win.getClienti = function () { return []; };
     win.saveClienti = function () {};
 
     var rows = win.FattureImportLegacy.parseToRows([{ name: 'b.xml', xml: SAMPLE_NO_SCAD }]);
-    // selected rimane true, pagamento resta ''
+    rows[0].pagamento = ''; // simula utente che cancella il default
     var res = win.FattureImportLegacy.importConfirmed(rows);
     expect(res.imported).toBe(0);
     expect(res.skipped).toBe(1);

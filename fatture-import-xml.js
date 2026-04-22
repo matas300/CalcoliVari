@@ -110,6 +110,12 @@
 
     var id = 'xmlimp_' + annoProgressivo + '_' + progressivo + '_' + tipoDoc + '_' + Math.round(Math.abs(totaleDoc) * 100);
 
+    var issuedYear = 0, issuedMonth = 0;
+    if (dataIso && /^\d{4}-\d{2}-\d{2}/.test(dataIso)) {
+      issuedYear = parseInt(dataIso.slice(0, 4), 10);
+      issuedMonth = parseInt(dataIso.slice(5, 7), 10);
+    }
+
     return {
       id: id,
       numero: numeroXml,
@@ -117,6 +123,8 @@
       anno: annoProgressivo,
       annoProgressivo: annoProgressivo,
       progressivo: progressivo,
+      issuedYear: issuedYear,
+      issuedMonth: issuedMonth,
       tipoDocumento: tipoDoc === 'TD04' ? 'TD04' : 'TD01',
       clienteId: '',
       clienteSnapshot: clienteSnapshot,
@@ -128,7 +136,8 @@
       modalitaPagamento: modalita || '',
       iban: iban || '',
       scadenzaPagamento: scadenza || '',
-      totaleDocumento: Math.abs(totaleDoc)
+      totaleDocumento: Math.abs(totaleDoc),
+      totaleDocument: Math.abs(totaleDoc)
     };
   }
 

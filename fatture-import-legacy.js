@@ -12,6 +12,17 @@
     return (root.sessionStorage && root.sessionStorage.getItem('calcoliPIVA_profile')) || 'Mattia';
   }
 
+  function _defaultPagamento(dataIso) {
+    if (!dataIso) return '';
+    var d = new Date(dataIso);
+    if (isNaN(d.getTime())) return '';
+    d.setMonth(d.getMonth() + 1);
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
   function parseToRows(entries) {
     var X = root.FattureImportXml;
     var profile = _getProfile();
@@ -27,14 +38,13 @@
         var draft = X.parseXml(xmlText);
         row.draft = draft;
         row.match = X.matchCliente(draft.clienteSnapshot, existingClienti);
-        row.pagamento = draft.scadenzaPagamento || '';
+        row.pagamento = draft.scadenzaPagamento || _defaultPagamento(draft.data);
+        row.pagamentoAuto = !draft.scadenzaPagamento;
         var key = X.dedupKey(draft);
         if (seen[key]) {
           row.status = 'duplicate';
           row.existing = seen[key];
           row.selected = false;
-        } else if (!row.pagamento) {
-          row.status = 'missing_pagamento';
         } else {
           row.status = 'ok';
         }
@@ -144,7 +154,7 @@
   }
 
   function _statusLabel(row) {
-    if (row.status === 'ok') return 'ok';
+    if (row.status === 'ok') return row.pagamentoAuto ? 'auto +1m' : 'ok';
     if (row.status === 'missing_pagamento') return 'manca data';
     if (row.status === 'duplicate') return 'gi\u00e0 presente';
     if (row.status === 'parse_error') return 'errore parsing';
@@ -159,10 +169,15 @@
     confirmBtn.textContent = 'Conferma import ' + count + ' fatture';
   }
 
+  var TD_STYLE = 'padding:6px 8px;border-bottom:1px solid var(--color-border,#2a2f38);vertical-align:middle;';
+  var TD_NUM = TD_STYLE + 'text-align:right;white-space:nowrap;';
+
   function _buildRow(row, confirmBtn, rows) {
     var tr = _el('tr', { 'data-idx': String(row.idx) });
+    if (row.status === 'duplicate') tr.style.opacity = '0.55';
+    if (row.status === 'parse_error') tr.style.background = 'rgba(220,53,69,.08)';
 
-    var cbCell = _el('td');
+    var cbCell = _el('td', { style: TD_STYLE + 'text-align:center;' });
     var cb = _el('input', { type: 'checkbox' });
     cb.checked = !!row.selected;
     cb.disabled = row.status === 'parse_error';
@@ -170,31 +185,35 @@
     cbCell.appendChild(cb);
     tr.appendChild(cbCell);
 
-    tr.appendChild(_el('td', null, [String(row.idx + 1)]));
-    tr.appendChild(_el('td', null, [row.draft ? (row.draft.numero || '\u2014') : row.file]));
-    tr.appendChild(_el('td', null, [row.draft ? (row.draft.data || '\u2014') : '\u2014']));
+    tr.appendChild(_el('td', { style: TD_STYLE + 'font-family:monospace;' }, [row.draft ? (row.draft.numero || '\u2014') : row.file]));
+    tr.appendChild(_el('td', { style: TD_STYLE + 'white-space:nowrap;' }, [row.draft ? (row.draft.data || '\u2014') : '\u2014']));
 
-    var clienteCell = _el('td');
+    var clienteCell = _el('td', { style: TD_STYLE });
     if (row.match) {
       var nome = row.match.mode === 'existing' ? row.match.cliente.nome : row.match.draft.nome;
       clienteCell.appendChild(_doc().createTextNode(nome + ' '));
-      var badgeCls = row.match.mode === 'existing' ? 'badge-stato pagata' : 'badge-stato inviata';
+      var badgeStyle = row.match.mode === 'existing'
+        ? 'display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:rgba(90,180,120,.15);color:#7dd79d;border:1px solid rgba(125,215,157,.3);'
+        : 'display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:rgba(90,140,220,.15);color:#8db4ea;border:1px solid rgba(141,180,234,.3);';
       var badgeTxt = row.match.mode === 'existing' ? '\u2713 esistente' : '+ nuovo';
-      clienteCell.appendChild(_el('span', { class: badgeCls }, [badgeTxt]));
+      clienteCell.appendChild(_el('span', { style: badgeStyle }, [badgeTxt]));
     } else {
       clienteCell.appendChild(_doc().createTextNode('\u2014'));
     }
     tr.appendChild(clienteCell);
 
-    tr.appendChild(_el('td', null, [row.draft ? _fmtImporto(row.draft) : '\u2014']));
-    tr.appendChild(_el('td', null, [row.draft ? row.draft.tipoDocumento : '\u2014']));
+    tr.appendChild(_el('td', { style: TD_NUM }, [row.draft ? _fmtImporto(row.draft) : '\u2014']));
+    tr.appendChild(_el('td', { style: TD_STYLE + 'text-align:center;font-family:monospace;' }, [row.draft ? row.draft.tipoDocumento : '\u2014']));
 
-    var pagCell = _el('td');
-    var dateInput = _el('input', { type: 'date' });
+    var pagCell = _el('td', { style: TD_STYLE });
+    var dateInput = _el('input', { type: 'date', style: 'padding:4px 6px;border-radius:4px;border:1px solid var(--color-border,#2a2f38);background:var(--color-bg,#0f1218);color:inherit;font-size:12px;' });
     dateInput.value = row.pagamento || '';
+    if (row.pagamentoAuto) dateInput.style.borderColor = '#b38e3a';
     if (row.status === 'missing_pagamento' && !row.pagamento) dateInput.style.background = '#5a4a1a';
     dateInput.onchange = function () {
       row.pagamento = dateInput.value;
+      row.pagamentoAuto = false;
+      dateInput.style.borderColor = 'var(--color-border,#2a2f38)';
       if (row.pagamento && row.status === 'missing_pagamento') row.status = 'ok';
       if (!row.pagamento && row.status === 'ok') row.status = 'missing_pagamento';
       var statusCell = tr.querySelector('td.status-cell');
@@ -204,68 +223,96 @@
     pagCell.appendChild(dateInput);
     tr.appendChild(pagCell);
 
-    tr.appendChild(_el('td', { class: 'status-cell' }, [_statusLabel(row)]));
+    tr.appendChild(_el('td', { class: 'status-cell', style: TD_STYLE + 'font-size:11px;color:var(--color-text-muted,#8a94a6);' }, [_statusLabel(row)]));
     return tr;
   }
 
   function openModal(rows) {
     var doc = _doc();
-    var overlay = _el('div', { id: 'importLegacyOverlay', class: 'modal-overlay' });
-    var modal = _el('div', { class: 'modal-content', style: 'max-width:1100px;width:95vw;max-height:90vh;overflow:auto;' });
+    var overlay = _el('div', {
+      id: 'importLegacyOverlay',
+      style: 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:2000;'
+    });
+    var modal = _el('div', {
+      style: 'background:var(--color-surface-3,#1a1d23);color:var(--color-text,#e7ecf1);border:1px solid var(--color-border,#2a2f38);border-radius:12px;max-width:1100px;width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5);'
+    });
 
-    var header = _el('div', { class: 'modal-header' }, [
-      _el('h3', null, ['Import legacy \u2014 preview']),
-      _el('button', { type: 'button', class: 'btn-close', onclick: function () { doc.body.removeChild(overlay); } }, ['\u00d7'])
+    var header = _el('div', {
+      style: 'display:flex;align-items:center;justify-content:space-between;padding:16px;background:var(--color-surface-2,#20242c);border-bottom:1px solid var(--color-border,#2a2f38);'
+    }, [
+      _el('h3', { style: 'margin:0;font-size:16px;' }, ['Import legacy \u2014 preview']),
+      _el('button', { type: 'button', class: 'btn btn-ghost', style: 'padding:4px 10px;', onclick: function () { doc.body.removeChild(overlay); } }, ['\u00d7'])
     ]);
     modal.appendChild(header);
 
+    var content = _el('div', { style: 'padding:16px;overflow:auto;flex:1;' });
+    modal.appendChild(content);
+
     var errors = rows.filter(function (r) { return r.status === 'parse_error'; });
     if (errors.length) {
-      var errList = _el('ul', null, errors.map(function (e) {
+      var errList = _el('ul', { style: 'margin:4px 0 0 16px;' }, errors.map(function (e) {
         return _el('li', null, [e.file + ' \u2014 ' + (e.error || '')]);
       }));
-      modal.appendChild(_el('div', { class: 'alert alert-error' }, [
+      content.appendChild(_el('div', {
+        style: 'background:#3a1a1a;border:1px solid #7a2a2a;border-radius:6px;padding:10px;margin-bottom:12px;'
+      }, [
         _el('strong', null, [errors.length + ' file non parseable:']),
         errList
       ]));
     }
 
-    modal.appendChild(_el('p', null, ['Controlla i dati, inserisci la data di pagamento quando manca, poi conferma.']));
+    content.appendChild(_el('p', { style: 'margin:0 0 12px;' }, ['Controlla i dati, inserisci la data di pagamento quando manca, poi conferma.']));
 
-    var table = _el('table', { class: 'import-legacy-table' });
+    var table = _el('table', { class: 'import-legacy-table', style: 'width:100%;border-collapse:collapse;font-size:12px;' });
+    var TH_STYLE = 'padding:8px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted,#8a94a6);border-bottom:1px solid var(--color-border,#2a2f38);background:var(--color-surface-2,#20242c);position:sticky;top:0;';
     var thead = _el('thead', null, [
       _el('tr', null, [
-        _el('th'),
-        _el('th', null, ['#']),
-        _el('th', null, ['Numero']),
-        _el('th', null, ['Data doc']),
-        _el('th', null, ['Cliente']),
-        _el('th', null, ['Importo']),
-        _el('th', null, ['Tipo']),
-        _el('th', null, ['Pagata il']),
-        _el('th', null, ['Status'])
+        _el('th', { style: TH_STYLE + 'width:32px;text-align:center;' }),
+        _el('th', { style: TH_STYLE }, ['Numero']),
+        _el('th', { style: TH_STYLE }, ['Data doc']),
+        _el('th', { style: TH_STYLE }, ['Cliente']),
+        _el('th', { style: TH_STYLE + 'text-align:right;' }, ['Importo']),
+        _el('th', { style: TH_STYLE + 'text-align:center;' }, ['Tipo']),
+        _el('th', { style: TH_STYLE }, ['Pagata il']),
+        _el('th', { style: TH_STYLE }, ['Status'])
       ])
     ]);
     table.appendChild(thead);
     var tbody = _el('tbody');
     table.appendChild(tbody);
-    modal.appendChild(table);
+    content.appendChild(table);
 
     var cancelBtn = _el('button', { type: 'button', class: 'btn btn-ghost', onclick: function () { doc.body.removeChild(overlay); } }, ['Annulla']);
     var confirmBtn = _el('button', { type: 'button', class: 'btn btn-primary' });
-    var actions = _el('div', { class: 'modal-actions', style: 'margin-top:16px;display:flex;justify-content:flex-end;gap:8px;' }, [cancelBtn, confirmBtn]);
+    var actions = _el('div', {
+      style: 'padding:12px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--color-border,#2a2f38);background:var(--color-surface-2,#20242c);'
+    }, [cancelBtn, confirmBtn]);
     modal.appendChild(actions);
 
     rows.forEach(function (row) { tbody.appendChild(_buildRow(row, confirmBtn, rows)); });
     _renderConfirmEnabled(rows, confirmBtn);
 
     confirmBtn.onclick = function () {
+      try {
+      var annoSet = Object.create(null);
+      rows.forEach(function (r) {
+        if (r.selected && r.pagamento) {
+          var y = Number(String(r.pagamento).slice(0, 4));
+          if (y) annoSet[y] = (annoSet[y] || 0) + 1;
+        }
+      });
       var res = importConfirmed(rows);
       doc.body.removeChild(overlay);
+      var anni = Object.keys(annoSet).map(Number).sort();
       var msg = 'Importate ' + res.imported + ' fatture';
-      if (res.clientiCreati) msg += ' (clienti nuovi: ' + res.clientiCreati + ')';
+      if (anni.length) msg += ' (anno pagamento: ' + anni.join(', ') + ')';
+      if (res.clientiCreati) msg += ' \u2014 clienti nuovi: ' + res.clientiCreati;
       if (res.skipped) msg += ' \u2014 skip ' + res.skipped;
       if (res.errors.length) msg += ' \u2014 ' + res.errors.length + ' errori';
+      var currentY = (typeof root.currentYear === 'number') ? root.currentYear : new Date().getFullYear();
+      if (anni.length && anni.indexOf(currentY) === -1) {
+        msg += ' \u2014 seleziona anno ' + anni[0] + ' per vederle nella tabella mensile';
+      }
       if (typeof root.showToast === 'function') root.showToast(msg, res.errors.length ? 'warning' : 'success');
       else if (typeof root.alert === 'function') root.alert(msg);
       if (root.FattureStorico && typeof root.FattureStorico.renderStorico === 'function') {
@@ -275,6 +322,7 @@
       }
       if (typeof root.renderClienti === 'function') root.renderClienti();
       if (typeof root.recalcAll === 'function') root.recalcAll();
+      } catch (err) { console.error('[IMPORT-LEGACY] onclick ERROR:', err); alert('Errore import: ' + (err && err.message || err)); }
     };
 
     overlay.appendChild(modal);

@@ -30,6 +30,10 @@
     for (var i = 0; i < righe.length; i++) {
       imp += (Number(righe[i].quantita) || 0) * (Number(righe[i].prezzoUnitario) || 0);
     }
+    if (imp === 0 && fattura) {
+      var fallback = Number(fattura.totaleDocument) || Number(fattura.totaleDocumento) || 0;
+      if (fallback > 0) return fallback;
+    }
     return imp;
   }
 

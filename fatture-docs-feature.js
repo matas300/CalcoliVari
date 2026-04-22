@@ -72,6 +72,24 @@
 
   function normalizeInvoice(inv) {
     if (!inv || typeof inv !== 'object') return inv;
+    const righeArr = Array.isArray(inv.righe) ? inv.righe : [];
+    const imp = righeArr.reduce((s, r) => s + (Number(r && r.quantita) || 0) * (Number(r && r.prezzoUnitario) || 0), 0);
+    const contr = Number(inv.contributoIntegrativo) || 0;
+    const bolloIn = (inv.marcaDaBollo && inv.bolloAddebitato) ? 2 : 0;
+    const computedTot = Math.round((imp + contr + bolloIn + Number.EPSILON) * 100) / 100 + 0;
+    const savedTot = Number(inv.totaleDocument);
+    const legacyTot = Number(inv.totaleDocumento);
+    let totaleDocument;
+    if (Number.isFinite(savedTot) && savedTot > 0) totaleDocument = savedTot;
+    else if (computedTot > 0) totaleDocument = computedTot;
+    else if (Number.isFinite(legacyTot) && legacyTot > 0) totaleDocument = legacyTot;
+    else totaleDocument = 0;
+    let issuedYear = Number(inv.issuedYear);
+    let issuedMonth = Number(inv.issuedMonth);
+    if ((!Number.isFinite(issuedYear) || !issuedYear || !Number.isFinite(issuedMonth) || !issuedMonth) && inv.data) {
+      const m = String(inv.data).match(/^(\d{4})-(\d{2})/);
+      if (m) { issuedYear = parseInt(m[1], 10); issuedMonth = parseInt(m[2], 10); }
+    }
     return {
       ...DRAFT_TEMPLATE,
       ...inv,
@@ -85,7 +103,10 @@
       ritenuta: Number(inv.ritenuta) || 0,
       aliquotaRitenuta: Number(inv.aliquotaRitenuta) || 20,
       tipoRitenuta: inv.tipoRitenuta || 'RT02',
-      causaleRitenuta: inv.causaleRitenuta || 'A'
+      causaleRitenuta: inv.causaleRitenuta || 'A',
+      totaleDocument: totaleDocument,
+      issuedYear: issuedYear || null,
+      issuedMonth: issuedMonth || null
     };
   }
 
