@@ -5689,6 +5689,35 @@ function onScadenziarioArchivedToggle(el) {
   else scadenziarioUiState.openArchived.delete(year);
 }
 
+function exportScadenzeIcs(year) {
+  var y = year || currentYear;
+  if (!window.CalendarExport || typeof buildForfettarioScheduleForYear !== 'function') {
+    alert('Export ICS non disponibile.');
+    return;
+  }
+  var rows = buildForfettarioScheduleForYear(y) || [];
+  var ics = window.CalendarExport.buildIcsForYear(y, currentProfile, rows);
+  var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'scadenze-fiscali-' + currentProfile + '-' + y + '.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  try {
+    localStorage.setItem('calcoliPIVA_' + currentProfile + '_icsExported_' + y, String(Date.now()));
+  } catch (e) { /* ignore quota errors */ }
+  if (typeof renderRiepilogo === 'function') renderRiepilogo();
+}
+
+function isIcsDownloaded(profile, year) {
+  try {
+    return !!localStorage.getItem('calcoliPIVA_' + profile + '_icsExported_' + year);
+  } catch (e) { return false; }
+}
+
 function renderScadenziario() {
   const el = document.getElementById('scadenziarioGrid');
   if (!el) return;
