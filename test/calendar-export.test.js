@@ -35,4 +35,27 @@ assert.strictEqual(u1, u2, 'UID must be deterministic');
 assert.ok(/@calcoli-piva\.local$/.test(u1), 'UID must end with @calcoli-piva.local');
 assert.notStrictEqual(CE._deterministicUid('Peru', 2026, 'imposta_saldo_2025'), u1);
 
-console.log('Tasks 2+3 tests passed');
+var ev = {
+  uid: 'test-uid@calcoli-piva.local',
+  dtstart: '20260630T090000',
+  dtend: '20260630T100000',
+  summary: 'Saldo imposta sostitutiva 2025',
+  description: 'Scadenza fiscale — codice tributo 1792',
+  location: 'F24'
+};
+var vevent = CE._eventToVevent(ev);
+assert.ok(vevent.indexOf('BEGIN:VEVENT') === 0);
+assert.ok(vevent.indexOf('END:VEVENT') > 0);
+assert.ok(vevent.indexOf('UID:test-uid@calcoli-piva.local') > 0);
+assert.ok(vevent.indexOf('DTSTART;TZID=Europe/Rome:20260630T090000') > 0);
+assert.ok(vevent.indexOf('DTEND;TZID=Europe/Rome:20260630T100000') > 0);
+assert.ok(vevent.indexOf('DTSTAMP:' + CE._FIXED_DTSTAMP) > 0);
+assert.ok(vevent.indexOf('SUMMARY:Saldo imposta sostitutiva 2025') > 0);
+assert.strictEqual((vevent.match(/BEGIN:VALARM/g) || []).length, 4);
+assert.ok(vevent.indexOf('TRIGGER:-P1M') > 0);
+assert.ok(vevent.indexOf('TRIGGER:-P2W') > 0);
+assert.ok(vevent.indexOf('TRIGGER:-P1W') > 0);
+assert.ok(vevent.indexOf('TRIGGER:-P1D') > 0);
+assert.ok(vevent.indexOf('\r\n') > 0);
+
+console.log('Tasks 2+3+4 tests passed');

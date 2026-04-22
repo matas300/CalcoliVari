@@ -48,7 +48,26 @@
     var safeKey = String(key).toLowerCase().replace(/[^a-z0-9_]/g, '');
     return 'calcolipiva-' + safeProfile + '-' + year + '-' + safeKey + '@calcoli-piva.local';
   }
-  function _eventToVevent(ev) { throw new Error('not implemented'); }
+  function _eventToVevent(ev) {
+    var lines = [];
+    lines.push('BEGIN:VEVENT');
+    lines.push(_foldLine('UID:' + ev.uid));
+    lines.push('DTSTAMP:' + FIXED_DTSTAMP);
+    lines.push('DTSTART;TZID=Europe/Rome:' + ev.dtstart);
+    lines.push('DTEND;TZID=Europe/Rome:' + ev.dtend);
+    lines.push(_foldLine('SUMMARY:' + _escape(ev.summary)));
+    if (ev.description) lines.push(_foldLine('DESCRIPTION:' + _escape(ev.description)));
+    if (ev.location) lines.push(_foldLine('LOCATION:' + _escape(ev.location)));
+    ['-P1M', '-P2W', '-P1W', '-P1D'].forEach(function (trig) {
+      lines.push('BEGIN:VALARM');
+      lines.push('ACTION:DISPLAY');
+      lines.push(_foldLine('DESCRIPTION:' + _escape(ev.summary)));
+      lines.push('TRIGGER:' + trig);
+      lines.push('END:VALARM');
+    });
+    lines.push('END:VEVENT');
+    return lines.join(CRLF);
+  }
   function buildIcsForYear(year, profile, scheduleRows) { throw new Error('not implemented'); }
 
   global.CalendarExport = {
