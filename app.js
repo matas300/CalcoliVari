@@ -5589,6 +5589,9 @@ function renderScadenziarioToolbar(displayedMetas, allMetas) {
         <button class="scad-filter-btn ${scadenziarioUiState.showHistoricalYears ? 'active' : ''}" onclick="toggleScadenziarioHistoricalYears()">
           ${scadenziarioUiState.showHistoricalYears ? 'Nascondi anni ordinari e misti' : 'Mostra anni ordinari e misti'}
         </button>
+        <button class="scad-filter-btn" onclick="exportScadenzeIcs(${currentYear})" title="Scarica le scadenze dell'anno corrente come file .ics da importare in Google Calendar">
+          📅 Esporta .ics
+        </button>
       </div>
     </div>
     <div class="scad-inline-meta">
