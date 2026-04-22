@@ -7,6 +7,26 @@
   var PRODID = '-//Calcoli PIVA//Scadenze Fiscali//IT';
   var FIXED_DTSTAMP = '20260101T000000Z'; // byte-deterministic output
 
+  var VTIMEZONE = [
+    'BEGIN:VTIMEZONE',
+    'TZID:Europe/Rome',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:+0100',
+    'TZOFFSETTO:+0200',
+    'TZNAME:CEST',
+    'DTSTART:19700329T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:+0200',
+    'TZOFFSETTO:+0100',
+    'TZNAME:CET',
+    'DTSTART:19701025T030000',
+    'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+    'END:STANDARD',
+    'END:VTIMEZONE'
+  ].join(CRLF);
+
   function _escape(text) {
     if (text == null) return '';
     return String(text)
@@ -68,7 +88,45 @@
     lines.push('END:VEVENT');
     return lines.join(CRLF);
   }
-  function buildIcsForYear(year, profile, scheduleRows) { throw new Error('not implemented'); }
+  function _shouldSkipRow(row) {
+    if (!row || !row.due || !row.due.iso) return true;
+    if (row.status === 'paid') return true;
+    if ((row.amount === 0 || row.amount == null) && /^bollo_/.test(row.key || '')) return true;
+    return false;
+  }
+
+  function _addHour(dtstart) {
+    // 'YYYYMMDDT090000' → 'YYYYMMDDT100000'. Events are 09:00→10:00 local.
+    return dtstart.slice(0, 9) + '10' + dtstart.slice(11);
+  }
+
+  function buildIcsForYear(year, profile, scheduleRows) {
+    var events = [];
+    for (var i = 0; i < (scheduleRows || []).length; i++) {
+      var row = scheduleRows[i];
+      if (_shouldSkipRow(row)) continue;
+      var dtstart = _formatDate(row.due.iso);
+      events.push(_eventToVevent({
+        uid: _deterministicUid(profile, year, row.key || ('row_' + i)),
+        dtstart: dtstart,
+        dtend: _addHour(dtstart),
+        summary: row.title || 'Scadenza fiscale',
+        description: '',
+        location: 'F24'
+      }));
+    }
+    var out = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:' + PRODID,
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      VTIMEZONE
+    ];
+    for (var j = 0; j < events.length; j++) out.push(events[j]);
+    out.push('END:VCALENDAR');
+    return out.join(CRLF) + CRLF;
+  }
 
   global.CalendarExport = {
     buildIcsForYear: buildIcsForYear,

@@ -58,4 +58,26 @@ assert.ok(vevent.indexOf('TRIGGER:-P1W') > 0);
 assert.ok(vevent.indexOf('TRIGGER:-P1D') > 0);
 assert.ok(vevent.indexOf('\r\n') > 0);
 
-console.log('Tasks 2+3+4 tests passed');
+var rows = [
+  { key: 'imposta_saldo_2025', title: 'Saldo imposta sostitutiva 2025', due: { iso: '2026-06-30' }, amount: 1200, status: 'open' },
+  { key: 'imposta_acc2_2026', title: 'Secondo acconto imposta 2026', due: { iso: '2026-11-30' }, amount: 800, status: 'open' },
+  { key: 'bollo_q1_2026',     title: 'Bollo 1° trimestre',            due: { iso: '2026-05-31' }, amount: 0,    status: 'open' },
+  { key: 'imposta_acc1_2026', title: 'Primo acconto imposta 2026',    due: { iso: '2026-06-30' }, amount: 500, status: 'paid' },
+  { key: 'inps_fissi_2_2026', title: 'INPS fissi — 2° rata 2026',     due: { iso: null },         amount: 900, status: 'open' }
+];
+
+var ics = CE.buildIcsForYear(2026, 'Mattia', rows);
+assert.ok(ics.indexOf('BEGIN:VCALENDAR') === 0);
+assert.ok(ics.indexOf('VERSION:2.0') > 0);
+assert.ok(ics.indexOf('PRODID:' + CE._PRODID) > 0);
+assert.ok(ics.indexOf('BEGIN:VTIMEZONE') > 0);
+assert.ok(ics.indexOf('TZID:Europe/Rome') > 0);
+assert.strictEqual((ics.match(/BEGIN:VEVENT/g) || []).length, 2);
+assert.ok(ics.indexOf('Saldo imposta sostitutiva 2025') > 0);
+assert.ok(ics.indexOf('Secondo acconto imposta 2026') > 0);
+assert.ok(/END:VCALENDAR\r\n?$/.test(ics));
+
+var ics2 = CE.buildIcsForYear(2026, 'Mattia', rows);
+assert.strictEqual(ics, ics2, 'buildIcsForYear must be byte-deterministic');
+
+console.log('Tasks 2+3+4+5 tests passed');
