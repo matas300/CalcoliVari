@@ -39,8 +39,15 @@
     if (buf.length) out.push(first ? buf : ' ' + buf);
     return out.join('\r\n');
   }
-  function _formatDate(iso) { throw new Error('not implemented'); }
-  function _deterministicUid(profile, year, key) { throw new Error('not implemented'); }
+  function _formatDate(iso) {
+    var parts = String(iso).split('-');
+    return parts[0] + parts[1] + parts[2] + 'T090000';
+  }
+  function _deterministicUid(profile, year, key) {
+    var safeProfile = String(profile || 'default').toLowerCase().replace(/[^a-z0-9]/g, '');
+    var safeKey = String(key).toLowerCase().replace(/[^a-z0-9_]/g, '');
+    return 'calcolipiva-' + safeProfile + '-' + year + '-' + safeKey + '@calcoli-piva.local';
+  }
   function _eventToVevent(ev) { throw new Error('not implemented'); }
   function buildIcsForYear(year, profile, scheduleRows) { throw new Error('not implemented'); }
 

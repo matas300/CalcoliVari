@@ -24,4 +24,15 @@ folded.split('\r\n').forEach(function (seg, i) {
   assert.ok(Buffer.byteLength(i === 0 ? seg : ' ' + body, 'utf8') <= 75, 'segment too long');
 });
 
-console.log('Task 2 tests passed');
+// _formatDate: YYYY-MM-DD at 09:00 local → YYYYMMDDT090000
+assert.strictEqual(CE._formatDate('2026-06-30'), '20260630T090000');
+assert.strictEqual(CE._formatDate('2026-01-05'), '20260105T090000');
+
+// _deterministicUid: stable per profile+year+key
+var u1 = CE._deterministicUid('Mattia', 2026, 'imposta_saldo_2025');
+var u2 = CE._deterministicUid('Mattia', 2026, 'imposta_saldo_2025');
+assert.strictEqual(u1, u2, 'UID must be deterministic');
+assert.ok(/@calcoli-piva\.local$/.test(u1), 'UID must end with @calcoli-piva.local');
+assert.notStrictEqual(CE._deterministicUid('Peru', 2026, 'imposta_saldo_2025'), u1);
+
+console.log('Tasks 2+3 tests passed');
