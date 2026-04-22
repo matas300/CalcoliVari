@@ -336,6 +336,19 @@
           </span>
         </label>
       </div>
+
+      <div class="settings-subsection-title">Google Calendar</div>
+      <div class="settings-group" style="margin-top:12px">
+        <div style="font-size:.82rem;color:var(--color-text-muted);line-height:1.5;margin-bottom:10px">
+          Scarica il file .ics con tutte le scadenze fiscali dell'anno corrente. Importalo in Google Calendar una sola volta: ogni scadenza riceverà reminder 1 mese, 2 settimane, 1 settimana e 1 giorno prima.
+        </div>
+        <button type="button" class="btn-primary" onclick="exportScadenzeIcs(currentYear)">
+          &#128197; Scarica .ics scadenze anno corrente
+        </button>
+        <div style="font-size:.75rem;color:var(--color-text-muted);margin-top:8px">
+          Come importare: <a href="https://calendar.google.com/calendar/u/0/r/settings/export" target="_blank" rel="noopener" style="color:var(--color-primary)">apri Google Calendar &rarr; Impostazioni &rarr; Importa ed esporta</a>.
+        </div>
+      </div>
     </div>
   </div>
 
