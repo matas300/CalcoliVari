@@ -5105,3 +5105,34 @@ html[data-theme="light"] .dich-conto-estero {
     flex: 1 1 calc(50% - var(--space-2));
   }
 }
+
+.ics-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  margin: 0 0 16px 0;
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 13px;
+}
+.ics-banner .icon { font-size: 18px; flex-shrink: 0; }
+.ics-banner .msg { flex: 1; line-height: 1.4; }
+.ics-banner .msg strong { color: var(--color-warning); font-weight: 600; }
+.ics-banner .actions { display: flex; gap: 8px; flex-shrink: 0; }
+.ics-banner button {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.ics-banner button.primary {
+  background: var(--color-warning);
+  color: var(--color-bg);
+  border-color: var(--color-warning);
+  font-weight: 600;
+}

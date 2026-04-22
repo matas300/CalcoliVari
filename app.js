@@ -3332,6 +3332,12 @@ function renderRiepilogo() {
   let h = '';
   if (regime === 'forfettario') renderRiepilogoForfettario(h, el);
   else renderRiepilogoOrdinario(h, el);
+  const banner = buildIcsBannerHtml();
+  if (banner) {
+    const existing = document.getElementById('ics-banner-root');
+    if (existing) existing.remove();
+    el.insertAdjacentHTML('afterbegin', banner);
+  }
 }
 
 function buildMonthlyTable(perc) {
@@ -5719,6 +5725,22 @@ function isIcsDownloaded(profile, year) {
   try {
     return !!localStorage.getItem('calcoliPIVA_' + profile + '_icsExported_' + year);
   } catch (e) { return false; }
+}
+
+function buildIcsBannerHtml() {
+  var now = new Date();
+  if (now.getMonth() !== 0) return '';
+  if (currentYear !== now.getFullYear()) return '';
+  if (!currentProfile) return '';
+  if (isIcsDownloaded(currentProfile, currentYear)) return '';
+  return '' +
+    '<div class="ics-banner" role="alert" id="ics-banner-root">' +
+      '<span class="icon">📅</span>' +
+      '<span class="msg"><strong>Nuovo anno ' + currentYear + ':</strong> scarica le scadenze fiscali per Google Calendar.</span>' +
+      '<span class="actions">' +
+        '<button class="primary" type="button" onclick="exportScadenzeIcs(' + currentYear + ')">Scarica .ics</button>' +
+      '</span>' +
+    '</div>';
 }
 
 function renderScadenziario() {
