@@ -72,9 +72,12 @@ assert.ok(ics.indexOf('VERSION:2.0') > 0);
 assert.ok(ics.indexOf('PRODID:' + CE._PRODID) > 0);
 assert.ok(ics.indexOf('BEGIN:VTIMEZONE') > 0);
 assert.ok(ics.indexOf('TZID:Europe/Rome') > 0);
-assert.strictEqual((ics.match(/BEGIN:VEVENT/g) || []).length, 2);
+// 5 rows → 3 events (skip: bollo with amount=0, row with null due.iso). Paid-status
+// filter dropped: real schedule rows carry status as {label,cls}, not a string.
+assert.strictEqual((ics.match(/BEGIN:VEVENT/g) || []).length, 3);
 assert.ok(ics.indexOf('Saldo imposta sostitutiva 2025') > 0);
 assert.ok(ics.indexOf('Secondo acconto imposta 2026') > 0);
+assert.ok(ics.indexOf('Primo acconto imposta 2026') > 0);
 assert.ok(/END:VCALENDAR\r\n?$/.test(ics));
 
 var ics2 = CE.buildIcsForYear(2026, 'Mattia', rows);

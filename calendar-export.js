@@ -90,7 +90,6 @@
   }
   function _shouldSkipRow(row) {
     if (!row || !row.due || !row.due.iso) return true;
-    if (row.status === 'paid') return true;
     if ((row.amount === 0 || row.amount == null) && /^bollo_/.test(row.key || '')) return true;
     return false;
   }

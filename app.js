@@ -5704,7 +5704,8 @@ function exportScadenzeIcs(year) {
     alert('Export ICS non disponibile.');
     return;
   }
-  var rows = buildForfettarioScheduleForYear(y) || [];
+  var schedule = buildForfettarioScheduleForYear(y) || {};
+  var rows = schedule.rows || [];
   var ics = window.CalendarExport.buildIcsForYear(y, currentProfile, rows);
   var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   var url = URL.createObjectURL(blob);
