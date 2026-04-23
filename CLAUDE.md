@@ -241,8 +241,19 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
 - **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
 - **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"
-- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`
+- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`. Propaga anche `ritenuta/aliquotaRitenuta/tipoRitenuta/causaleRitenuta` dall'originale (F5).
+- **`ImportoRitenuta` su TD04**: viene emesso col segno del documento (`fmtXmlNum(ritenuta * sign)`) così il bilancio con `ImportoPagamento` resta consistente. `AliquotaRitenuta` resta positiva (è una percentuale, non un importo).
+- **DatiBollo su TD04**: sempre escluso. Rationale: il bollo dell'originale resta a carico emittente (Risoluzione AdE 98/E del 2003); la NC non genera obbligo di bollo autonomo.
 - No automated SdI submission — upload is always manual via the AdE portal
+
+### NC TD04 — sync con fattura originale
+- **File**: `fatture-nc-sync.js` (IIFE, espone `window.FattureNCSync`)
+- **API**: `applyNCToOriginal(nc, fattureArr)` muta in-place. Invocato dai 3 call sites che promuovono una fattura a `'inviata'`: `saveFatturaDraft`, `quickMarkInviataFromCard`, `FattureStorico._markInviata`.
+- **Effetti**: push `nc.id` in `orig.ncIds`; incrementa `orig.ncTotaleImporto` con `|importo NC|`; scrive `nc.tipoStorno` (`'totale'` se somma NC ≥ importo originale entro 0.01 €, altrimenti `'parziale'`); se totale → `orig.stato = 'stornata'`.
+- **Idempotenza**: se `nc.id` è già in `orig.ncIds` non re-incrementa. Sicuro re-salvare la stessa NC.
+- **Validazione data NC**: `isNCDateValid(dataNC, dataOriginale)` richiede `dataNC >= dataOriginale` (ISO string compare). Chiamata da `validateDraftForInvio` quando `tipoDocumento='TD04'`.
+- **Reverse on hard-delete**: gestito separatamente in `hardDeleteFattura` (decrementa `ncTotaleImporto` e rollback `stornata`→`pagata`/`inviata` se applicabile).
+- **Tests**: `test/fatture-nc-sync.test.js` (15 test: guardie, storno totale/parziale, idempotenza, arrotondamenti, validazione data).
 
 ### Calendar ICS Export
 - **File**: `calendar-export.js` (IIFE, espone `window.CalendarExport`)

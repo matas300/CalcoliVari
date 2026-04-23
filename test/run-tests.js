@@ -81,6 +81,7 @@ require('./clienti-autofill.test.js');
 require('./fatture-import-xml.test.js');
 require('./fatture-import-nuove.test.js');
 require('./fatture-import-legacy.test.js');
+require('./fatture-nc-sync.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

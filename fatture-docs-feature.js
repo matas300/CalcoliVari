@@ -1025,6 +1025,15 @@
     }
     if (!draft.scadenzaPagamento) errors.push('Imposta la scadenza di pagamento.');
     if (!draft.numero) errors.push('Numero fattura mancante.');
+    // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
+    if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
+      const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
+      if (orig && orig.data
+          && window.FattureNCSync
+          && !window.FattureNCSync.isNCDateValid(draft.data, orig.data)) {
+        errors.push(`Data NC (${draft.data}) anteriore alla fattura originale (${orig.data}).`);
+      }
+    }
     return errors;
   }
 
@@ -1066,6 +1075,15 @@
     const history = loadFattureEmesse();
     const idx = history.findIndex(h => h.id === draft.id);
     if (idx >= 0) history[idx] = draft; else history.unshift(draft);
+
+    // F1+F2+F3: sync NC TD04 → originale (ncTotaleImporto, ncIds, stato=stornata, tipoStorno)
+    if (draft.tipoDocumento === 'TD04'
+        && draft.stato === 'inviata'
+        && draft.fatturaOriginaleId
+        && window.FattureNCSync) {
+      window.FattureNCSync.applyNCToOriginal(draft, history);
+    }
+
     saveFattureEmesse(history);
 
     // Validazione XML asincrona via openapi.com — fire-and-forget.
@@ -1551,14 +1569,21 @@
     // campo è valorizzato per evitare XML fiscalmente non conforme (lo standard
     // Fiscozen per gestione separata non emette integrativo — vedi campioni).
 
-    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6)
+    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6).
+    // F7 rationale: il bollo della fattura originale resta a carico dell'emittente anche in caso
+    // di storno; la NC non genera obbligo di bollo autonomo (Risoluzione AdE 98/E del 2003
+    // e prassi consolidata). Se mai dovesse servire — caso straordinario — il campo marcaDaBollo
+    // sulla NC è lasciato editabile ma bypassato qui.
     const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo)) ? `
       <DatiBollo>
         <BolloVirtuale>SI</BolloVirtuale>
         <ImportoBollo>2.00</ImportoBollo>
       </DatiBollo>` : '';
 
-    // Fix #9 — DatiRitenuta dentro DatiGeneraliDocumento (prima di ImportoTotaleDocumento)
+    // Fix #9 — DatiRitenuta dentro DatiGeneraliDocumento (prima di ImportoTotaleDocumento).
+    // F7 — ImportoRitenuta segue il segno del documento: per TD04 la ritenuta va negativa
+    // per mantenere il bilancio con ImportoPagamento (che già applica sign in riga 1721).
+    // AliquotaRitenuta resta positiva: è una percentuale, non un importo.
     let xmlRitenuta = '';
     if (Number(draft.ritenuta) > 0) {
       const tipo = draft.tipoRitenuta || 'RT02';
@@ -1566,7 +1591,7 @@
       xmlRitenuta = `
       <DatiRitenuta>
         <TipoRitenuta>${tipo}</TipoRitenuta>
-        <ImportoRitenuta>${Number(draft.ritenuta).toFixed(2)}</ImportoRitenuta>
+        <ImportoRitenuta>${fmtXmlNum(Number(draft.ritenuta) * sign)}</ImportoRitenuta>
         <AliquotaRitenuta>${Number(draft.aliquotaRitenuta || 0).toFixed(2)}</AliquotaRitenuta>
         <CausalePagamento>${xmlEscape(caus)}</CausalePagamento>
       </DatiRitenuta>`;
@@ -2019,7 +2044,13 @@ ${dettaglioLinee.join('\n')}
       fatturaOriginaleId: orig.id,
       stato: 'bozza',
       marcaDaBollo: false,
-      contributoIntegrativo: orig.contributoIntegrativo || 0
+      contributoIntegrativo: orig.contributoIntegrativo || 0,
+      // F5 — propaga ritenuta: se l'originale aveva una ritenuta d'acconto,
+      // la NC deve stornarla. In XML il segno viene applicato a ImportoRitenuta.
+      ritenuta: Number(orig.ritenuta) || 0,
+      aliquotaRitenuta: Number(orig.aliquotaRitenuta) || 0,
+      tipoRitenuta: orig.tipoRitenuta || '',
+      causaleRitenuta: orig.causaleRitenuta || ''
     };
     state.draft = draft;
     state.editingId = null;
@@ -2251,7 +2282,12 @@ ${dettaglioLinee.join('\n')}
     const target = all.find(f => f.id === id);
     if (!target) return;
     const numero = target.numero || id;
-    const msg = `Eliminare definitivamente la fattura ${numero}? L'azione NON è reversibile.`;
+    // F6 — warning se la fattura ha NC collegate (diventerebbero orfane)
+    const ncCollegate = (target.tipoDocumento !== 'TD04' && Array.isArray(target.ncIds)) ? target.ncIds.length : 0;
+    let msg = `Eliminare definitivamente la fattura ${numero}? L'azione NON è reversibile.`;
+    if (ncCollegate > 0) {
+      msg += `\n\n⚠ Questa fattura ha ${ncCollegate} nota/e di credito collegate che resteranno senza riferimento.`;
+    }
     const confirmer = (typeof window.showAppConfirm === 'function')
       ? (cb) => window.showAppConfirm({ title: 'Hard delete fattura', message: msg, okLabel: 'Elimina', danger: true }, cb)
       : (cb) => { if (window.confirm(msg)) cb(); };
@@ -2304,6 +2340,12 @@ ${dettaglioLinee.join('\n')}
     all[idx].stato = 'inviata';
     if (!all[idx].dataInvioSdi) {
       all[idx].dataInvioSdi = new Date().toISOString().slice(0, 10);
+    }
+    // F1+F2+F3: sync NC TD04 → originale se applicabile
+    if (all[idx].tipoDocumento === 'TD04'
+        && all[idx].fatturaOriginaleId
+        && window.FattureNCSync) {
+      window.FattureNCSync.applyNCToOriginal(all[idx], all);
     }
     store.save(profile, all);
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();

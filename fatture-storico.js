@@ -220,6 +220,12 @@
     if (idx < 0) return;
     fatture[idx].stato = 'inviata';
     fatture[idx].dataInvioSdi = data;
+    // F1+F2+F3: sync NC TD04 → originale se applicabile
+    if (fatture[idx].tipoDocumento === 'TD04'
+        && fatture[idx].fatturaOriginaleId
+        && window.FattureNCSync) {
+      window.FattureNCSync.applyNCToOriginal(fatture[idx], fatture);
+    }
     save(profile, fatture);
     const sel = document.getElementById('archivioAnnoSelect');
     renderStorico(Number(sel && sel.value) || new Date().getFullYear());
