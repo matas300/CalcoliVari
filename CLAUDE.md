@@ -244,6 +244,19 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`
 - No automated SdI submission — upload is always manual via the AdE portal
 
+### Calendar ICS Export
+- **File**: `calendar-export.js` (IIFE, espone `window.CalendarExport`)
+- **API**: `buildIcsForYear(year, profile, scheduleRows)` → ICS text (RFC 5545, CRLF, VTIMEZONE Europe/Rome)
+- **Input**: array di `rows` come ritornato da `buildForfettarioScheduleForYear(year).rows` (NON passare l'oggetto wrapper — il wrapper in `exportScadenzeIcs` fa già l'unwrap `.rows`).
+- **Entry points in `app.js`**: `exportScadenzeIcs(year)` usato da (1) bottone `📅 Esporta .ics` nel toolbar Scadenziario, (2) sezione Google Calendar in Impostazioni, (3) banner gennaio sul Riepilogo.
+- **Eventi**: un VEVENT per ogni riga con `due.iso` valorizzato; skip righe `bollo_*` con `amount===0`. Timed 09:00→10:00 locali Europe/Rome. 4 VALARM DISPLAY a −P1M/−P2W/−P1W/−P1D.
+- **UID deterministico**: `calcolipiva-{profile}-{year}-{key}@calcoli-piva.local` — re-import aggiorna in place, non duplica.
+- **DTSTAMP fisso** (`20260101T000000Z`) per output byte-deterministico.
+- **Flag**: `calcoliPIVA_{profile}_icsExported_{year}` in localStorage (NON syncato Firebase). Usato solo per nascondere il banner di gennaio dopo il primo download.
+- **Banner Riepilogo**: compare quando `month===0 && year===currentYear && !flag`. Dismiss automatico al click "Scarica .ics".
+- **Tests**: `test/calendar-export.test.js`, run `node test/calendar-export.test.js`.
+- **Paid-state**: NON filtrato dall'export; `row.status` è `{label,cls}` time-based. Se in futuro serve filtrare le scadenze già pagate, integrare con `getPaymentEventsForScheduleKey(row.key)`.
+
 ### Fatture: single source of truth (workflow redesign 2026-04-20)
 - **`fattureEmesse` è UNICA fonte della verità** per tutte le feature (dashboard, bollo trimestrale, budget, tasse accantonate, scadenziario, forfettario engine, cross-year). La vecchia struttura `data.fatture[m]` è considerata **legacy** e viene mantenuta solo come backup per la migrazione (read-only, non cancellata per permettere rollback).
 - **`FattureSelectors` è l'API canonica** per leggere le fatture. Mai più accesso diretto a `data.fatture[m]` dai consumer. API:
