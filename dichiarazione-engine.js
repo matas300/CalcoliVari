@@ -283,18 +283,83 @@
     },
     buildQuadroRW: function(contiEsteri) {
       contiEsteri = contiEsteri || [];
-      var righi = contiEsteri.map(function(c) {
+      var r2 = function(n) { return Math.round(n * 100) / 100; };
+      var FIN_TYPES = { conto_corrente: true, deposito: true, prodotti_finanziari: true };
+      var ivafeTotale = 0;
+      var ivieTotale = 0;
+      var aggregateWarnings = [];
+      var anyMissingDetail = false;
+
+      var righi = contiEsteri.map(function(c, idx) {
+        c = c || {};
+        var tipo = c.tipo || null;
+        var quota = (typeof c.quotaPossesso === 'number' && !isNaN(c.quotaPossesso)) ? c.quotaPossesso : 1;
+        var giacenza = parseFloat(c.giacenzaMediaAnnua);
+        if (isNaN(giacenza)) giacenza = 0;
+        var valoreImmobile = parseFloat(c.valoreImmobile);
+        if (isNaN(valoreImmobile)) valoreImmobile = 0;
+        var primaCasa = !!c.primaCasa;
+
+        var ivafe = 0;
+        var ivie = 0;
+        var warnings = [];
+
+        if (tipo === 'immobile') {
+          var aliq = primaCasa ? 0.004 : 0.0106;
+          var ivieRaw = valoreImmobile * aliq * quota;
+          if (ivieRaw > 0 && ivieRaw < 200) {
+            warnings.push('IVIE calcolata ' + r2(ivieRaw) + ' \u20ac sotto soglia minima 200 \u20ac: non dovuta');
+            ivie = 0;
+          } else {
+            ivie = r2(ivieRaw);
+          }
+        } else if (tipo && FIN_TYPES[tipo]) {
+          if (giacenza > 0) {
+            ivafe = r2(giacenza * 0.002 * quota);
+          }
+          if (giacenza > 0 && giacenza <= 5000) {
+            warnings.push('Giacenza < 5.000 \u20ac: IVAFE non dovuta per conti correnti/depositi ma obbligo monitoraggio RW attivo');
+          }
+        } else {
+          // Backward compat: nessun tipo → rigo legacy, warning soglia IVAFE
+          anyMissingDetail = true;
+          warnings.push('Rigo ' + (idx + 1) + ': tipo/giacenza non specificati — verificare soglia IVAFE 5.000 \u20ac e calcolo imposta manualmente');
+        }
+
+        ivafeTotale += ivafe;
+        ivieTotale += ivie;
+
         return {
-          paese: c.paese || '',
+          // Campi legacy (backward compat per UI existing)
+          paese: c.paese || c.codicePaese || '',
+          codicePaese: c.codicePaese || c.paese || '',
           tipoConto: c.tipoConto || '',
           iban: c.iban || '',
           valoreIniziale: parseFloat(c.valoreIniziale) || 0,
           valoreFinale: parseFloat(c.valoreFinale) || 0,
           giorniDetenzione: parseInt(c.giorniDetenzione) || 0,
-          valutaCodice: c.valutaCodice || 'EUR'
+          valutaCodice: c.valutaCodice || 'EUR',
+          // Campi R2
+          tipo: tipo || 'conto_corrente',
+          giacenzaMediaAnnua: giacenza,
+          valoreImmobile: valoreImmobile,
+          primaCasa: primaCasa,
+          quotaPossesso: quota,
+          ivafeRigoDovuto: ivafe,
+          ivieRigoDovuto: ivie,
+          _warnings: warnings
         };
       });
-      return { righi: righi };
+
+      if (anyMissingDetail) {
+        aggregateWarnings.push('Quadro RW: impostare tipo/giacenza/valore per ogni posizione estera per calcolo IVAFE/IVIE');
+      }
+
+      return {
+        righi: righi,
+        totali: { ivafeTotale: r2(ivafeTotale), ivieTotale: r2(ivieTotale) },
+        warnings: aggregateWarnings
+      };
     },
     buildCondizionali: function(input, yearData) {
       input = input || {};
@@ -385,6 +450,16 @@
           if (!r.paese) {
             errors.push({ code: 'RW_PAESE_MANCANTE', message: 'Paese mancante per conto estero ' + (i + 1), quadro: 'RW', rigo: 'RW' + (i + 1), severity: 'error' });
           }
+          if (r._warnings && r._warnings.length) {
+            r._warnings.forEach(function(w, j) {
+              warnings.push({ code: 'RW_RIGO_WARN', message: 'RW rigo ' + (i + 1) + ': ' + w, quadro: 'RW', rigo: 'RW' + (i + 1) + '_' + j, severity: 'warning' });
+            });
+          }
+        });
+      }
+      if (rw.warnings && rw.warnings.length) {
+        rw.warnings.forEach(function(msg, i) {
+          warnings.push({ code: 'RW_AGGREGATE_WARN', message: msg, quadro: 'RW', rigo: 'RW_agg_' + i, severity: 'warning' });
         });
       }
       if (rr.sezI && rr.sezI.RR8 && rr.sezI.RR8.value < 0) {
