@@ -5895,7 +5895,7 @@ function _renderFatturaRow(f, m, fi, nFatt, stim) {
   // Import cell
   let importoCell;
   if (!isLegacy && hasId) {
-    // Read-only display for wizard / manuale / ocr-import rows
+    // Read-only display for wizard / manuale rows
     const impFormatted = fmt(Math.abs(imp));
     importoCell = `<span class="fatt-input-importo" style="${isNC ? 'color:var(--color-error)' : ''}">${isNC ? '−' : ''}${impFormatted}</span>`;
     if (isStornata && window.FattureSelectors) {

@@ -279,7 +279,7 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
   - `FattureSelectors.getImportoSigned(f)` — importo con segno (NC negativi)
   - `FattureSelectors.getNettoEffettivo(f)` — `importo − ncTotaleImporto` (per stornate parziali)
 - **Workflow stati**: `bozza → inviata → pagata`; ortogonale NC TD04 → `stornata` (se `tipoStorno='totale'` + NC `inviata`, oppure se somma NC parziali collegate ≥ totale originale → `ncTotaleImporto` traccia la somma). Fatture `inviata`/`pagata` NON si cancellano mai — solo tramite NC. `×` solo su `bozza`.
-- **`origine`** sul record fattura: `'wizard'` (creata dal wizard 3-step), `'legacy-migrated'` (promossa dalla vecchia struttura monthly), `'manuale'` (arricchita post-"completa dati" su una legacy), `'ocr-import'` (riservato al sub-progetto OCR futuro), `'xml-import'` (import XML nuove dal tab Fatture), `'xml-import-legacy'` (import XML archivio, onboarding retroattivo).
+- **`origine`** sul record fattura: `'wizard'` (creata dal wizard 3-step), `'legacy-migrated'` (promossa dalla vecchia struttura monthly), `'manuale'` (arricchita post-"completa dati" su una legacy), `'xml-import'` (import XML nuove dal tab Fatture), `'xml-import-legacy'` (import XML archivio, onboarding retroattivo).
 - **Import XML FatturaPA** è in tre moduli separati (redesign 2026-04-21):
   - `fatture-import-xml.js` — parser puro + `matchCliente(snapshot, existingClienti)` (P.IVA → CF → idPaese+idCodice → new draft) + `dedupKey(f)` = `tipoDoc|annoProgressivo|progressivo|numero`.
   - `fatture-import-nuove.js` — entry point tab Fatture principale (bottone `📄 Importa da XML`). Import rapido, nessuna preview. `stato='inviata'`, `pagMese/pagAnno = null`, `origine='xml-import'`. Silent skip su duplicati.

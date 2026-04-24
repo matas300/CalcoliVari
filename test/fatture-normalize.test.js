@@ -131,10 +131,6 @@ describe('normalizeFatturaEmessa — origine', function () {
     expect(norm({ origine: 'manuale' }).origine).toBe('manuale');
   });
 
-  test('origine ocr-import preservata', function () {
-    expect(norm({ origine: 'ocr-import' }).origine).toBe('ocr-import');
-  });
-
   test('origine invalida → wizard', function () {
     expect(norm({ origine: 'unknown' }).origine).toBe('wizard');
   });
@@ -292,42 +288,6 @@ describe('normalizeFatturaEmessa — cessionario', function () {
 
   test('cessionarioCognome preservato', function () {
     expect(norm({ cessionarioCognome: 'Rossi' }).cessionarioCognome).toBe('Rossi');
-  });
-});
-
-// ─── pdfAllegato / OCR stubs ─────────────────────────────────────────────────
-
-describe('normalizeFatturaEmessa — PDF allegato + OCR stubs', function () {
-  test('pdfAllegato null se assente', function () {
-    expect(norm({}).pdfAllegato).toBe(null);
-  });
-
-  test('pdfAllegato null se dataUrl mancante', function () {
-    expect(norm({ pdfAllegato: { name: 'test.pdf' } }).pdfAllegato).toBe(null);
-  });
-
-  test('pdfAllegato preservato se dataUrl stringa', function () {
-    var r = norm({ pdfAllegato: { name: 'fattura.pdf', dataUrl: 'data:application/pdf;base64,abc' } });
-    expect(r.pdfAllegato).toBeTruthy();
-    expect(r.pdfAllegato.name).toBe('fattura.pdf');
-    expect(r.pdfAllegato.dataUrl).toBe('data:application/pdf;base64,abc');
-  });
-
-  test('pdfAllegato.name default se non fornito', function () {
-    var r = norm({ pdfAllegato: { dataUrl: 'data:...' } });
-    expect(r.pdfAllegato.name).toBe('allegato.pdf');
-  });
-
-  test('_ocrRawText null se assente', function () {
-    expect(norm({})._ocrRawText).toBe(null);
-  });
-
-  test('_ocrConfidence null se assente', function () {
-    expect(norm({})._ocrConfidence).toBe(null);
-  });
-
-  test('_ocrFieldsExtracted null se assente', function () {
-    expect(norm({})._ocrFieldsExtracted).toBe(null);
   });
 });
 

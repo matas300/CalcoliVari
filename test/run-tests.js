@@ -76,7 +76,6 @@ require('./fatture-normalize.test.js');
 require('./fatture-migration.test.js');
 require('./fatture-hard-delete.test.js');
 require('./fatture-legacy-badge.test.js');
-require('./fatture-ocr-stub.test.js');
 require('./clienti-autofill.test.js');
 require('./fatture-import-xml.test.js');
 require('./fatture-import-nuove.test.js');
