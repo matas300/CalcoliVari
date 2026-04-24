@@ -106,8 +106,45 @@
       // LM4: reddito netto
       var lm4 = Math.max(0, Math.round((lm2 - lm3) * 100) / 100);
 
-      // LM34: after perdite pregresse
-      var perditePregresse = parseFloat(overrides.LM_perditePregresse) || 0;
+      // LM34: after perdite pregresse — art. 84 TUIR: scadenza 5 periodi d'imposta
+      // R3: se settings.perditePregresseDettaglio (array {anno,importo}) presente → filtra
+      //     per anno >= year - 5 (perdita anno X utilizzabile fino a X+5); altrimenti fallback legacy.
+      var perditeWarnings = [];
+      var perditePregresse = 0;
+      var dettaglio = (settings && Array.isArray(settings.perditePregresseDettaglio))
+        ? settings.perditePregresseDettaglio
+        : null;
+      if (dettaglio && dettaglio.length > 0) {
+        for (var pi = 0; pi < dettaglio.length; pi++) {
+          var pd = dettaglio[pi] || {};
+          var annoP = parseInt(pd.anno, 10);
+          var impP = parseFloat(pd.importo) || 0;
+          if (!annoP || impP <= 0) continue;
+          if (annoP >= year - 5) {
+            perditePregresse += impP;
+          } else {
+            perditeWarnings.push(
+              'Perdita anno ' + annoP + ' (' + impP.toFixed(2).replace('.', ',') +
+              ' \u20ac) scaduta: non pi\u00f9 utilizzabile dal ' + (annoP + 6)
+            );
+          }
+        }
+        perditePregresse = Math.round(perditePregresse * 100) / 100;
+      } else {
+        // Backward compat: overrides.LM_perditePregresse o settings.perditePregresse come numero aggregato
+        var legacyVal = parseFloat(overrides.LM_perditePregresse);
+        if (isNaN(legacyVal)) legacyVal = parseFloat(settings && settings.perditePregresse);
+        if (!isNaN(legacyVal) && legacyVal > 0) {
+          perditePregresse = legacyVal;
+          perditeWarnings.push(
+            'Dettaglio anno perdite mancante: impossibile verificare scadenza 5 anni art. 84 TUIR'
+          );
+        }
+      }
+      // Override esplicito numerico ha sempre la precedenza (mantiene compat test legacy)
+      if (overrides.LM_perditePregresse != null && !dettaglio) {
+        perditePregresse = parseFloat(overrides.LM_perditePregresse) || 0;
+      }
       var lm34 = Math.max(0, Math.round((lm4 - perditePregresse) * 100) / 100);
 
       // LM36: imposta sostitutiva
@@ -149,6 +186,7 @@
         LM45: rigo(lm45, 'Imposta a debito (saldo)'),
         LM46: rigo(lm46, 'Imposta a credito'),
         LM47: rigo(lm36, 'Imposta sostitutiva (riepilogo)'),
+        _perditeWarnings: perditeWarnings,
         _meta: { coeff: coeff, aliquota: aliquota, perditePregresse: perditePregresse }
       };
     },
@@ -464,6 +502,19 @@
       }
       if (rr.sezI && rr.sezI.RR8 && rr.sezI.RR8.value < 0) {
         errors.push({ code: 'RR8_NEGATIVO', message: 'RR8 contributi eccedenti negativo', quadro: 'RR', rigo: 'RR8', severity: 'error' });
+      }
+
+      // R3: perdite pregresse scadute (art. 84 TUIR — 5 periodi d'imposta)
+      if (lm._perditeWarnings && lm._perditeWarnings.length) {
+        lm._perditeWarnings.forEach(function(msg, i) {
+          warnings.push({
+            code: 'PERDITE_SCADUTE',
+            message: msg,
+            quadro: 'LM',
+            rigo: 'LM34_' + i,
+            severity: 'warning'
+          });
+        });
       }
 
       // Warnings

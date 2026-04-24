@@ -92,6 +92,7 @@ require('./dichiarazione-lm3-per-cassa.test.js');
 require('./scadenziario-saldo-acconti-pagati.test.js');
 require('./dichiarazione-startup-aliquota.test.js');
 require('./dichiarazione-rw-soglie.test.js');
+require('./dichiarazione-perdite-scadenza.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
