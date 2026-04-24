@@ -81,6 +81,7 @@ require('./fatture-import-xml.test.js');
 require('./fatture-import-nuove.test.js');
 require('./fatture-import-legacy.test.js');
 require('./fatture-nc-sync.test.js');
+require('./fatture-xml-anagrafica.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

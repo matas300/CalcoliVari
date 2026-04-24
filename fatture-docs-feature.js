@@ -165,6 +165,24 @@
     }[ch]));
   }
 
+  function buildAnagraficaXml(cliente) {
+    var denom = String((cliente.denominazione || cliente.ragioneSociale || '')).trim();
+    var nome = String(cliente.nome || '').trim();
+    var cognome = String(cliente.cognome || '').trim();
+    var piva = String(cliente.partitaIva || '').replace(/\D/g, '');
+    var hasPiva = piva.length === 11;
+    if (denom) {
+      return '<Denominazione>' + xmlEscape(denom.slice(0, 80)) + '</Denominazione>';
+    }
+    if (hasPiva) {
+      return '<Denominazione>' + xmlEscape((nome || piva).slice(0, 80)) + '</Denominazione>';
+    }
+    if (nome && cognome) {
+      return '<Nome>' + xmlEscape(nome.slice(0, 60)) + '</Nome><Cognome>' + xmlEscape(cognome.slice(0, 60)) + '</Cognome>';
+    }
+    return '<Denominazione>' + xmlEscape(String(cliente.nome || '').slice(0, 80)) + '</Denominazione>';
+  }
+
   function formatPdfMoney(value) {
     const amount = round2(value);
     return `EUR ${amount.toLocaleString('it-IT', {
@@ -1697,7 +1715,7 @@
     <CessionarioCommittente>
       <DatiAnagrafici>${cessionarioFiscaleXml}
         <Anagrafica>
-          <Denominazione>${xmlEscape(String(cliente.nome || '').slice(0, 80))}</Denominazione>
+          ${buildAnagraficaXml(cliente)}
         </Anagrafica>
       </DatiAnagrafici>
       <Sede>
@@ -2198,6 +2216,7 @@ ${dettaglioLinee.join('\n')}
   window.openFatturaDaCalendarioPicker = openFatturaDaCalendarioPicker;
   window.openFatturaDaCalendario = openFatturaDaCalendario;
   window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
+  window.__buildAnagraficaXml = buildAnagraficaXml;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
   window.closeFatturaModal = closeFatturaModal;
