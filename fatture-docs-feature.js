@@ -1541,13 +1541,11 @@
     const profileCognome = String(profile.cognome || '').trim()
       || String(profile.nome || currentProfile).trim().split(/\s+/).slice(-1)[0];
 
-    // Natura + riferimento normativo (forfettario)
-    //  - cliente IT → N2.2 + art. 1 c. 54-89 L. 190/2014
-    //  - cliente estero → N2.1 (operazioni non soggette art. 7-7septies DPR 633/72)
-    const naturaLinea = clienteEstero ? 'N2.1' : 'N2.2';
-    const riferimentoNormativo = clienteEstero
-      ? 'Operazioni non soggette a IVA ai sensi degli articoli da 7 a 7-septies del DPR 633/1972'
-      : "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
+    // Natura + riferimento normativo — forfettario RF19 sempre N2.2.
+    // art. 1 c. 58 L. 190/2014 + Circ. AdE 9/E 2019 §4.1: fuori campo IVA,
+    // non ex artt. 7-7septies DPR 633/72. N2.1 è riservata al regime ordinario.
+    const naturaLinea = 'N2.2';
+    const riferimentoNormativo = "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
 
     // Imponibile = somma righe (bollo e contributo integrativo esclusi dall'XML SdI)
     const imponibile = round2(totals.subtotal);
@@ -2216,6 +2214,7 @@ ${dettaglioLinee.join('\n')}
   window.openFatturaDaCalendarioPicker = openFatturaDaCalendarioPicker;
   window.openFatturaDaCalendario = openFatturaDaCalendario;
   window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
+  window.buildFatturaElettronicaXml = buildFatturaElettronicaXml;
   window.__buildAnagraficaXml = buildAnagraficaXml;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
