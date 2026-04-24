@@ -63,9 +63,27 @@
     };
   }
 
+  // R9 — methodText coerente con la reale disponibilità dei dati N-1.
+  // hasHistorical: true se esiste lo storico forfettario dell'anno precedente.
+  // firstYearManualUsed: true se si sta usando il fallback `primoAnno*`.
+  // manualSet: true se l'utente ha impostato l'override manuale saldo.
+  // prevAccontiPaid: somma acconti N-1 già registrati (>0 ⇒ saldo "netto acconti").
+  // year: anno di riferimento (per le etichette come `Totale ${year - 1}`).
+  function buildSaldoContribN1MethodText(hasHistorical, firstYearManualUsed, manualSet, prevAccontiPaid, year) {
+    if (manualSet) return 'Importo manuale';
+    if (firstYearManualUsed) return 'Manuale primo utilizzo';
+    if (!hasHistorical) {
+      // Nessuno storico N-1 e nessun dato primoAnno*: siamo in un buco informativo.
+      return 'Dati anno precedente non disponibili';
+    }
+    if (prevAccontiPaid > 0) return (year - 1) + ' netto acconti';
+    return 'Totale ' + (year - 1);
+  }
+
   var api = {
     computeAutoSaldoAnnoAperto: computeAutoSaldoAnnoAperto,
-    sumPagamentiForSaldoKeys: sumPagamentiForSaldoKeys
+    sumPagamentiForSaldoKeys: sumPagamentiForSaldoKeys,
+    buildSaldoContribN1MethodText: buildSaldoContribN1MethodText
   };
 
   if (typeof module !== 'undefined' && module.exports) {

@@ -4592,6 +4592,24 @@ function buildForfettarioScheduleForYear(year) {
       ? primoAnnoContribVariabiliPrec - (primoAnnoAccontiContribPrec || 0)
       : 0);
   const contribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoContribSaldo;
+  // R9 — se non esistono né storico contrib N-1 né primoAnno* variabili, segnalo il buco informativo.
+  const hasContribHistorical = !!prevForfettarioContribution || (firstYearManualUsed && primoAnnoContribVariabiliPrec !== null);
+  if (!hasContribHistorical && manualSaldoContributi === null && contribSaldo <= 0) {
+    notes.push(`Dati contributi variabili ${year - 1} non disponibili: imposta saldo e acconti manualmente in Impostazioni > Scadenziario (sezione "Opzioni avanzate").`);
+  }
+  const _saldoHelpersR9 = (typeof window !== 'undefined' && window.ScadenziarioSaldoHelpers) || null;
+  const contribSaldoMethodText = (_saldoHelpersR9 && _saldoHelpersR9.buildSaldoContribN1MethodText)
+    ? _saldoHelpersR9.buildSaldoContribN1MethodText(
+        hasContribHistorical,
+        firstYearManualUsed,
+        manualSaldoContributi !== null,
+        prevContribAccontiPaid,
+        year
+      )
+    : (manualSaldoContributi !== null ? 'Importo manuale'
+      : (firstYearManualUsed ? 'Manuale primo utilizzo'
+        : (!hasContribHistorical ? 'Dati anno precedente non disponibili'
+          : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`))));
   if (contribSaldo > 0) {
     pushDueRow(
       overrideSaldoImposta ? overrideSaldoImposta.month : FORFETTARIO_RULES.saldoMonth,
@@ -4600,9 +4618,7 @@ function buildForfettarioScheduleForYear(year) {
       `Saldo ${year - 1}`,
       contribSaldo,
       'contributi',
-      manualSaldoContributi !== null ? 'Importo manuale'
-        : (firstYearManualUsed ? 'Manuale primo utilizzo'
-          : (prevContribAccontiPaid > 0 ? `${year - 1} netto acconti` : `Totale ${year - 1}`)),
+      contribSaldoMethodText,
       '',
       { key: `contributi_saldo_${year - 1}`, certainty: manualSaldoContributi !== null ? 'fixed' : (firstYearManualUsed || prevHasEst ? 'estimated' : 'fixed'), fiscalYear: year - 1, dueYear: overrideSaldoImposta ? overrideSaldoImposta.year : undefined }
     );

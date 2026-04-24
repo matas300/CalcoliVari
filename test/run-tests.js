@@ -94,6 +94,7 @@ require('./dichiarazione-startup-aliquota.test.js');
 require('./dichiarazione-rw-soglie.test.js');
 require('./dichiarazione-perdite-scadenza.test.js');
 require('./dichiarazione-limite-forfettario.test.js');
+require('./scadenziario-nota-saldo-contrib-n1.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
