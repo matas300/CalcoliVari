@@ -1503,6 +1503,22 @@
     const tipoDoc = isNC ? 'TD04' : 'TD01';
     const sign = isNC ? -1 : 1;
 
+    // R6 — validate NC date >= original invoice date (fiscally NC cannot precede the invoice it stornas).
+    if (isNC) {
+      var origRef = draft._originalForValidation;
+      if (!origRef && draft.fatturaOriginaleId && typeof window !== 'undefined' && window.FattureStorico && typeof window.FattureStorico.load === 'function') {
+        try {
+          var allOrig = window.FattureStorico.load(currentProfile) || [];
+          for (var i = 0; i < allOrig.length; i++) {
+            if (allOrig[i] && allOrig[i].id === draft.fatturaOriginaleId) { origRef = allOrig[i]; break; }
+          }
+        } catch (e) { /* noop */ }
+      }
+      if (origRef && origRef.data && draft.data && String(draft.data) < String(origRef.data)) {
+        throw new Error('Data NC (' + draft.data + ') anteriore alla fattura originale (' + origRef.data + '). La nota di credito non può precedere l\u2019emissione originale.');
+      }
+    }
+
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
     const totals = computeDraftTotals(draft);
