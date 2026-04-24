@@ -163,7 +163,42 @@
       var rr3 = Math.round(eccedenti * riduzione * 100) / 100;
       var rr4 = Math.round((rr2 + rr3) * 100) / 100;
       var rr5 = parseFloat(overrides.RR5_value) || 0;
-      var rr8 = Math.max(0, Math.round((rr4 - rr5) * 100) / 100);
+
+      // RR6 = RR4 − RR5 (totale contributi a saldo dopo compensazione manuale); override supportato
+      var rr6Source = 'computed';
+      var rr6;
+      if (overrides.RR6_value != null) {
+        rr6 = parseFloat(overrides.RR6_value) || 0;
+        rr6Source = 'override';
+      } else {
+        rr6 = Math.round((rr4 - rr5) * 100) / 100;
+      }
+
+      // RR7 = acconti effettivamente versati per contributi_acc1_{year} e contributi_acc2_{year}
+      // Sommati da yearData.pagamenti[] dove tipo==='contributi' e linkedKeys matcha /^contributi_acc[12]_/
+      var rr7Source = 'computed';
+      var rr7 = 0;
+      if (overrides.RR7_value != null) {
+        rr7 = parseFloat(overrides.RR7_value) || 0;
+        rr7Source = 'override';
+      } else {
+        var pagamenti = (yearData && Array.isArray(yearData.pagamenti)) ? yearData.pagamenti : [];
+        for (var i = 0; i < pagamenti.length; i++) {
+          var p = pagamenti[i];
+          if (!p || p.tipo !== 'contributi') continue;
+          var keys = Array.isArray(p.linkedKeys) ? p.linkedKeys : [];
+          var match = false;
+          for (var j = 0; j < keys.length; j++) {
+            if (/^contributi_acc[12]_/.test(String(keys[j]))) { match = true; break; }
+          }
+          if (match) rr7 += parseFloat(p.importo) || 0;
+        }
+        rr7 = Math.round(rr7 * 100) / 100;
+      }
+
+      var saldoNetto = Math.round((rr6 - rr7) * 100) / 100;
+      var rr8 = saldoNetto > 0 ? saldoNetto : 0;
+      var rr8Credito = saldoNetto < 0 ? Math.round(-saldoNetto * 100) / 100 : 0;
 
       return {
         sezI: {
@@ -171,8 +206,11 @@
           RR2: rigo(rr2, 'Contributi sul minimale'),
           RR3: rigo(rr3, 'Contributi eccedenti il minimale'),
           RR4: rigo(rr4, 'Totale contributi dovuti'),
-          RR5: rigo(rr5, 'Contributi già versati (acconti)'),
-          RR8: rigo(rr8, 'Saldo contributi da versare')
+          RR5: rigo(rr5, 'Contributi compensati / già versati (override)', overrides.RR5_value != null ? 'override' : 'computed'),
+          RR6: rigo(rr6, 'Totale contributi a saldo (RR4 − RR5)', rr6Source),
+          RR7: rigo(rr7, 'Acconti effettivamente versati', rr7Source),
+          RR8: rigo(rr8, 'Saldo contributi a debito (max 0, RR6 − RR7)'),
+          RR8_credito: rigo(rr8Credito, 'Contributi a credito (se RR6 − RR7 < 0)')
         },
         sezII: null
       };
