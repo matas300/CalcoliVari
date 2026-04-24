@@ -90,6 +90,7 @@ require('./fatture-xml-progressivo.test.js');
 require('./fatture-xml-nc-date.test.js');
 require('./dichiarazione-lm3-per-cassa.test.js');
 require('./scadenziario-saldo-acconti-pagati.test.js');
+require('./dichiarazione-startup-aliquota.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

@@ -399,7 +399,54 @@
         warnings.push({ code: 'REDDITO_OLTRE_SOGLIA_85K', message: 'Reddito > 85.000 \u20ac: decadenza forfettario dal prossimo anno', quadro: 'LM', rigo: 'LM2', severity: 'warning' });
       }
 
+      // Startup aliquota 5% validation (R1)
+      var ctx = dich._validationContext;
+      if (ctx && ctx.settings) {
+        var startupRes = this.validateStartupAliquota(ctx.settings, ctx.yearData || {}, ctx.year);
+        if (startupRes && startupRes.warnings && startupRes.warnings.length) {
+          startupRes.warnings.forEach(function(msg, idx) {
+            warnings.push({
+              code: 'startup_aliquota_' + (idx + 1),
+              message: msg,
+              quadro: 'LM',
+              rigo: 'LM10',
+              severity: 'warning'
+            });
+          });
+        }
+      }
+
       return { errors: errors, warnings: warnings };
+    },
+    validateStartupAliquota: function(settings, yearData, year) {
+      settings = settings || {};
+      var warnings = [];
+      var meta = {};
+      var aliquota = Number(settings.impostaSostitutiva);
+      if (aliquota !== 5) {
+        return { applicable: false, warnings: warnings, meta: meta };
+      }
+      var dataApertura = settings.dataAperturaPiva;
+      if (!dataApertura) {
+        warnings.push('Data apertura P.IVA mancante: impossibile verificare i 5 anni del regime start-up');
+      } else {
+        var annoApertura = parseInt(String(dataApertura).slice(0, 4), 10);
+        if (!isNaN(annoApertura) && typeof year === 'number') {
+          var diff = year - annoApertura;
+          meta.yearsSincePivaOpen = diff;
+          if (diff > 4) {
+            warnings.push("Regime start-up: scaduti i 5 anni dall'apertura P.IVA (apertura " + (year - 5) + ' o prima)');
+          }
+        }
+      }
+      if (!settings.startupRequisitiAutocertificati) {
+        warnings.push('Requisiti soggettivi art. 1 c. 65 L. 190/2014 non autocertificati: verifica (a) no attività prec 3 anni, (b) no prosecuzione dipendente/autonomo, (c) ricavi anno prec \u2264 limite forfettario se continuazione');
+      }
+      return {
+        applicable: warnings.length === 0,
+        warnings: warnings,
+        meta: meta
+      };
     },
     validateCodiceFiscale: function(cf) {
       if (!cf || typeof cf !== 'string') return false;
