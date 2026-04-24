@@ -1676,6 +1676,21 @@
       if (clienteCF) cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
     }
 
+    // C3 — XSD element order guarantee (fatturaordinaria_v1.2.xsd §2.1.1)
+    // Ordine richiesto: TipoDocumento → Divisa → Data → Numero → DatiRitenuta → DatiBollo →
+    // ImportoTotaleDocumento → Causale. L'interpolazione inline è fragile; costruiamo la
+    // sezione via array per garantire l'ordine strutturalmente.
+    var dgParts = [];
+    dgParts.push('<TipoDocumento>' + xmlEscape(tipoDoc) + '</TipoDocumento>');
+    dgParts.push('<Divisa>EUR</Divisa>');
+    dgParts.push('<Data>' + xmlEscape(draft.data) + '</Data>');
+    dgParts.push('<Numero>' + xmlEscape(draft.numero) + '</Numero>');
+    if (xmlRitenuta && String(xmlRitenuta).trim()) dgParts.push(String(xmlRitenuta).trim());
+    if (datiBollo && String(datiBollo).trim()) dgParts.push(String(datiBollo).trim());
+    dgParts.push('<ImportoTotaleDocumento>' + fmtXmlNum(round2(totals.total * sign)) + '</ImportoTotaleDocumento>');
+    if (causaleXml && String(causaleXml).trim()) dgParts.push(String(causaleXml).trim());
+    var datiGeneraliDocumentoXml = '<DatiGeneraliDocumento>' + dgParts.join('') + '</DatiGeneraliDocumento>';
+
     return `<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12"
   xmlns:p="${XML_NAMESPACE}"
@@ -1726,13 +1741,7 @@
   </FatturaElettronicaHeader>
   <FatturaElettronicaBody>
     <DatiGenerali>
-      <DatiGeneraliDocumento>
-        <TipoDocumento>${tipoDoc}</TipoDocumento>
-        <Divisa>EUR</Divisa>
-        <Data>${xmlEscape(draft.data)}</Data>
-        <Numero>${xmlEscape(draft.numero)}</Numero>${xmlRitenuta}${datiBollo}
-        <ImportoTotaleDocumento>${fmtXmlNum(round2(totals.total * sign))}</ImportoTotaleDocumento>${causaleXml}
-      </DatiGeneraliDocumento>${datiCollegate}
+      ${datiGeneraliDocumentoXml}${datiCollegate}
     </DatiGenerali>
     <DatiBeniServizi>
 ${dettaglioLinee.join('\n')}
