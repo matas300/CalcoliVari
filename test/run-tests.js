@@ -88,6 +88,7 @@ require('./fatture-xml-natura.test.js');
 require('./fatture-xml-element-order.test.js');
 require('./fatture-xml-progressivo.test.js');
 require('./fatture-xml-nc-date.test.js');
+require('./dichiarazione-lm3-per-cassa.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

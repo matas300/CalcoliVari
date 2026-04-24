@@ -66,21 +66,42 @@
         lm2Source = 'computed';
       }
 
-      // LM3: contributi INPS deducibili (stima da settings)
-      var contribFissi = parseFloat(settings.contribFissi) || 0;
-      var minimale = parseFloat(settings.minimaleInps) || 0;
-      var aliqContrib = parseFloat(settings.aliqContributi) || 0;
-      var redditoCassa = lm2;
-      var contribVar = 0;
-      if (aliqContrib > 0 && redditoCassa > minimale && settings.inpsMode !== 'gestione_separata') {
-        contribVar = Math.round((redditoCassa - minimale) * (aliqContrib / 100) * 100) / 100;
-      } else if (settings.inpsMode === 'gestione_separata' && aliqContrib > 0) {
-        contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
-        contribFissi = 0;
+      // LM3: contributi INPS deducibili — art. 1 c. 64 L. 190/2014 (criterio di cassa)
+      // Default: somma pagamenti tipo='contributi' nell'anno (yearData è già year-scoped).
+      // Fallback: se pagamenti undefined/null → competenza (settings.contribFissi + contribVar computato).
+      // Override: overrides.LM3_value vince sempre.
+      var lm3, lm3Source;
+      var pagamenti = yearData.pagamenti;
+      if (overrides.LM3_value != null) {
+        lm3 = parseFloat(overrides.LM3_value);
+        lm3Source = 'override';
+      } else if (Array.isArray(pagamenti)) {
+        var sumContrib = 0;
+        pagamenti.forEach(function (p) {
+          if (p && p.tipo === 'contributi') {
+            var imp = parseFloat(p.importo);
+            if (!isNaN(imp)) sumContrib += imp;
+          }
+        });
+        lm3 = Math.round(sumContrib * 100) / 100;
+        lm3Source = 'pagamenti';
+      } else {
+        // Fallback competenza (backward compat quando pagamenti non è tracciato)
+        var contribFissi = parseFloat(settings.contribFissi) || 0;
+        var minimale = parseFloat(settings.minimaleInps) || 0;
+        var aliqContrib = parseFloat(settings.aliqContributi) || 0;
+        var redditoCassa = lm2;
+        var contribVar = 0;
+        if (aliqContrib > 0 && redditoCassa > minimale && settings.inpsMode !== 'gestione_separata') {
+          contribVar = Math.round((redditoCassa - minimale) * (aliqContrib / 100) * 100) / 100;
+        } else if (settings.inpsMode === 'gestione_separata' && aliqContrib > 0) {
+          contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
+          contribFissi = 0;
+        }
+        var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
+        lm3 = Math.round((contribFissi + contribVar) * riduzione * 100) / 100;
+        lm3Source = 'fallback-competenza';
       }
-      var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
-      var lm3 = Math.round((contribFissi + contribVar) * riduzione * 100) / 100;
-      if (overrides.LM3_value != null) { lm3 = parseFloat(overrides.LM3_value); }
 
       // LM4: reddito netto
       var lm4 = Math.max(0, Math.round((lm2 - lm3) * 100) / 100);
@@ -115,7 +136,7 @@
       return {
         LM1: rigo(lm1, 'Ricavi o compensi percepiti'),
         LM2: { value: lm2, descrizione: 'Reddito lordo (ricavi \u00d7 coefficiente)', source: lm2Source },
-        LM3: rigo(lm3, 'Contributi previdenziali deducibili'),
+        LM3: rigo(lm3, 'Contributi previdenziali deducibili', lm3Source),
         LM4: rigo(lm4, 'Reddito al netto dei contributi'),
         LM34: rigo(lm34, 'Reddito imponibile (al netto perdite)'),
         LM36: rigo(lm36, 'Imposta sostitutiva'),
