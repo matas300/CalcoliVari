@@ -517,12 +517,28 @@
         });
       }
 
-      // Warnings
+      // Warnings — R4: limite forfettario letto da settings (no hardcoded 85k)
       var lm2val = lm.LM2 ? lm.LM2.value : 0;
-      if (lm2val > 100000) {
-        warnings.push({ code: 'REDDITO_OLTRE_SOGLIA_100K', message: 'Reddito > 100.000 \u20ac: decadenza forfettario nell\'anno corrente', quadro: 'LM', rigo: 'LM2', severity: 'warning' });
-      } else if (lm2val > 85000) {
-        warnings.push({ code: 'REDDITO_OLTRE_SOGLIA_85K', message: 'Reddito > 85.000 \u20ac: decadenza forfettario dal prossimo anno', quadro: 'LM', rigo: 'LM2', severity: 'warning' });
+      var ctxLimite = dich._validationContext && dich._validationContext.settings || {};
+      var limiteForfettario = parseFloat(ctxLimite.limiteForfettario);
+      if (!isFinite(limiteForfettario) || limiteForfettario <= 0) limiteForfettario = 85000;
+      // Soglia decadenza immediata: limite + 15000 (storicamente 100k quando limite=85k).
+      var limiteDecadenza = limiteForfettario + 15000;
+      var fmtLim = function(n) {
+        return n.toLocaleString('it-IT');
+      };
+      if (lm2val > limiteDecadenza) {
+        warnings.push({
+          code: 'REDDITO_OLTRE_SOGLIA_100K',
+          message: 'Reddito > ' + fmtLim(limiteDecadenza) + ' \u20ac: decadenza forfettario nell\'anno corrente',
+          quadro: 'LM', rigo: 'LM2', severity: 'warning'
+        });
+      } else if (lm2val > limiteForfettario) {
+        warnings.push({
+          code: 'REDDITO_OLTRE_SOGLIA_85K',
+          message: 'Reddito > ' + fmtLim(limiteForfettario) + ' \u20ac: decadenza forfettario dal prossimo anno',
+          quadro: 'LM', rigo: 'LM2', severity: 'warning'
+        });
       }
 
       // Startup aliquota 5% validation (R1)
