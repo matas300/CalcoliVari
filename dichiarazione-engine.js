@@ -92,6 +92,22 @@
       // LM36: imposta sostitutiva
       var lm36 = Math.round(lm34 * (aliquota / 100) * 100) / 100;
 
+      // B3 — sezione II: imposta netta, ritenute, acconti, saldo (Modello Redditi PF 2026 quadro LM sez. II)
+      if (overrides.LM34_value != null) {
+        lm34 = Math.round(parseFloat(overrides.LM34_value) * 100) / 100;
+      }
+      var lm38 = Math.round(lm34 * (aliquota / 100) * 100) / 100;
+      var lm39 = parseFloat(overrides.LM39_value) || 0;
+      var lm40 = Math.max(0, Math.round((lm38 - lm39) * 100) / 100);
+      var lm41 = parseFloat(overrides.LM41_value) || 0;
+      var lm42 = parseFloat(overrides.LM42_value) || 0;
+      var lm43 = parseFloat(overrides.LM43_value) || 0;
+      var saldoLordo = Math.round((lm40 - lm41 - lm42 - lm43) * 100) / 100;
+      var lm45 = saldoLordo > 0 ? saldoLordo : 0;
+      var lm46 = saldoLordo < 0 ? Math.round(-saldoLordo * 100) / 100 : 0;
+      // Ricalcola lm36 coerentemente con eventuale LM34 override
+      lm36 = Math.round(lm34 * (aliquota / 100) * 100) / 100;
+
       function rigo(val, desc, source) {
         return { value: val, descrizione: desc, source: source || 'computed' };
       }
@@ -103,6 +119,14 @@
         LM4: rigo(lm4, 'Reddito al netto dei contributi'),
         LM34: rigo(lm34, 'Reddito imponibile (al netto perdite)'),
         LM36: rigo(lm36, 'Imposta sostitutiva'),
+        LM38: rigo(lm38, 'Imposta lorda'),
+        LM39: rigo(lm39, 'Detrazioni e crediti d\u2019imposta', overrides.LM39_value != null ? 'override' : 'computed'),
+        LM40: rigo(lm40, 'Imposta netta'),
+        LM41: rigo(lm41, 'Ritenute subite', overrides.LM41_value != null ? 'override' : 'computed'),
+        LM42: rigo(lm42, 'Credito eccedenze anno precedente', overrides.LM42_value != null ? 'override' : 'computed'),
+        LM43: rigo(lm43, 'Acconti versati', overrides.LM43_value != null ? 'override' : 'computed'),
+        LM45: rigo(lm45, 'Imposta a debito (saldo)'),
+        LM46: rigo(lm46, 'Imposta a credito'),
         LM47: rigo(lm36, 'Imposta sostitutiva (riepilogo)'),
         _meta: { coeff: coeff, aliquota: aliquota, perditePregresse: perditePregresse }
       };

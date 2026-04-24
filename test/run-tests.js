@@ -69,6 +69,7 @@ global.expect = expect;
 
 // Load test files
 require('./dichiarazione-engine.test.js');
+require('./dichiarazione-quadro-lm-completo.test.js');
 require('./tax-engine.test.js');
 require('./fatture-storico.test.js');
 require('./fatture-selectors.test.js');
