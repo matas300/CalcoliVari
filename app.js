@@ -4750,7 +4750,19 @@ function buildForfettarioScheduleForYear(year) {
     });
   }
 
-  const autoCurrentImpostaSaldo = currentApplied ? currentApplied.tasse - impostaAcconti.total : 0;
+  // Fix C1 (tax audit 2026-04-24): per l'anno APERTO il saldo deve essere netto
+  // degli acconti EFFETTIVAMENTE versati (pagamenti registrati con
+  // scheduleKey = `imposta_acc[12]_{year}`), non degli acconti pianificati
+  // (`impostaAcconti.total`). Anni chiusi restano invariati.
+  const _saldoHelpers = (typeof window !== 'undefined' && window.ScadenziarioSaldoHelpers) || null;
+  const _impostaSaldoRes = _saldoHelpers && currentApplied
+    ? _saldoHelpers.computeAutoSaldoAnnoAperto(
+        currentApplied.tasse, impostaAcconti, getPagamenti(), year, isClosedYear, 'imposta'
+      )
+    : null;
+  const autoCurrentImpostaSaldo = _impostaSaldoRes
+    ? _impostaSaldoRes.saldo
+    : (currentApplied ? currentApplied.tasse - impostaAcconti.total : 0);
   const currentImpostaSaldo = manualSaldoImposta !== null ? manualSaldoImposta : autoCurrentImpostaSaldo;
   if (currentImpostaSaldo > 0) {
     pushDueRow(
@@ -4768,7 +4780,16 @@ function buildForfettarioScheduleForYear(year) {
     credits.push({ title: 'Imposta sostitutiva', competence: `Credito da saldo ${year}`, amount: Math.abs(autoCurrentImpostaSaldo), fiscalYear: year });
   }
 
-  const autoCurrentContribSaldo = currentContribution ? currentContribution.saldoAccontoBase - contribAcconti.total : 0;
+  // Fix C1 (tax audit 2026-04-24): stesso ragionamento per i contributi — anno
+  // aperto netta i versamenti reali (scheduleKey `contributi_acc[12]_{year}`).
+  const _contribSaldoRes = _saldoHelpers && currentContribution
+    ? _saldoHelpers.computeAutoSaldoAnnoAperto(
+        currentContribution.saldoAccontoBase, contribAcconti, getPagamenti(), year, isClosedYear, 'contributi'
+      )
+    : null;
+  const autoCurrentContribSaldo = _contribSaldoRes
+    ? _contribSaldoRes.saldo
+    : (currentContribution ? currentContribution.saldoAccontoBase - contribAcconti.total : 0);
   const currentContribSaldo = manualSaldoContributi !== null ? manualSaldoContributi : autoCurrentContribSaldo;
   if (currentContribSaldo > 0) {
     pushDueRow(
