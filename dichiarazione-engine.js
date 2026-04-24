@@ -295,7 +295,12 @@
         RS378: rigoRS('RS378', 'Totale spese'),
         RS379: rigoRS('RS379', 'Ricavi dichiarati'),
         RS380: rigoRS('RS380', 'Numero clienti'),
-        RS381: rigoRS('RS381', 'Numero dipendenti')
+        RS381: rigoRS('RS381', 'Numero dipendenti'),
+        // R10 — i righi RS371-RS381 sono INFORMATIVI per i forfettari:
+        // non deducono dal reddito (che è già determinato applicando il
+        // coefficiente ATECO ai ricavi). Esposto come campo leggibile
+        // dall'UI per mostrare un disclaimer all'utente.
+        _disclaimer: 'Quadro RS per forfettari: i righi RS371-RS381 sono dati informativi (spese sostenute per lo svolgimento dell\'attività) e NON deducono dal reddito. Il reddito forfettario è già determinato applicando il coefficiente ai ricavi.'
       };
     },
     buildQuadroRX: function(yearData, settings, precedente, overrides) {
@@ -472,6 +477,7 @@
       var lm = dich.quadroLM || {};
       var rr = dich.quadroRR || {};
       var rw = dich.quadroRW || {};
+      var rs = dich.quadroRS || {};
 
       // Errors
       if (!fp.codiceFiscale || !this.validateCodiceFiscale(fp.codiceFiscale)) {
@@ -556,6 +562,26 @@
             });
           });
         }
+      }
+
+      // R10 — Quadro RS informativo: se l'utente ha popolato uno qualsiasi dei
+      // righi RS371-RS381 con un importo > 0, emettiamo un warning severity
+      // 'info' che ricorda come quei valori NON deducano dal reddito.
+      var rsKeys = ['RS371','RS372','RS373','RS374','RS375','RS376','RS377','RS378','RS379','RS380','RS381'];
+      var rsHasValues = false;
+      for (var _i = 0; _i < rsKeys.length; _i++) {
+        var _k = rsKeys[_i];
+        var _v = rs[_k] && typeof rs[_k].value !== 'undefined' ? parseFloat(rs[_k].value) : 0;
+        if (isFinite(_v) && _v > 0) { rsHasValues = true; break; }
+      }
+      if (rsHasValues) {
+        warnings.push({
+          code: 'RS_INFORMATIVO',
+          message: 'Quadro RS compilato: i dati sono solo informativi, non deducono dal reddito forfettario',
+          quadro: 'RS',
+          rigo: 'RS371-RS381',
+          severity: 'info'
+        });
       }
 
       return { errors: errors, warnings: warnings };
