@@ -1032,6 +1032,14 @@
     }
     if (!draft.scadenzaPagamento) errors.push('Imposta la scadenza di pagamento.');
     if (!draft.numero) errors.push('Numero fattura mancante.');
+    // R5 — ProgressivoInvio max 10 alfanumerici (FatturaPA §1.1.2).
+    // Il sanitize rimuove separatori e tronca: due numeri diversi con stesso troncato
+    // collidono nella catena SdI. Blocchiamo upfront.
+    const rawNum = String(draft.numero || '').trim();
+    const sanitizedNum = rawNum.replace(/[^A-Za-z0-9]/g, '');
+    if (sanitizedNum.length > 10) {
+      errors.push('Numero fattura troppo lungo: "' + rawNum + '" diventa "' + sanitizedNum + '" (' + sanitizedNum.length + ' char) dopo normalizzazione SdI. Max 10 alfanumerici. Abbrevia la numerazione.');
+    }
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
@@ -2235,6 +2243,7 @@ ${dettaglioLinee.join('\n')}
   window.addFatturaLine = addFatturaLine;
   window.removeFatturaLine = removeFatturaLine;
   window.saveFatturaDraft = saveFatturaDraft;
+  window.__validateDraftForInvio = validateDraftForInvio;
   window.previewFatturaPdf = previewFatturaPdf;
   window.downloadFatturaPdf = downloadFatturaPdf;
   window.downloadFatturaXml = downloadFatturaXml;
