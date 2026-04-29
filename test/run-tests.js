@@ -100,6 +100,7 @@ require('./dichiarazione-rs-disclaimer.test.js');
 require('./fatture-ritenuta-forfettario.test.js');
 require('./fatture-ritenuta-forfettario-cleanup.test.js');
 require('./fatture-bollo-addebitato-xml.test.js');
+require('./fatture-cliente-pa.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

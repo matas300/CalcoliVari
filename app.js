@@ -867,6 +867,7 @@ function normalizeCliente(input, fallbackId) {
   return {
     id,
     nome: normalizeClienteField(item.nome),
+    tipoCliente: ['PF', 'PG', 'PA', 'Estero'].indexOf(item.tipoCliente) >= 0 ? item.tipoCliente : 'PG',
     partitaIva: normalizeClienteField(item.partitaIva),
     codiceFiscale: normalizeClienteField(item.codiceFiscale),
     codiceSDI: normalizeClienteField(item.codiceSDI, '0000000') || '0000000',
@@ -1019,8 +1020,17 @@ function renderClienteModal(id) {
       <div class="cliente-section">
         <div class="cliente-section-label">Fatturazione elettronica</div>
         <div class="cliente-field">
-          <label>Codice SDI</label>
-          <input type="text" value="${esc(cliente.codiceSDI)}" maxlength="7" ${on('codiceSDI')}>
+          <label>Tipo cliente</label>
+          <select ${on('tipoCliente')}>
+            <option value="PG" ${(!cliente.tipoCliente || cliente.tipoCliente === 'PG') ? 'selected' : ''}>Persona Giuridica (azienda)</option>
+            <option value="PF" ${cliente.tipoCliente === 'PF' ? 'selected' : ''}>Persona Fisica</option>
+            <option value="PA" ${cliente.tipoCliente === 'PA' ? 'selected' : ''}>Pubblica Amministrazione</option>
+            <option value="Estero" ${cliente.tipoCliente === 'Estero' ? 'selected' : ''}>Estero</option>
+          </select>
+        </div>
+        <div class="cliente-field">
+          <label>${cliente.tipoCliente === 'PA' ? 'Codice IPA (6 char)' : 'Codice SDI (7 char)'}</label>
+          <input type="text" value="${esc(cliente.codiceSDI)}" maxlength="${cliente.tipoCliente === 'PA' ? 6 : 7}" ${on('codiceSDI')}>
         </div>
         <div class="cliente-field">
           <label>PEC</label>
@@ -1068,6 +1078,10 @@ function updateClienteField(id, key, value) {
   renderClienti();
   // Non re-renderizzare l'intero modal (perderebbe il focus sull'input attivo).
   // Aggiorna solo il titolo se cambia il nome.
+  // Eccezione: cambio tipoCliente → re-render per aggiornare label SDI/IPA e maxlength.
+  if (clienteModalState.id === id && key === 'tipoCliente' && typeof renderClienteModal === 'function') {
+    renderClienteModal(id);
+  }
   if (clienteModalState.id === id && key === 'nome') {
     const titleEl = document.getElementById('clienteModalTitle');
     if (titleEl) titleEl.textContent = value || 'Nuovo cliente';

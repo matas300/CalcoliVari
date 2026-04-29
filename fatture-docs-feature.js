@@ -1073,6 +1073,16 @@
         errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura e comunicare al committente la dichiarazione sostitutiva di non assoggettamento.");
       }
     } catch (_e) { /* getSettings non disponibile: skip */ }
+    // A-A6 — cliente PA → CodiceIPA 6 caratteri alfanumerici (D.M. 55/2013 art. 2).
+    // Senza codice IPA valido, SdI rifiuta con errore EC02. Il campo SDI è 7 char per
+    // privati/PG, 6 char per PA (Indice IPA: https://indicepa.gov.it).
+    var clientePAref = draft.cliente || draft.clienteSnapshot;
+    if (clientePAref && clientePAref.tipoCliente === 'PA') {
+      var ipa = String(clientePAref.codiceSDI || '').trim();
+      if (!/^[A-Z0-9]{6}$/i.test(ipa)) {
+        errors.push('Cliente PA: il Codice IPA deve essere 6 caratteri alfanumerici (D.M. 55/2013 art. 2).');
+      }
+    }
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
@@ -1589,13 +1599,17 @@
 
     // CodiceDestinatario:
     //  - cliente estero → XXXXXXX (convenzione FatturaPA per operazioni transfrontaliere)
-    //  - cliente IT con SDI valorizzato → quello
+    //  - cliente PA → Codice IPA 6 char alfanumerici as-is (D.M. 55/2013 art. 2)
+    //  - cliente IT con SDI valorizzato → quello (7 char, padded)
     //  - cliente IT privato o senza SDI → 0000000
+    const isClientePA = cliente.tipoCliente === 'PA';
     const codiceSDI = clienteEstero
       ? 'XXXXXXX'
-      : (clientePivaValida
-          ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
-          : String(cliente.codiceSDI || '').trim() || '0000000');
+      : (isClientePA
+          ? String(cliente.codiceSDI || '').trim().toUpperCase()
+          : (clientePivaValida
+              ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
+              : String(cliente.codiceSDI || '').trim() || '0000000'));
 
     // Cedente Nome/Cognome dal profilo fiscale (campi già separati in getProfileFiscalData)
     const profileNome = String(profile.nome || '').replace(String(profile.cognome || ''), '').trim()
