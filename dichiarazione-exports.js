@@ -294,6 +294,44 @@
       }
 
       footer();
+
+      // C-A4: Watermark "BOZZA" + disclaimer trasmissione su ogni pagina
+      function addBozzaWatermark(d, pW, pH) {
+        d.saveGraphicsState && d.saveGraphicsState();
+        var hasGState = false;
+        try {
+          if (d.GState && d.setGState) {
+            d.setGState(new d.GState({ opacity: 0.15 }));
+            hasGState = true;
+          }
+        } catch (e) { hasGState = false; }
+        if (hasGState) {
+          d.setTextColor(180, 30, 30);
+        } else {
+          // Fallback: full-opacity ma colore chiaro
+          d.setTextColor(220, 200, 200);
+        }
+        d.setFontSize(60);
+        d.setFont('helvetica', 'bold');
+        d.text('BOZZA', pW / 2, pH / 2, { align: 'center', angle: 35 });
+        d.restoreGraphicsState && d.restoreGraphicsState();
+        // Footer disclaimer (sempre visibile, opacity normale)
+        d.setTextColor(120, 120, 120);
+        d.setFontSize(7);
+        d.setFont('helvetica', 'normal');
+        d.text(
+          'BOZZA — NON SOSTITUISCE LA DICHIARAZIONE TELEMATICA. La presentazione avviene esclusivamente via Entratel/Fisconline o intermediario abilitato (art. 3 DPR 322/1998).',
+          pW / 2, pH - 8, { align: 'center', maxWidth: pW - 20 }
+        );
+      }
+      var totalPages = doc.internal.getNumberOfPages();
+      var pW = doc.internal.pageSize.getWidth();
+      var pH = doc.internal.pageSize.getHeight();
+      for (var p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        addBozzaWatermark(doc, pW, pH);
+      }
+
       doc.save(filename);
     }
   };
