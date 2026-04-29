@@ -43,3 +43,36 @@ describe('buildQuadroRW — criptovalute IC 2‰ (L. 197/2022)', function() {
     expect(rw.righi[0].icRigoDovuto).toBe(0);
   });
 });
+
+describe('C-A3 v2 — sanitize input cripto', function () {
+  var Engine = DE;
+
+  test('valoreFinale negativo → trattato come 0 + warning', function () {
+    var r = Engine.buildQuadroRW([{ tipo: 'criptovalute', valoreFinale: -500, quotaPossesso: 1 }]);
+    expect(r.righi[0].icRigoDovuto).toBe(0);
+    expect(r.righi[0].valoreFinale >= 0).toBe(true);
+    var hasWarn = (r.warnings && r.warnings.length > 0)
+      || (r.righi[0]._warnings && r.righi[0]._warnings.length > 0);
+    expect(hasWarn).toBe(true);
+  });
+
+  test('quotaPossesso > 1 clampata a 1', function () {
+    var r = Engine.buildQuadroRW([{ tipo: 'criptovalute', valoreFinale: 10000, quotaPossesso: 1.5 }]);
+    expect(r.righi[0].quotaPossesso).toBe(1);
+    expect(r.righi[0].icRigoDovuto).toBe(20);
+  });
+
+  test('quotaPossesso negativa clampata a 0', function () {
+    var r = Engine.buildQuadroRW([{ tipo: 'criptovalute', valoreFinale: 10000, quotaPossesso: -0.3 }]);
+    expect(r.righi[0].quotaPossesso).toBe(0);
+    expect(r.righi[0].icRigoDovuto).toBe(0);
+  });
+
+  test('quotaPossesso fuori range emette warning', function () {
+    var r = Engine.buildQuadroRW([{ tipo: 'criptovalute', valoreFinale: 10000, quotaPossesso: 2 }]);
+    var hasWarn = (r.warnings || []).concat(r.righi[0]._warnings || []).some(function (w) {
+      return /quota/i.test(String(w));
+    });
+    expect(hasWarn).toBe(true);
+  });
+});

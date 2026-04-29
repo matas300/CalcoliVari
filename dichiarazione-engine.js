@@ -338,7 +338,8 @@
       var righi = contiEsteri.map(function(c, idx) {
         c = c || {};
         var tipo = c.tipo || null;
-        var quota = (typeof c.quotaPossesso === 'number' && !isNaN(c.quotaPossesso)) ? c.quotaPossesso : 1;
+        var quotaRaw = (typeof c.quotaPossesso === 'number' && !isNaN(c.quotaPossesso)) ? c.quotaPossesso : 1;
+        var quota = Math.min(1, Math.max(0, quotaRaw));
         var giacenza = parseFloat(c.giacenzaMediaAnnua);
         if (isNaN(giacenza)) giacenza = 0;
         var valoreImmobile = parseFloat(c.valoreImmobile);
@@ -348,6 +349,10 @@
         var ivafe = 0;
         var ivie = 0;
         var warnings = [];
+
+        if (quota !== quotaRaw) {
+          warnings.push('Quota possesso fuori range [0,1]: clampata da ' + quotaRaw + ' a ' + quota);
+        }
 
         if (tipo === 'immobile') {
           var aliq = primaCasa ? 0.004 : 0.0106;
@@ -361,8 +366,12 @@
         } else if (tipo === 'criptovalute') {
           // Imposta sul valore cripto-attivit\u00e0 (L. 197/2022 art. 1 cc. 126-147; Provv. AdE 7/8/2023)
           // IC = 2 per mille del valore detenuto. Nessuna soglia 5.000 \u20ac (vale solo IVAFE conti UE/SEE).
-          var valoreCripto = parseFloat(c.valoreFinale);
-          if (isNaN(valoreCripto)) valoreCripto = 0;
+          var valoreCriptoRaw = parseFloat(c.valoreFinale);
+          if (isNaN(valoreCriptoRaw)) valoreCriptoRaw = 0;
+          var valoreCripto = Math.max(0, valoreCriptoRaw);
+          if (valoreCripto !== valoreCriptoRaw) {
+            warnings.push('Valore cripto negativo (' + valoreCriptoRaw + '): trattato come 0. Verificare input.');
+          }
           var ic = 0;
           if (valoreCripto > 0) {
             ic = r2(valoreCripto * 0.002 * quota);

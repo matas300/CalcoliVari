@@ -33,8 +33,21 @@
       if (dich.quadroRX) processQuadro('RX', dich.quadroRX);
       if (dich.quadroRW && dich.quadroRW.righi) {
         dich.quadroRW.righi.forEach(function(r, i) {
-          rows.push('RW,RW' + (i + 1) + ',' + (r.valoreFinale || 0) + ',' + r.paese + ',input');
+          var ic = r.icRigoDovuto || 0;
+          var ivafe = r.ivafeRigoDovuto || 0;
+          var ivie = r.ivieRigoDovuto || 0;
+          var labelTipo = (r.tipo || r.paese || '').toString().replace(/,/g, ';');
+          rows.push('RW,RW' + (i + 1) + ',' + (r.valoreFinale || 0) + ',"' + labelTipo + '",input');
+          if (ic > 0) rows.push('RW,RW' + (i + 1) + '_IC,' + ic + ',"IC cripto-attività 2‰",computed');
+          if (ivafe > 0) rows.push('RW,RW' + (i + 1) + '_IVAFE,' + ivafe + ',"IVAFE 2‰",computed');
+          if (ivie > 0) rows.push('RW,RW' + (i + 1) + '_IVIE,' + ivie + ',"IVIE",computed');
         });
+        if (dich.quadroRW.totali) {
+          var tRW = dich.quadroRW.totali;
+          if (tRW.icTotale > 0) rows.push('RW,_TOT_IC,' + tRW.icTotale + ',"IC totale cripto-attività",computed');
+          if (tRW.ivafeTotale > 0) rows.push('RW,_TOT_IVAFE,' + tRW.ivafeTotale + ',"IVAFE totale",computed');
+          if (tRW.ivieTotale > 0) rows.push('RW,_TOT_IVIE,' + tRW.ivieTotale + ',"IVIE totale",computed');
+        }
       }
       if (dich.quadroRN) rows.push('RN,redditoDipendente,' + (dich.quadroRN.redditoDipendente || 0) + ',Reddito da lavoro dipendente,input');
       if (dich.quadroCE) processQuadro('CE', dich.quadroCE);
@@ -262,11 +275,45 @@
           doc.setFont('helvetica', 'bold');
           doc.text('RW' + (i + 1), margin, y);
           doc.setFont('helvetica', 'normal');
-          doc.text(r.paese + ' \u2014 ' + r.tipoConto, margin + 22, y);
+          var label = (r.tipo === 'criptovalute')
+            ? ('Cripto-attivit\u00e0' + (r.exchange ? ' \u2014 ' + r.exchange : ''))
+            : ((r.paese || '') + ' \u2014 ' + (r.tipoConto || ''));
+          doc.text(label, margin + 22, y);
           var val = (r.valoreFinale || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
-          doc.text(val, pageW - margin, y, { align: 'right' });
+          var ic = r.icRigoDovuto || 0;
+          var ivafe = r.ivafeRigoDovuto || 0;
+          var ivie = r.ivieRigoDovuto || 0;
+          var imp = ic > 0 ? ic : (ivafe > 0 ? ivafe : ivie);
+          var impLabel = '';
+          if (ic > 0) impLabel = 'IC ' + ic.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          else if (ivafe > 0) impLabel = 'IVAFE ' + ivafe.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          else if (ivie > 0) impLabel = 'IVIE ' + ivie.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          doc.text(val, pageW - margin - 40, y, { align: 'right' });
+          if (impLabel) doc.text(impLabel, pageW - margin, y, { align: 'right' });
           y += 7;
         });
+        // Totali imposte RW
+        if (dich.quadroRW.totali) {
+          var t = dich.quadroRW.totali;
+          y += 2;
+          doc.setFont('helvetica', 'bold');
+          if (t.icTotale > 0) {
+            checkPageBreak(7);
+            doc.text('Totale IC cripto-attivit\u00e0 (2\u2030): \u20ac ' + t.icTotale.toFixed(2), margin, y);
+            y += 6;
+          }
+          if (t.ivafeTotale > 0) {
+            checkPageBreak(7);
+            doc.text('Totale IVAFE: \u20ac ' + t.ivafeTotale.toFixed(2), margin, y);
+            y += 6;
+          }
+          if (t.ivieTotale > 0) {
+            checkPageBreak(7);
+            doc.text('Totale IVIE: \u20ac ' + t.ivieTotale.toFixed(2), margin, y);
+            y += 6;
+          }
+          doc.setFont('helvetica', 'normal');
+        }
       }
 
       // Quadro RX
