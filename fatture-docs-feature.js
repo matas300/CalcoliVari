@@ -1706,7 +1706,12 @@
     // Risoluzione AdE 444/E del 18/11/2008: il bollo addebitato è un rimborso
     // (fuori campo IVA art. 15 DPR 633/72, Natura N1). Mai su TD04 (NC):
     // il bollo dell'originale resta a carico emittente (Ris. AdE 98/E 2003).
-    const emetteRimborsoBollo = !isNC && draft.marcaDaBollo === true && draft.bolloAddebitato === true;
+    // A-A7 v2: soglia 77,47 € coerente con applicaBolloSeDovuto (D.M. 17/06/2014 art. 6)
+    // "superiore a" 77,47 → operatore strict >; totals già calcolato a riga 1630
+    const emetteRimborsoBollo = !isNC
+      && draft.marcaDaBollo === true
+      && draft.bolloAddebitato === true
+      && (totals && (totals.subtotal || 0) > 77.47);
     if (emetteRimborsoBollo) {
       lineNum++;
       dettaglioLinee.push(`    <DettaglioLinee>

@@ -99,4 +99,30 @@ describe('A-A7 — riga rimborso bollo in XML (Ris. AdE 444/E 2008)', function (
     var xml = build(baseDraft(), {});
     expect(/<ImportoTotaleDocumento>102\.00<\/ImportoTotaleDocumento>/.test(xml)).toBe(true);
   });
+
+  test('A-A7 v2: sotto soglia 77,47 € + bolloAddebitato=true → NON emette riga rimborso (incoerenza evitata)', function () {
+    // Bug pre-fix: riga rimborso bollo emessa anche se subtotal <= 77.47 (senza DatiBollo corrispondente)
+    var draftSottoSoglia = baseDraft({
+      righe: [{ descrizione: 'Mini', quantita: 1, prezzoUnitario: 50 }]  // 50 < 77.47
+    });
+    var xml = build(draftSottoSoglia, {});
+    expect(/Rimborso imposta di bollo/.test(xml)).toBe(false);
+    // Verifica anche che <DatiBollo> non sia emesso (sotto soglia → no DatiBollo)
+    expect(/<DatiBollo>/.test(xml)).toBe(false);
+  });
+
+  test('A-A7 v2: a soglia esatta 77,47 € → NON emette (operatore strict, soglia "superiore a")', function () {
+    // D.M. 17/06/2014 art. 6: bollo dovuto se "superiore a" 77,47 → strict >
+    var draft = baseDraft({
+      righe: [{ descrizione: 'X', quantita: 1, prezzoUnitario: 77.47 }]
+    });
+    var xml = build(draft, {});
+    expect(/Rimborso imposta di bollo/.test(xml)).toBe(false);
+  });
+
+  test('A-A7 v2: sopra soglia (100 €) + bolloAddebitato → emette riga rimborso (caso normale)', function () {
+    // sanity check: il caso che già passava continua a passare
+    var xml = build(baseDraft(), {});  // baseDraft usa prezzoUnitario: 100
+    expect(/Rimborso imposta di bollo/.test(xml)).toBe(true);
+  });
 });
