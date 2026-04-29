@@ -716,6 +716,10 @@
 
   function renderStep3Html() {
     const draft = currentDraft();
+    const isForfettarioRegime = (() => {
+      try { return (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; }
+      catch (_e) { return false; }
+    })();
     return `
       <div class="fattura-form-grid">
         <label class="fattura-field">
@@ -736,6 +740,14 @@
             <span style="font-size:10px; color:var(--color-text-faint); text-transform:uppercase; letter-spacing:.04em;">Addebita al cliente</span>
           </div>
         </label>
+        ${isForfettarioRegime ? `
+        <div class="fattura-field fattura-field-wide">
+          <span>Ritenuta d'acconto</span>
+          <div style="font-size:11px; color:var(--color-text-muted); padding:6px 0;">
+            Non applicabile: il regime forfettario è esonerato dalla ritenuta (art. 1 c. 67 L. 190/2014).
+          </div>
+        </div>
+        ` : `
         <div class="fattura-field fattura-field-wide">
           <span>Ritenuta d'acconto</span>
           <div class="fattura-bollo-wrap">
@@ -762,6 +774,7 @@
             </div>
           </div>
         </div>
+        `}
         <label class="fattura-field fattura-field-wide">
           <span>Nota</span>
           <textarea id="fatturaNota" rows="2" oninput="updateFatturaDraftField('note', this.value)">${esc(draft.note)}</textarea>
@@ -1040,6 +1053,15 @@
     if (sanitizedNum.length > 10) {
       errors.push('Numero fattura troppo lungo: "' + rawNum + '" diventa "' + sanitizedNum + '" (' + sanitizedNum.length + ' char) dopo normalizzazione SdI. Max 10 alfanumerici. Abbrevia la numerazione.');
     }
+    // C-A2 — forfettario esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014)
+    // Fonte: Circ. AdE 9/E 2019 §4.1. Il committente non deve operare ritenuta;
+    // se la trattiene per errore, il forfettario perde liquidità.
+    try {
+      var settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
+      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura e comunicare al committente la dichiarazione sostitutiva di non assoggettamento.");
+      }
+    } catch (_e) { /* getSettings non disponibile: skip */ }
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
