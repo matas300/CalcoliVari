@@ -77,7 +77,7 @@
     if (base <= cfg.thresholdZero) {
       return { base, total: 0, first: 0, second: 0, mode: 'none' };
     }
-    if (base < cfg.thresholdSingle) {
+    if (base <= cfg.thresholdSingle) {
       return { base, total: base, first: 0, second: base, mode: 'single' };
     }
     const parts = splitAmountByWeights(base, cfg.weights);

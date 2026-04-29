@@ -4070,7 +4070,7 @@ function buildAccontoPlan(baseAmount) {
   if (base <= FORFETTARIO_RULES.accontoThreshold) {
     return { base, total: 0, first: 0, second: 0, mode: 'none' };
   }
-  if (base < FORFETTARIO_RULES.singleAccontoThreshold) {
+  if (base <= FORFETTARIO_RULES.singleAccontoThreshold) {
     return { base, total: base, first: 0, second: base, mode: 'single' };
   }
   const [first, second] = splitAmountByWeights(base, FORFETTARIO_RULES.fixedAccontoWeights);
