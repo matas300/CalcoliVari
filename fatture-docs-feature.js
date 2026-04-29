@@ -722,6 +722,35 @@
   }
   if (typeof window !== 'undefined') window.__clearRitenutaForForfettario = _clearRitenutaForForfettario;
 
+  // NR-10 — fallback chain robusto per regime PDF (art. 6 c. 1 D.Lgs. 471/1997)
+  // Mai PDF con dicitura legale silenziosamente assente: se il regime non è
+  // determinabile, throw esplicito così l'utente è avvisato.
+  function _resolveRegimeForPdf() {
+    // 1. Try getSettings (path normale)
+    try {
+      if (typeof getSettings === 'function') {
+        var s = getSettings();
+        if (s && s.regime) return s.regime;
+      }
+    } catch (_e) { /* fallthrough */ }
+    // 2. Fallback diretto a localStorage
+    try {
+      var profile = (typeof window !== 'undefined' && window.currentProfile)
+        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem && sessionStorage.getItem('calcoliPIVA_profile'));
+      var year = (typeof window !== 'undefined' && window.currentYear) || new Date().getFullYear();
+      if (profile && year) {
+        var raw = localStorage.getItem('calcoliPIVA_' + profile + '_' + year);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.settings && parsed.settings.regime) return parsed.settings.regime;
+        }
+      }
+    } catch (_e) { /* fallthrough */ }
+    // 3. Last resort: throw — mai dicitura silenziosamente assente
+    throw new Error('PDF fattura: impossibile determinare il regime fiscale per la dicitura legale (NR-10).');
+  }
+  if (typeof window !== 'undefined') window.__resolveRegimeForPdf = _resolveRegimeForPdf;
+
   function renderStep3Html() {
     const draft = currentDraft();
     const isForfettarioRegime = (() => {
@@ -1407,8 +1436,14 @@
     }
 
     // Footer legale — A-A8: dicitura forfettario obbligatoria (D.L. 119/2018 art. 1 c. 909)
-    let isForfettario = false;
-    try { isForfettario = (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; } catch (_e) { /* fallback su nota custom */ }
+    // NR-10: fail loud se il regime non è determinabile, mai PDF con dicitura ambigua
+    // (art. 6 c. 1 D.Lgs. 471/1997 — sanzione 250-2000 € per omessa indicazione).
+    let isForfettario;
+    try {
+      isForfettario = _resolveRegimeForPdf() === 'forfettario';
+    } catch (resolveErr) {
+      throw resolveErr;
+    }
     const customNote = (invoice.note && String(invoice.note).trim()) ? String(invoice.note).trim() : '';
     const noteToPrint = customNote || (isForfettario ? DEFAULT_FORFETTARIO_NOTE : '');
     if (noteToPrint) {
