@@ -1806,10 +1806,12 @@
       // Estero: accetta piva "grezza" (non deve passare validazione IT)
       const vatEstero = clientePivaRaw || clienteCF;
       if (vatEstero) {
+        // NR-3: strip prefisso paese se duplicato (FatturaPA v1.2 §2.1.2.6)
+        const vatCodice = vatEstero.replace(new RegExp('^' + cliNaz, 'i'), '').trim() || vatEstero;
         cessionarioFiscaleXml = `
         <IdFiscaleIVA>
           <IdPaese>${cliNaz}</IdPaese>
-          <IdCodice>${xmlEscape(vatEstero)}</IdCodice>
+          <IdCodice>${xmlEscape(vatCodice)}</IdCodice>
         </IdFiscaleIVA>`;
       } else {
         console.warn('Cliente estero senza VAT né CF: XML potrebbe essere rifiutato da SdI');
