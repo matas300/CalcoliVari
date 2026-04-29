@@ -321,7 +321,7 @@
         d.setFont('helvetica', 'normal');
         d.text(
           'BOZZA — NON SOSTITUISCE LA DICHIARAZIONE TELEMATICA. La presentazione avviene esclusivamente via Entratel/Fisconline o intermediario abilitato (art. 3 DPR 322/1998).',
-          pW / 2, pH - 8, { align: 'center', maxWidth: pW - 20 }
+          pW / 2, pH - 14, { align: 'center', maxWidth: pW - 20 }
         );
       }
       var totalPages = doc.internal.getNumberOfPages();
