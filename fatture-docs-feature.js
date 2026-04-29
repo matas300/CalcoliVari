@@ -1570,6 +1570,13 @@
         if (!hasPivaIT && !hasCF) errors.push('Cliente IT senza P.IVA valida né CF valido: SdI rifiuterà.');
       }
     }
+    // C-A2 bypass: blocca ritenuta su forfettario anche dai path preview/download XML
+    try {
+      const settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
+      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura prima di scaricare/visualizzare l'XML.");
+      }
+    } catch (_e) { /* settings non disponibili: skip */ }
     return { errors };
   }
 
@@ -2055,6 +2062,12 @@ ${dettaglioLinee.join('\n')}
     try {
       const saved = saveFatturaDraft(true);
       if (!saved) return;
+      // C-A2 bypass: validate prima della preview
+      const validation = validateFatturaForXml(saved);
+      if (validation.errors && validation.errors.length) {
+        showFatturaToast(validation.errors[0], 'error');
+        return;
+      }
       const xml = (saved.tipoDocumento === 'TD04' && saved.fatturaOriginaleId)
         ? buildFatturaElettronicaXmlNC(saved, _findOriginale(saved.fatturaOriginaleId))
         : buildFatturaElettronicaXml(saved);
@@ -2372,6 +2385,7 @@ ${dettaglioLinee.join('\n')}
   window.removeFatturaLine = removeFatturaLine;
   window.saveFatturaDraft = saveFatturaDraft;
   window.__validateDraftForInvio = validateDraftForInvio;
+  window.__validateFatturaForXml = validateFatturaForXml;
   window.previewFatturaPdf = previewFatturaPdf;
   window.downloadFatturaPdf = downloadFatturaPdf;
   window.downloadFatturaXml = downloadFatturaXml;
