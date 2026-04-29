@@ -714,12 +714,23 @@
     `;
   }
 
+  function _clearRitenutaForForfettario(draft) {
+    draft.ritenuta = 0;
+    draft.aliquotaRitenuta = 0;
+    if (draft.tipoRitenuta) draft.tipoRitenuta = '';
+    if (draft.causaleRitenuta) draft.causaleRitenuta = '';
+  }
+  if (typeof window !== 'undefined') window._clearRitenutaForForfettario = _clearRitenutaForForfettario;
+
   function renderStep3Html() {
     const draft = currentDraft();
     const isForfettarioRegime = (() => {
       try { return (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; }
       catch (_e) { return false; }
     })();
+    if (isForfettarioRegime && Number(draft.ritenuta) > 0) {
+      _clearRitenutaForForfettario(draft);
+    }
     return `
       <div class="fattura-form-grid">
         <label class="fattura-field">
