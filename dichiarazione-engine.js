@@ -200,7 +200,8 @@
       }
 
       if (settings.inpsMode === 'gestione_separata') {
-        var aliqGs = parseFloat(settings.aliqContributi) || 26.23;
+        // REG-2: aliquota Gestione Separata esclusivo 2024-2026 = 26,07% (Circ. INPS 26/2025 + 8/2026)
+        var aliqGs = parseFloat(settings.aliqContributi) || 26.07;
         var contrib = Math.round(reddito * (aliqGs / 100) * 100) / 100;
         return {
           sezI: null,
