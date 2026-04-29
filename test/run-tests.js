@@ -92,6 +92,7 @@ require('./dichiarazione-lm3-per-cassa.test.js');
 require('./scadenziario-saldo-acconti-pagati.test.js');
 require('./dichiarazione-startup-aliquota.test.js');
 require('./dichiarazione-rw-soglie.test.js');
+require('./dichiarazione-rw-cripto.test.js');
 require('./dichiarazione-perdite-scadenza.test.js');
 require('./dichiarazione-limite-forfettario.test.js');
 require('./scadenziario-nota-saldo-contrib-n1.test.js');

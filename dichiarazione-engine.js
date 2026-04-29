@@ -330,6 +330,7 @@
       var FIN_TYPES = { conto_corrente: true, deposito: true, prodotti_finanziari: true };
       var ivafeTotale = 0;
       var ivieTotale = 0;
+      var icTotale = 0; // imposta sul valore cripto-attività (L. 197/2022)
       var aggregateWarnings = [];
       var anyMissingDetail = false;
 
@@ -356,6 +357,38 @@
           } else {
             ivie = r2(ivieRaw);
           }
+        } else if (tipo === 'criptovalute') {
+          // Imposta sul valore cripto-attivit\u00e0 (L. 197/2022 art. 1 cc. 126-147; Provv. AdE 7/8/2023)
+          // IC = 2 per mille del valore detenuto. Nessuna soglia 5.000 \u20ac (vale solo IVAFE conti UE/SEE).
+          var valoreCripto = parseFloat(c.valoreFinale);
+          if (isNaN(valoreCripto)) valoreCripto = 0;
+          var ic = 0;
+          if (valoreCripto > 0) {
+            ic = r2(valoreCripto * 0.002 * quota);
+            warnings.push('Cripto-attivit\u00e0: eventuali plusvalenze realizzate (cessione/conversione) sono soggette a imposta sostitutiva 26% \u2014 verificare quadro RT (fuori scope monitoraggio RW)');
+          }
+          icTotale += ic;
+          return {
+            paese: c.paese || c.codicePaese || '',
+            codicePaese: c.codicePaese || c.paese || '',
+            tipoConto: c.tipoConto || '',
+            iban: c.iban || '',
+            valoreIniziale: parseFloat(c.valoreIniziale) || 0,
+            valoreFinale: valoreCripto,
+            giorniDetenzione: parseInt(c.giorniDetenzione) || 0,
+            valutaCodice: c.valutaCodice || 'EUR',
+            tipo: 'criptovalute',
+            exchange: c.exchange || '',
+            walletAddress: c.walletAddress || '',
+            giacenzaMediaAnnua: 0,
+            valoreImmobile: 0,
+            primaCasa: false,
+            quotaPossesso: quota,
+            ivafeRigoDovuto: 0,
+            ivieRigoDovuto: 0,
+            icRigoDovuto: ic,
+            _warnings: warnings
+          };
         } else if (tipo && FIN_TYPES[tipo]) {
           if (giacenza > 0) {
             ivafe = r2(giacenza * 0.002 * quota);
@@ -390,6 +423,7 @@
           quotaPossesso: quota,
           ivafeRigoDovuto: ivafe,
           ivieRigoDovuto: ivie,
+          icRigoDovuto: 0,
           _warnings: warnings
         };
       });
@@ -400,7 +434,7 @@
 
       return {
         righi: righi,
-        totali: { ivafeTotale: r2(ivafeTotale), ivieTotale: r2(ivieTotale) },
+        totali: { ivafeTotale: r2(ivafeTotale), ivieTotale: r2(ivieTotale), icTotale: r2(icTotale) },
         warnings: aggregateWarnings
       };
     },

@@ -181,7 +181,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 | `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: INPS sezione I (artigiani/commercianti) or sezione II (gestione separata) |
 | `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
 | `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
-| `buildQuadroRW(contiEsteri)` | Quadro RW: conti e investimenti esteri (one rigo per account) |
+| `buildQuadroRW(contiEsteri)` | Quadro RW: conti esteri, immobili, criptovalute. Calcola IVAFE (2‰ finanziari), IVIE (4‰ prima casa / 10,6‰ altri), IC (2‰ cripto, L. 197/2022) |
 | `buildCondizionali(input, yearData)` | Conditional quadri: quadroRN (annoMisto), quadroCE (imposteEstere) |
 | `buildDichiarazione(year, profile, input)` | Assembles all quadri into the full dichiarazione object |
 | `validateDichiarazione(dich)` | Returns `{ errors, warnings }` arrays; errors block export, warnings are confirmable |
