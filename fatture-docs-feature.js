@@ -1630,6 +1630,24 @@
     </DettaglioLinee>`;
     });
 
+    // A-A7 — riga "Rimborso imposta di bollo" quando addebitato al cliente.
+    // Risoluzione AdE 444/E del 18/11/2008: il bollo addebitato è un rimborso
+    // (fuori campo IVA art. 15 DPR 633/72, Natura N1). Mai su TD04 (NC):
+    // il bollo dell'originale resta a carico emittente (Ris. AdE 98/E 2003).
+    const emetteRimborsoBollo = !isNC && draft.marcaDaBollo === true && draft.bolloAddebitato === true;
+    if (emetteRimborsoBollo) {
+      lineNum++;
+      dettaglioLinee.push(`    <DettaglioLinee>
+      <NumeroLinea>${lineNum}</NumeroLinea>
+      <Descrizione>Rimborso imposta di bollo</Descrizione>
+      <Quantita>1.00</Quantita>
+      <PrezzoUnitario>2.00</PrezzoUnitario>
+      <PrezzoTotale>2.00</PrezzoTotale>
+      <AliquotaIVA>0.00</AliquotaIVA>
+      <Natura>N1</Natura>
+    </DettaglioLinee>`);
+    }
+
     // Contributo integrativo: si applica SOLO alle casse autonome (es. TC01 avvocati,
     // TC02 ingegneri). Gestione separata INPS (TC22) non ha integrativo. Finché non
     // supportiamo TipoCassa + DatiCassaPrevidenziale, blocchiamo l'export se il
@@ -1813,7 +1831,14 @@ ${dettaglioLinee.join('\n')}
         <ImponibileImporto>${fmtXmlNum(round2(imponibile * sign))}</ImponibileImporto>
         <Imposta>0.00</Imposta>
         <RiferimentoNormativo>${xmlEscape(riferimentoNormativo)}</RiferimentoNormativo>
-      </DatiRiepilogo>
+      </DatiRiepilogo>${emetteRimborsoBollo ? `
+      <DatiRiepilogo>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N1</Natura>
+        <ImponibileImporto>2.00</ImponibileImporto>
+        <Imposta>0.00</Imposta>
+        <RiferimentoNormativo>Rimborso imposta di bollo - Escluso art. 15 DPR 633/72 (Ris. AdE 444/E 2008)</RiferimentoNormativo>
+      </DatiRiepilogo>` : ''}
     </DatiBeniServizi>${clienteEstero ? '' : `
     <DatiPagamento>
       <CondizioniPagamento>TP02</CondizioniPagamento>
