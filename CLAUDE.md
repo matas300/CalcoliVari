@@ -108,7 +108,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - **INPS fixed** (artigiani/commercianti): 4 quarterly rates on May 16, Aug 20, Nov 16, Feb 16 (next year)
 - **INPS variable** (contributi eccedenti il minimale): same saldo/acconto structure as imposta sostitutiva
 - **Saldo** = actual tax/contribution for the year minus acconti already paid
-- **Thresholds**: < 51.65€ = no acconti; < 257.52€ = single acconto in November (100%); otherwise 40/60 split
+- **Thresholds**: < 51.65€ = no acconti; ≤ 257.52€ = single acconto in November (100%); otherwise 40/60 split (operatore inclusivo per art. 17 c. 3 DPR 435/2001)
 
 #### First-Year Onboarding
 - When no previous year data exists in localStorage, the schedule builder uses `primoAnno*` settings as fallback
@@ -189,7 +189,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 
 #### Exports (`DichiarazioneExports`)
 - **C2 — JSON + CSV zip**: `DichiarazioneExports.exportC2(dich)` — zips a structured JSON and a human-readable CSV of all righi values
-- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout
+- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout. **Watermark "BOZZA" diagonale** + **footer disclaimer** "Non sostituisce la dichiarazione telematica (art. 3 DPR 322/1998)" su ogni pagina (C-A4, post-audit 2026-04-29)
 
 #### Unit Tests
 - `test/dichiarazione-engine.test.js` — 39 tests covering all engine functions
@@ -226,7 +226,7 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
 - **`buildFatturaElettronicaXml(draft, opts)`**: genera XML TD01 (fattura) o TD04 (nota di credito) a seconda di `opts.isNC`; quando isNC=true, applica segni negativi agli importi e inserisce `DatiFattureCollegate` con `IdDocumento`/`Data` dalla fattura originale
 - **`buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale)`**: wrapper per generazione NC
-- **XML audit fixes (11 punti conformità AdE v1.2):**
+- **XML audit fixes (15 punti conformità AdE v1.2):**
   - `sanitizeProgressivoInvio` — max 10 char alfanumerici
   - `isValidPartitaIvaIT` — 11 cifre IT
   - `isValidCodiceFiscale` — 16 char + check digit
@@ -238,6 +238,10 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
   - Contributo integrativo su riga separata con propria `Natura`
   - `DatiPagamento.ImportoPagamento` = totale lordo − ritenuta
   - XSD element order in `DatiGeneraliDocumento`: Numero → DatiRitenuta → DatiBollo → ImportoTotaleDocumento → Causale
+  - **C-A2** (post-audit 2026-04-29): `validateDraftForInvio` blocca `ritenuta > 0` quando `regime === 'forfettario'` (art. 1 c. 67 L. 190/2014); UI nasconde la checkbox; `__clearRitenutaForForfettario` azzera valori stale a render time
+  - **A-A6** (post-audit 2026-04-29): cliente con `tipoCliente ∈ {'PF','PG','PA','Estero'}` (default 'PG'); per PA il `CodiceDestinatario` deve essere IPA 6 char alfanumerici (D.M. 55/2013); validate blocca formato errato
+  - **A-A7** (post-audit 2026-04-29): se `marcaDaBollo && bolloAddebitato` su TD01, emette `<DettaglioLinee>` "Rimborso imposta di bollo" con `Natura=N1` + secondo `<DatiRiepilogo>` (Ris. AdE 444/E 2008). Esclusa su TD04.
+  - **A-A8** (post-audit 2026-04-29): footer PDF fattura con dicitura art. 1 c. 54-89 L. 190/2014 emessa SOLO per regime forfettario (D.L. 119/2018)
 - **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
 - **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
 - **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"
