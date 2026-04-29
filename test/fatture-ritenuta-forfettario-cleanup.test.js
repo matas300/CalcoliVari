@@ -24,10 +24,10 @@ var _regime = 'forfettario';
 global.getSettings = function () { return { regime: _regime, giorniIncasso: 30 }; };
 require('../fatture-docs-feature.js');
 
-var clearFn = global._clearRitenutaForForfettario || (global.window && global.window._clearRitenutaForForfettario);
-if (!clearFn) throw new Error('_clearRitenutaForForfettario not exposed');
+var clearFn = global.window && global.window.__clearRitenutaForForfettario;
+if (!clearFn) throw new Error('__clearRitenutaForForfettario not exposed');
 
-describe('C-A2 cleanup — _clearRitenutaForForfettario', function () {
+describe('C-A2 cleanup — __clearRitenutaForForfettario', function () {
   test('azzera ritenuta e aliquota su draft con valori > 0', function () {
     var draft = { ritenuta: 200, aliquotaRitenuta: 20, tipoRitenuta: 'RT02', causaleRitenuta: 'A' };
     clearFn(draft);

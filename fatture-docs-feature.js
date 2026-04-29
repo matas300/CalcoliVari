@@ -717,10 +717,10 @@
   function _clearRitenutaForForfettario(draft) {
     draft.ritenuta = 0;
     draft.aliquotaRitenuta = 0;
-    if (draft.tipoRitenuta) draft.tipoRitenuta = '';
-    if (draft.causaleRitenuta) draft.causaleRitenuta = '';
+    draft.tipoRitenuta = '';
+    draft.causaleRitenuta = '';
   }
-  if (typeof window !== 'undefined') window._clearRitenutaForForfettario = _clearRitenutaForForfettario;
+  if (typeof window !== 'undefined') window.__clearRitenutaForForfettario = _clearRitenutaForForfettario;
 
   function renderStep3Html() {
     const draft = currentDraft();
