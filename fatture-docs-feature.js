@@ -1,6 +1,6 @@
 /* Fatture PDF feature: create, preview, persist, and sync invoice history */
 (function () {
-  const DEFAULT_FORFETTARIO_NOTE = "Operazione senza applicazione dell'IVA ai sensi dell'art.1 commi 54-89 L.190/2014 e successive modifiche";
+  const DEFAULT_FORFETTARIO_NOTE = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 — regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
   const DEFAULT_BONIFICO = 'Bonifico bancario';
   // FatturaPA ModalitaPagamento codes (spec v1.2)
   const MODALITA_TO_MP = {
@@ -1396,16 +1396,21 @@
       y += 4;
     }
 
-    // Footer legale (forfettario)
-    y += 4;
-    doc.setDrawColor.apply(doc, BORDER);
-    doc.setLineWidth(0.2);
-    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
-    y += 5;
-    doc.setFontSize(8);
-    doc.setTextColor.apply(doc, MUTED);
-    const note = invoice.note || DEFAULT_FORFETTARIO_NOTE;
-    doc.splitTextToSize(note, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+    // Footer legale — A-A8: dicitura forfettario obbligatoria (D.L. 119/2018 art. 1 c. 909)
+    let isForfettario = false;
+    try { isForfettario = (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; } catch (_e) { /* fallback su nota custom */ }
+    const customNote = (invoice.note && String(invoice.note).trim()) ? String(invoice.note).trim() : '';
+    const noteToPrint = customNote || (isForfettario ? DEFAULT_FORFETTARIO_NOTE : '');
+    if (noteToPrint) {
+      y += 4;
+      doc.setDrawColor.apply(doc, BORDER);
+      doc.setLineWidth(0.2);
+      doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+      y += 5;
+      doc.setFontSize(8);
+      doc.setTextColor.apply(doc, MUTED);
+      doc.splitTextToSize(noteToPrint, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+    }
 
     return doc;
   }
