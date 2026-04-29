@@ -106,6 +106,7 @@ require('./fatture-pdf-regime-fallback.test.js');
 require('./dichiarazione-quadro-rr-aliquota-gs.test.js');
 require('./fatture-cliente-anagrafica-validate.test.js');
 require('./fatture-xml-cliente-ue.test.js');
+require('./dichiarazione-cassa-non-gestita.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

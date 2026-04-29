@@ -298,8 +298,17 @@
           y += 2;
           doc.setFont('helvetica', 'bold');
           if (t.icTotale > 0) {
-            checkPageBreak(7);
+            checkPageBreak(13);
             doc.text('Totale IC cripto-attivit\u00e0 (2\u2030): \u20ac ' + t.icTotale.toFixed(2), margin, y);
+            y += 6;
+            // IC-F24-1: codice tributo F24 per IC cripto (Ris. AdE 36/E del 14/06/2023)
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+            doc.text('Versamento F24: codice tributo 1727 \u2014 Sezione Erario (Ris. AdE 36/E del 14/06/2023)', margin, y);
+            doc.setFontSize(9);
+            doc.setTextColor(INK[0], INK[1], INK[2]);
+            doc.setFont('helvetica', 'bold');
             y += 6;
           }
           if (t.ivafeTotale > 0) {

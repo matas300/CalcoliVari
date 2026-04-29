@@ -199,6 +199,18 @@
         return { value: Math.round(val * 100) / 100, descrizione: desc, source: src || 'computed' };
       }
 
+      // CASSE-1: warning se cassa previdenziale non gestita (INARCASSA, CNPADC, ENPACL, EPAP, ecc.)
+      // Le casse autonome richiedono compilazione manuale del quadro contributivo.
+      var rrWarnings = [];
+      var recognizedInpsModes = ['gestione_separata', 'artigiani_commercianti', 'artcom', '', null, undefined];
+      if (recognizedInpsModes.indexOf(settings.inpsMode) === -1) {
+        rrWarnings.push({
+          severity: 'error',
+          code: 'RR_CASSA_NON_GESTITA',
+          message: 'Cassa previdenziale "' + settings.inpsMode + '" non gestita: il quadro RR è calcolato come artigiani/commercianti per default. Per casse autonome (INARCASSA, CNPADC, ENPACL, EPAP, ecc.) inserire i contributi manualmente e consultare l\'ordine professionale.'
+        });
+      }
+
       if (settings.inpsMode === 'gestione_separata') {
         // REG-2: aliquota Gestione Separata esclusivo 2024-2026 = 26,07% (Circ. INPS 26/2025 + 8/2026)
         var aliqGs = parseFloat(settings.aliqContributi) || 26.07;
@@ -210,7 +222,8 @@
             RR20: rigo(contrib, 'Contributi gestione separata'),
             RR21: rigo(0, 'Contributi già versati'),
             RR22: rigo(Math.max(0, contrib), 'Saldo contributi')
-          }
+          },
+          _warnings: rrWarnings
         };
       }
 
@@ -272,7 +285,8 @@
           RR8: rigo(rr8, 'Saldo contributi a debito (max 0, RR6 − RR7)'),
           RR8_credito: rigo(rr8Credito, 'Contributi a credito (se RR6 − RR7 < 0)')
         },
-        sezII: null
+        sezII: null,
+        _warnings: rrWarnings
       };
     },
     buildQuadroRS: function(yearData, settings, overrides) {
@@ -552,6 +566,16 @@
       }
       if (rr.sezI && rr.sezI.RR8 && rr.sezI.RR8.value < 0) {
         errors.push({ code: 'RR8_NEGATIVO', message: 'RR8 contributi eccedenti negativo', quadro: 'RR', rigo: 'RR8', severity: 'error' });
+      }
+      // CASSE-1: propaga warnings da buildQuadroRR (es. cassa autonoma non gestita)
+      if (rr._warnings && rr._warnings.length) {
+        rr._warnings.forEach(function(w) {
+          var entry = (typeof w === 'object' && w !== null)
+            ? { code: w.code || 'RR_WARN', message: w.message, quadro: 'RR', rigo: 'RR_meta', severity: w.severity || 'warning' }
+            : { code: 'RR_WARN', message: String(w), quadro: 'RR', rigo: 'RR_meta', severity: 'warning' };
+          if (entry.severity === 'error') errors.push(entry);
+          else warnings.push(entry);
+        });
       }
 
       // R3: perdite pregresse scadute (art. 84 TUIR — 5 periodi d'imposta)
