@@ -1112,6 +1112,22 @@
         errors.push('Cliente PA: il Codice IPA deve essere 6 caratteri alfanumerici (D.M. 55/2013 art. 2).');
       }
     }
+    // NR-2 — cliente IT deve avere P.IVA o CF (FatturaPA v1.2 §1.4.1.2).
+    // Senza almeno uno dei due, SdI rifiuta l'XML. Blocchiamo qui (pre-invio) per
+    // dare feedback immediato anziché far fallire la build XML in modo tardivo.
+    var clienteAnag = draft.cliente || draft.clienteSnapshot;
+    if (clienteAnag) {
+      var nazCli = String(clienteAnag.nazione || 'IT').toUpperCase();
+      if (nazCli === 'IT') {
+        var pivaRaw = String(clienteAnag.partitaIva || '').replace(/\s+/g, '');
+        var cfRaw = String(clienteAnag.codiceFiscale || '').trim();
+        var hasPiva = pivaRaw && (typeof isValidPartitaIvaIT === 'function' ? isValidPartitaIvaIT(pivaRaw) : pivaRaw.length === 11);
+        var hasCF = cfRaw && (typeof isValidCodiceFiscale === 'function' ? isValidCodiceFiscale(cfRaw) : cfRaw.length === 16);
+        if (!hasPiva && !hasCF) {
+          errors.push("Cliente IT deve avere almeno la P.IVA o il Codice Fiscale (FatturaPA v1.2 §1.4.1.2). SdI rifiuterà l'XML senza questo dato.");
+        }
+      }
+    }
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);

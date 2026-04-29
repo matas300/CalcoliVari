@@ -103,6 +103,7 @@ require('./fatture-bollo-addebitato-xml.test.js');
 require('./fatture-cliente-pa.test.js');
 require('./fatture-pdf-regime-fallback.test.js');
 require('./dichiarazione-quadro-rr-aliquota-gs.test.js');
+require('./fatture-cliente-anagrafica-validate.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
