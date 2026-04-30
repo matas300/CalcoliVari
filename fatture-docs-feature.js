@@ -1154,9 +1154,12 @@
       }
       const statoCorrente = draft.stato || 'bozza';
       if (statoCorrente === 'bozza') {
-        draft.stato = 'inviata';
-        if (!draft.dataInvioSdi) {
-          draft.dataInvioSdi = todayIso();
+        // DUP-2: state machine canonica
+        if (window.FattureStateMachine) {
+          window.FattureStateMachine.markInviata(draft);
+        } else {
+          draft.stato = 'inviata';
+          if (!draft.dataInvioSdi) draft.dataInvioSdi = todayIso();
         }
       }
     } else {
@@ -2627,9 +2630,12 @@ ${dettaglioLinee.join('\n')}
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'bozza') return;
-    all[idx].stato = 'inviata';
-    if (!all[idx].dataInvioSdi) {
-      all[idx].dataInvioSdi = todayIso();
+    // DUP-2: state machine canonica
+    if (window.FattureStateMachine) {
+      window.FattureStateMachine.markInviata(all[idx]);
+    } else {
+      all[idx].stato = 'inviata';
+      if (!all[idx].dataInvioSdi) all[idx].dataInvioSdi = todayIso();
     }
     // F1+F2+F3: sync NC TD04 → originale se applicabile
     if (all[idx].tipoDocumento === 'TD04'
@@ -2669,12 +2675,17 @@ ${dettaglioLinee.join('\n')}
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'inviata') return;
-    const iso = todayIso();
-    const today = new Date(iso + 'T00:00:00');
-    all[idx].stato = 'pagata';
-    all[idx].dataPagamento = iso;
-    all[idx].pagMese = today.getMonth() + 1;
-    all[idx].pagAnno = today.getFullYear();
+    // DUP-2: state machine canonica
+    if (window.FattureStateMachine) {
+      window.FattureStateMachine.markPagata(all[idx]);
+    } else {
+      const iso = todayIso();
+      const today = new Date(iso + 'T00:00:00');
+      all[idx].stato = 'pagata';
+      all[idx].dataPagamento = iso;
+      all[idx].pagMese = today.getMonth() + 1;
+      all[idx].pagAnno = today.getFullYear();
+    }
     store.save(profile, all);
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
     if (typeof recalcAll === 'function') recalcAll();

@@ -228,8 +228,10 @@
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
     if (idx < 0) return;
-    fatture[idx].stato = 'inviata';
-    fatture[idx].dataInvioSdi = data;
+    // DUP-2: state machine canonica
+    var FSM = (typeof window !== 'undefined' && window.FattureStateMachine) ? window.FattureStateMachine : null;
+    if (FSM) FSM.markInviata(fatture[idx], { date: data });
+    else { fatture[idx].stato = 'inviata'; fatture[idx].dataInvioSdi = data; }
     // F1+F2+F3: sync NC TD04 → originale se applicabile
     if (fatture[idx].tipoDocumento === 'TD04'
         && fatture[idx].fatturaOriginaleId
@@ -265,15 +267,17 @@
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
     if (idx < 0) return;
-    fatture[idx].stato = 'pagata';
-    fatture[idx].dataPagamento = data;
-    // F2: aggiorna pagMese/pagAnno coerentemente (parità con quickMarkPagataFromCard).
-    // Senza questo i selettori per-cassa (getByPagAnno, getByMonth, getCrossYearPaidIn)
-    // non vedono la fattura come incassata nell'anno giusto.
-    const dt2 = new Date(data + 'T00:00:00');
-    if (!isNaN(dt2.getTime())) {
-      fatture[idx].pagMese = dt2.getMonth() + 1;
-      fatture[idx].pagAnno = dt2.getFullYear();
+    // DUP-2: state machine canonica (gestisce pagMese/pagAnno + validazione)
+    var FSM2 = (typeof window !== 'undefined' && window.FattureStateMachine) ? window.FattureStateMachine : null;
+    if (FSM2) FSM2.markPagata(fatture[idx], { date: data });
+    else {
+      fatture[idx].stato = 'pagata';
+      fatture[idx].dataPagamento = data;
+      const dt2 = new Date(data + 'T00:00:00');
+      if (!isNaN(dt2.getTime())) {
+        fatture[idx].pagMese = dt2.getMonth() + 1;
+        fatture[idx].pagAnno = dt2.getFullYear();
+      }
     }
     save(profile, fatture);
     const sel = document.getElementById('archivioAnnoSelect');
