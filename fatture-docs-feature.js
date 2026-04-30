@@ -176,13 +176,9 @@
     return '<Denominazione>' + xmlEscape(String(cliente.nome || '').slice(0, 80)) + '</Denominazione>';
   }
 
-  function formatPdfMoney(value) {
-    const amount = round2(value);
-    return `EUR ${amount.toLocaleString('it-IT', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
-  }
+  const _FormatUtilsFatt = (typeof FormatUtils !== 'undefined') ? FormatUtils
+    : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+  const formatPdfMoney = _FormatUtilsFatt.formatPdfMoney;
 
   function sanitizeDownloadFileName(value, fallback = 'documento') {
     const safe = String(value || fallback)
@@ -1492,10 +1488,7 @@
     if (!parts) return String(iso || '');
     return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + parts.year;
   }
-  function formatEur(n) {
-    const v = Number(n) || 0;
-    return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
-  }
+  const formatEur = _FormatUtilsFatt.formatEur;
   function formatNumIt(n) {
     return Number(n).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }

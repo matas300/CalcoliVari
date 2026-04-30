@@ -63,9 +63,9 @@
     : (typeof require !== 'undefined' ? require('./html-utils.js') : null);
   const escHtml = _HtmlUtilsDich.escapeHtml;
 
-  function fmtEur(val) {
-    return (val || 0).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
-  }
+  const _FormatUtilsDich = (typeof FormatUtils !== 'undefined') ? FormatUtils
+    : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+  const fmtEur = _FormatUtilsDich.formatEur;
 
   function roField(label, val) {
     return '<div class="dich-field-group"><label>' + escHtml(label) + '</label>' +

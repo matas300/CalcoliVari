@@ -306,9 +306,9 @@
     const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? (m[3] + '/' + m[2] + '/' + m[1]) : (iso || '\u2014');
   }
-  function _formatEur(n) {
-    return (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
-  }
+  const _FormatUtilsStorico = (typeof FormatUtils !== 'undefined') ? FormatUtils
+    : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+  const _formatEur = _FormatUtilsStorico.formatEur;
   function _calcTotale(f) {
     const imp = (f.righe || []).reduce((s, r) => s + (Number(r.quantita) || 0) * (Number(r.prezzoUnitario) || 0), 0);
     const bollo = (f.marcaDaBollo && imp > 77.47) ? 2 : 0;

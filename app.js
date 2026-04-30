@@ -2978,12 +2978,9 @@ function getCSSVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function fmt(n) {
-  if (n === undefined || n === null || isNaN(n)) return '\u2014';
-  var v = ceil2(n) + 0;
-  return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
-}
-function fmtPct(n) { return (n * 100).toFixed(1) + '%'; }
+const _FormatUtilsApp = window.FormatUtils || (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+const fmt = _FormatUtilsApp.formatEurOrDash;
+const fmtPct = _FormatUtilsApp.formatPct;
 function row(label, val, cls, valCls) {
   return `<div class="row ${cls||''}"><label>${label}</label><span class="val ${valCls||''}">${val}</span></div>`;
 }
