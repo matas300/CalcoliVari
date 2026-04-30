@@ -153,6 +153,25 @@
     return (sign * tot).toFixed(2) + ' \u20ac';
   }
 
+  // QF5: conversione date IT (DD/MM/YYYY) <-> ISO (YYYY-MM-DD)
+  function _isoToItDate(iso) {
+    if (!iso || typeof iso !== 'string') return '';
+    var m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
+  }
+  function _itDateToIso(it) {
+    if (!it || typeof it !== 'string') return '';
+    // Accetta DD/MM/YYYY o D/M/YYYY o DD-MM-YYYY o D.M.YYYY (separatore tollerato)
+    var m = it.trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (!m) return '';
+    var day = parseInt(m[1], 10), month = parseInt(m[2], 10), year = parseInt(m[3], 10);
+    if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return '';
+    var dt = new Date(year, month - 1, day);
+    if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) return '';
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    return year + '-' + pad(month) + '-' + pad(day);
+  }
+
   function _statusLabel(row) {
     if (row.status === 'ok') return row.pagamentoAuto ? 'auto +1m' : 'ok';
     if (row.status === 'missing_pagamento') return 'manca data';
@@ -205,21 +224,39 @@
     tr.appendChild(_el('td', { style: TD_NUM }, [row.draft ? _fmtImporto(row.draft) : '\u2014']));
     tr.appendChild(_el('td', { style: TD_STYLE + 'text-align:center;font-family:monospace;' }, [row.draft ? row.draft.tipoDocumento : '\u2014']));
 
+    // QF5: input testuale DD/MM/YYYY (formato europeo) — `<input type=date>` mostrava
+    // MM/DD/YYYY su browser con locale US. Conversione interna a ISO YYYY-MM-DD.
     var pagCell = _el('td', { style: TD_STYLE });
-    var dateInput = _el('input', { type: 'date', style: 'padding:4px 6px;border-radius:4px;border:1px solid var(--color-border,#2a2f38);background:var(--color-bg,#0f1218);color:inherit;font-size:12px;' });
-    dateInput.value = row.pagamento || '';
+    var dateInput = _el('input', {
+      type: 'text',
+      placeholder: 'GG/MM/AAAA',
+      maxlength: '10',
+      inputmode: 'numeric',
+      style: 'padding:4px 6px;border-radius:4px;border:1px solid var(--color-border,#2a2f38);background:var(--color-bg,#0f1218);color:inherit;font-size:12px;width:100px;font-family:monospace;'
+    });
+    dateInput.value = row.pagamento ? _isoToItDate(row.pagamento) : '';
     if (row.pagamentoAuto) dateInput.style.borderColor = '#b38e3a';
     if (row.status === 'missing_pagamento' && !row.pagamento) dateInput.style.background = '#5a4a1a';
-    dateInput.onchange = function () {
-      row.pagamento = dateInput.value;
+    function _commitPagamento() {
+      var raw = String(dateInput.value || '').trim();
+      var iso = raw ? _itDateToIso(raw) : '';
+      if (raw && !iso) {
+        // formato non valido: bordo rosso, non aggiornare row
+        dateInput.style.borderColor = '#c0392b';
+        return;
+      }
+      row.pagamento = iso;
       row.pagamentoAuto = false;
-      dateInput.style.borderColor = 'var(--color-border,#2a2f38)';
-      if (row.pagamento && row.status === 'missing_pagamento') row.status = 'ok';
-      if (!row.pagamento && row.status === 'ok') row.status = 'missing_pagamento';
+      dateInput.style.borderColor = iso ? 'var(--color-border,#2a2f38)' : '#5a4a1a';
+      dateInput.style.background = iso ? 'var(--color-bg,#0f1218)' : '#5a4a1a';
+      if (iso && row.status === 'missing_pagamento') row.status = 'ok';
+      if (!iso && row.status === 'ok') row.status = 'missing_pagamento';
       var statusCell = tr.querySelector('td.status-cell');
       if (statusCell) { statusCell.textContent = _statusLabel(row); }
       _renderConfirmEnabled(rows, confirmBtn);
-    };
+    }
+    dateInput.onchange = _commitPagamento;
+    dateInput.onblur = _commitPagamento;
     pagCell.appendChild(dateInput);
     tr.appendChild(pagCell);
 

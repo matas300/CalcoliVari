@@ -135,6 +135,7 @@
     const tzOffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
   }
+  if (typeof window !== 'undefined') window.__todayIso = todayIso;
 
   function addDaysIso(dateIso, days) {
     const d = new Date(dateIso || todayIso());
@@ -1173,7 +1174,7 @@
       if (statoCorrente === 'bozza') {
         draft.stato = 'inviata';
         if (!draft.dataInvioSdi) {
-          draft.dataInvioSdi = new Date().toISOString().slice(0, 10);
+          draft.dataInvioSdi = todayIso();
         }
       }
     } else {
@@ -2661,7 +2662,7 @@ ${dettaglioLinee.join('\n')}
     if ((all[idx].stato || 'bozza') !== 'bozza') return;
     all[idx].stato = 'inviata';
     if (!all[idx].dataInvioSdi) {
-      all[idx].dataInvioSdi = new Date().toISOString().slice(0, 10);
+      all[idx].dataInvioSdi = todayIso();
     }
     // F1+F2+F3: sync NC TD04 → originale se applicabile
     if (all[idx].tipoDocumento === 'TD04'
@@ -2705,8 +2706,8 @@ ${dettaglioLinee.join('\n')}
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'inviata') return;
-    const today = new Date();
-    const iso = today.toISOString().slice(0, 10);
+    const iso = todayIso();
+    const today = new Date(iso + 'T00:00:00');
     all[idx].stato = 'pagata';
     all[idx].dataPagamento = iso;
     all[idx].pagMese = today.getMonth() + 1;

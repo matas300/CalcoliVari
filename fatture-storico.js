@@ -213,7 +213,10 @@
   }
 
   function _markInviata(id, profile) {
-    const data = prompt('Data invio SdI (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+    const dataDefault = (typeof window !== 'undefined' && window.__todayIso)
+      ? window.__todayIso()
+      : new Date().toISOString().slice(0, 10);
+    const data = prompt('Data invio SdI (YYYY-MM-DD):', dataDefault);
     if (!data) return;
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
@@ -233,7 +236,9 @@
 
   function _markPagata(id, profile) {
     // F3: validate ISO date format YYYY-MM-DD strict (no /, no DD-MM-YYYY)
-    const today = new Date().toISOString().slice(0, 10);
+    const today = (typeof window !== 'undefined' && window.__todayIso)
+      ? window.__todayIso()
+      : new Date().toISOString().slice(0, 10);
     let data;
     while (true) {
       data = prompt('Data pagamento (formato YYYY-MM-DD, es. ' + today + '):', today);

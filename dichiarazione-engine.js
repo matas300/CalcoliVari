@@ -98,7 +98,11 @@
           contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
           contribFissi = 0;
         }
-        var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
+        // Riduzione 35% INPS vale SOLO per artigiani/commercianti (art. 1 c. 77 L. 190/2014).
+        // Per gestione separata non si applica.
+        var riduzione = (settings.riduzione35 == 1
+          && (settings.inpsMode === 'artigiani_commercianti' || settings.inpsMode === 'artcom'))
+          ? 0.65 : 1;
         lm3 = Math.round((contribFissi + contribVar) * riduzione * 100) / 100;
         lm3Source = 'fallback-competenza';
       }
@@ -193,7 +197,11 @@
     buildQuadroRR: function(yearData, settings, quadroLM, overrides) {
       overrides = overrides || {};
       var reddito = (quadroLM && quadroLM.LM4) ? quadroLM.LM4.value : 0;
-      var riduzione = (settings.riduzione35 == 1) ? 0.65 : 1;
+      // Riduzione 35% INPS vale SOLO per artigiani/commercianti (art. 1 c. 77 L. 190/2014).
+      // Per gestione separata non si applica.
+      var riduzione = (settings.riduzione35 == 1
+        && (settings.inpsMode === 'artigiani_commercianti' || settings.inpsMode === 'artcom'))
+        ? 0.65 : 1;
 
       function rigo(val, desc, src) {
         return { value: Math.round(val * 100) / 100, descrizione: desc, source: src || 'computed' };
