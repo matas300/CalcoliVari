@@ -65,127 +65,145 @@ function runWithFixture(fatture, year) {
   return sandbox.window.getFattureForAccantonamentoForYear(year);
 }
 
-// Fixture: replica lo scenario degli screenshot di Mattia (anno 2026 con cross-year da 2025)
+// Fixture: scenario realistico con aggregazione per (mese, cliente).
+// Cross-year da 2025 (Goldbridge), same-year 2026 con NC (Acme), bozze, stornate.
+var GOLDBRIDGE = { id: 'cli-goldbridge', denominazione: 'Goldbridge Group LTD' };
+var ACME = { id: 'cli-acme', denominazione: 'Acme S.r.l.' };
+var BETA = { id: 'cli-beta', denominazione: 'Beta SpA' };
+
 var fatture = [
-  // F1 — Gennaio 2025, incassata in 2026 (CROSS-YEAR da 2025 verso 2026)
-  {
-    id: 'f1', stato: 'pagata', tipoDocumento: 'TD01',
-    data: '2025-01-15', issuedYear: 2025, issuedMonth: 1,
-    pagAnno: 2026, pagMese: 1,
-    numero: '2025/001',
-    righe: [{ quantita: 1, prezzoUnitario: 5827.50, descrizione: 'PLM Consultant - Daily Rate - Order n. 6801000087' }]
+  // CROSS-YEAR Goldbridge: 2 fatture Febbraio 2025 stesso cliente → AGGREGATE in UNA riga
+  { id: 'f1', stato: 'pagata', tipoDocumento: 'TD01',
+    data: '2025-02-01', issuedYear: 2025, issuedMonth: 2,
+    pagAnno: 2026, pagMese: 3, numero: '2025/002',
+    clienteId: 'cli-goldbridge', clienteSnapshot: GOLDBRIDGE,
+    righe: [{ quantita: 1, prezzoUnitario: 6874.82, descrizione: 'PLM Consultant 2/2025' }]
   },
-  // F2 — Febbraio 2025, incassata in 2026 (CROSS-YEAR)
-  {
-    id: 'f2', stato: 'pagata', tipoDocumento: 'TD01',
+  { id: 'f2', stato: 'pagata', tipoDocumento: 'TD01',
     data: '2025-02-15', issuedYear: 2025, issuedMonth: 2,
-    pagAnno: 2026, pagMese: 2,
-    numero: '2025/002',
-    righe: [{ quantita: 1, prezzoUnitario: 4882.50, descrizione: 'PLM Consultant - Daily Rate - Order n. 6801000087' }]
+    pagAnno: 2026, pagMese: 3, numero: '2025/003',
+    clienteId: 'cli-goldbridge', clienteSnapshot: GOLDBRIDGE,
+    righe: [{ quantita: 1, prezzoUnitario: 3833.62, descrizione: 'PLM Consultant 3/2025' }]
   },
-  // F3 — Marzo 2026, incassata in 2026 (SAME-YEAR, deve apparire 1 volta)
-  {
-    id: 'f3', stato: 'pagata', tipoDocumento: 'TD01',
-    data: '2026-03-10', issuedYear: 2026, issuedMonth: 3,
-    pagAnno: 2026, pagMese: 3,
-    numero: '2026/003',
-    righe: [{ quantita: 1, prezzoUnitario: 1000, descrizione: 'Consulenza marzo' }]
+  // CROSS-YEAR Goldbridge — NC TD04 di −3066.90 (parziale su f1)
+  { id: 'nc1', stato: 'inviata', tipoDocumento: 'TD04',
+    data: '2025-02-28', issuedYear: 2025, issuedMonth: 2,
+    pagAnno: 2026, pagMese: 3, numero: '2025/NC1',
+    clienteId: 'cli-goldbridge', clienteSnapshot: GOLDBRIDGE,
+    fatturaOriginaleId: 'f1',
+    righe: [{ quantita: 1, prezzoUnitario: 3066.90, descrizione: 'NC parziale' }]
   },
-  // F4 — Aprile 2026 STORNATA da NC totale (NON deve apparire)
-  {
-    id: 'f4', stato: 'stornata', tipoDocumento: 'TD01',
-    data: '2026-04-01', issuedYear: 2026, issuedMonth: 4,
-    pagAnno: 2026, pagMese: 4,
-    numero: '2026/004',
-    ncTotaleImporto: 500,
-    righe: [{ quantita: 1, prezzoUnitario: 500, descrizione: 'Storno totale' }]
+  // CROSS-YEAR Goldbridge gennaio 2025 — diverso mese → riga separata
+  { id: 'f3', stato: 'pagata', tipoDocumento: 'TD01',
+    data: '2025-01-10', issuedYear: 2025, issuedMonth: 1,
+    pagAnno: 2026, pagMese: 1, numero: '2025/001',
+    clienteId: 'cli-goldbridge', clienteSnapshot: GOLDBRIDGE,
+    righe: [{ quantita: 1, prezzoUnitario: 5827.50, descrizione: 'PLM Consultant 1/2025' }]
   },
-  // F5 — NC TD04 (NON deve apparire come riga separata)
-  {
-    id: 'f5', stato: 'inviata', tipoDocumento: 'TD04',
-    data: '2026-04-02', issuedYear: 2026, issuedMonth: 4,
-    pagAnno: 2026, pagMese: 4,
-    numero: '2026/NC1', fatturaOriginaleId: 'f4',
-    righe: [{ quantita: 1, prezzoUnitario: 500, descrizione: 'NC su 2026/004' }]
+  // SAME-YEAR Acme aprile 2026 — fattura singola
+  { id: 'f4', stato: 'pagata', tipoDocumento: 'TD01',
+    data: '2026-04-10', issuedYear: 2026, issuedMonth: 4,
+    pagAnno: 2026, pagMese: 4, numero: '2026/001',
+    clienteId: 'cli-acme', clienteSnapshot: ACME,
+    righe: [{ quantita: 1, prezzoUnitario: 1000, descrizione: 'Consulenza aprile' }]
   },
-  // F6 — Maggio 2026 con NC parziale (deve apparire con netto = importo - ncTotaleImporto)
-  {
-    id: 'f6', stato: 'pagata', tipoDocumento: 'TD01',
+  // SAME-YEAR Beta maggio 2026 — fattura + NC superiore alla fattura → riga ESCLUSA (netto < 0)
+  { id: 'f5', stato: 'pagata', tipoDocumento: 'TD01',
     data: '2026-05-01', issuedYear: 2026, issuedMonth: 5,
-    pagAnno: 2026, pagMese: 5,
-    numero: '2026/005',
-    ncTotaleImporto: 200,  // NC parziale 200 su 1000 → netto 800
-    righe: [{ quantita: 1, prezzoUnitario: 1000, descrizione: 'Consulenza maggio' }]
+    pagAnno: 2026, pagMese: 5, numero: '2026/002',
+    clienteId: 'cli-beta', clienteSnapshot: BETA,
+    righe: [{ quantita: 1, prezzoUnitario: 500, descrizione: 'Beta servizio' }]
   },
-  // F7 — Bozza (NON deve apparire)
-  {
-    id: 'f7', stato: 'bozza', tipoDocumento: 'TD01',
+  { id: 'nc2', stato: 'inviata', tipoDocumento: 'TD04',
+    data: '2026-05-15', issuedYear: 2026, issuedMonth: 5,
+    pagAnno: 2026, pagMese: 5, numero: '2026/NC2',
+    clienteId: 'cli-beta', clienteSnapshot: BETA,
+    fatturaOriginaleId: 'f5',
+    righe: [{ quantita: 1, prezzoUnitario: 800, descrizione: 'NC eccesso Beta' }]
+  },
+  // STORNATA: NON deve apparire (filtrata da stato)
+  { id: 'f6', stato: 'stornata', tipoDocumento: 'TD01',
     data: '2026-06-01', issuedYear: 2026, issuedMonth: 6,
-    pagAnno: 2026, pagMese: 6,
-    numero: '2026/006',
+    pagAnno: 2026, pagMese: 6, numero: '2026/003',
+    clienteId: 'cli-acme', clienteSnapshot: ACME,
+    ncTotaleImporto: 500,
+    righe: [{ quantita: 1, prezzoUnitario: 500, descrizione: 'Storno totale Acme' }]
+  },
+  // BOZZA: NON deve apparire
+  { id: 'f7', stato: 'bozza', tipoDocumento: 'TD01',
+    data: '2026-07-01', issuedYear: 2026, issuedMonth: 7,
+    pagAnno: 2026, pagMese: 7, numero: '2026/004',
+    clienteId: 'cli-acme', clienteSnapshot: ACME,
     righe: [{ quantita: 1, prezzoUnitario: 999, descrizione: 'Bozza' }]
   }
 ];
 
-describe('getFattureForAccantonamentoForYear — bugfix accantonamento', function () {
+describe('getFattureForAccantonamentoForYear — aggregazione per (mese, cliente)', function () {
   var items = runWithFixture(fatture, 2026);
 
-  test('Conta righe corretto: 2 cross-year + 2 same-year valide = 4 (no F4/F5/F7)', function () {
-    expect(items.length).toBe(4);
+  test('Numero righe: 3 (Gennaio 2025 Goldbridge, Febbraio 2025 Goldbridge, Aprile Acme — Beta esclusa per netto <= 0)', function () {
+    expect(items.length).toBe(3);
   });
 
-  test('Cross-year: F1 e F2 appaiono UNA SOLA volta (no duplicati)', function () {
-    var f1Rows = items.filter(function (it) { return it.label.indexOf('Gennaio 2025') === 0 && it.isCrossYear; });
-    var f2Rows = items.filter(function (it) { return it.label.indexOf('Febbraio 2025') === 0 && it.isCrossYear; });
-    expect(f1Rows.length).toBe(1);
-    expect(f2Rows.length).toBe(1);
+  test('Cross-year Febbraio 2025 Goldbridge: aggrega 2 fatture (6874.82 + 3833.62) − NC parziale (3066.90) = 7641.54', function () {
+    var row = items.find(function (it) { return it.isCrossYear && it.mese === 2 && it.label.indexOf('Goldbridge') !== -1; });
+    expect(row).toBeTruthy();
+    expect(row.importo).toBe(7641.54);
   });
 
-  test('Cross-year: NESSUNA versione "Gennaio - PLM" senza anno (la duplicazione è eliminata)', function () {
-    var dupRows = items.filter(function (it) {
-      return !it.isCrossYear && it.label.indexOf('PLM') !== -1;
-    });
-    expect(dupRows.length).toBe(0);
+  test('Cross-year Gennaio 2025 Goldbridge: 1 sola fattura, netto = 5827.50', function () {
+    var row = items.find(function (it) { return it.isCrossYear && it.mese === 1 && it.label.indexOf('Goldbridge') !== -1; });
+    expect(row).toBeTruthy();
+    expect(row.importo).toBe(5827.50);
   });
 
-  test('Stornata F4: assente dalla tabella', function () {
-    var stornate = items.filter(function (it) { return it.label.indexOf('Storno totale') !== -1; });
-    expect(stornate.length).toBe(0);
+  test('Cross-year label formato: "Mese ANNO - ClientName"', function () {
+    var row = items.find(function (it) { return it.isCrossYear && it.mese === 2; });
+    expect(row.label).toBe('Febbraio 2025 - Goldbridge Group LTD');
   });
 
-  test('NC TD04 F5: assente come riga propria', function () {
-    var ncRows = items.filter(function (it) { return it.label.indexOf('NC su') !== -1; });
-    expect(ncRows.length).toBe(0);
+  test('Cross-year key formato: cross_YYYY_M_clientSlug', function () {
+    var row = items.find(function (it) { return it.isCrossYear && it.mese === 2; });
+    expect(row.key).toBe('cross_2025_2_cli-goldbridge');
   });
 
-  test('Bozza F7: assente', function () {
-    var bozze = items.filter(function (it) { return it.label.indexOf('Bozza') !== -1; });
-    expect(bozze.length).toBe(0);
+  test('Same-year Aprile Acme: 1 fattura, netto = 1000', function () {
+    var row = items.find(function (it) { return !it.isCrossYear && it.mese === 4 && it.label.indexOf('Acme') !== -1; });
+    expect(row).toBeTruthy();
+    expect(row.importo).toBe(1000);
   });
 
-  test('NC parziale F6: importo è il NETTO EFFETTIVO (1000 - 200 = 800), non 1000', function () {
-    var f6 = items.find(function (it) { return it.label.indexOf('Consulenza maggio') !== -1; });
-    expect(f6.importo).toBe(800);
+  test('Same-year label formato: "Mese - ClientName" (no anno)', function () {
+    var row = items.find(function (it) { return !it.isCrossYear && it.mese === 4; });
+    expect(row.label).toBe('Aprile - Acme S.r.l.');
   });
 
-  test('Same-year F3: importo pieno (no NC)', function () {
-    var f3 = items.find(function (it) { return it.label.indexOf('Consulenza marzo') !== -1; });
-    expect(f3.importo).toBe(1000);
+  test('Same-year key formato: cur_M_clientSlug', function () {
+    var row = items.find(function (it) { return !it.isCrossYear && it.mese === 4; });
+    expect(row.key).toBe('cur_4_cli-acme');
   });
 
-  test('Cross-year label formato: "Mese Anno - desc" usa issuedMonth+issuedYear', function () {
-    var f1 = items.find(function (it) { return it.isCrossYear && it.label.indexOf('PLM') !== -1 && it.mese === 1; });
-    expect(f1.label.indexOf('Gennaio 2025')).toBe(0);
-    expect(f1.anno).toBe(2025);
+  test('Beta maggio: ESCLUSO perché NC (-800) > fattura (+500) → netto -300', function () {
+    var row = items.find(function (it) { return it.label.indexOf('Beta') !== -1; });
+    expect(row).toBeFalsy();
   });
 
-  test('Cross-year key: usa issuedMonth (non pagMese) per il numero mese', function () {
-    var f2 = items.find(function (it) { return it.isCrossYear && it.mese === 2; });
-    expect(f2.key.indexOf('cross_2025_2_')).toBe(0);
+  test('Stornata: assente', function () {
+    var row = items.find(function (it) { return it.label.indexOf('Storno') !== -1; });
+    expect(row).toBeFalsy();
   });
 
-  test('Same-year key: usa pagMese (compat saved keys)', function () {
-    var f3 = items.find(function (it) { return !it.isCrossYear && it.label.indexOf('Consulenza marzo') !== -1; });
-    expect(f3.key.indexOf('cur_3_')).toBe(0);
+  test('Bozza: assente', function () {
+    var row = items.find(function (it) { return it.label.indexOf('Bozza') !== -1; });
+    expect(row).toBeFalsy();
+  });
+
+  test('Ordering: cross-year prima, poi same-year, ognuno per issuedMonth', function () {
+    expect(items[0].isCrossYear).toBe(true);
+    expect(items[0].mese).toBe(1);  // Gen 2025
+    expect(items[1].isCrossYear).toBe(true);
+    expect(items[1].mese).toBe(2);  // Feb 2025
+    expect(items[2].isCrossYear).toBe(false);
+    expect(items[2].mese).toBe(4);  // Apr 2026
   });
 });

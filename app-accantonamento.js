@@ -15,59 +15,76 @@
     const items = [];
     const perc = getEffectiveTaxRateForYear(year);
 
-    // Path moderno: usa unified store (FattureSelectors). Esclude:
-    //   - bozze (non emesse)
-    //   - stornate (TD01 totalmente annullata da NC)
-    //   - NC dirette (TD04): il loro netto è già scontato dall'originale via ncTotaleImporto
-    // Importo: getNettoEffettivo = importo - ncTotaleImporto (gestisce NC parziali)
+    // Path moderno: usa unified store (FattureSelectors). Aggregazione per
+    // (mese emissione, cliente): una riga unica per cliente per mese, netto
+    // = somma TD01 (con netto effettivo per NC parziali) − somma TD04 (NC dirette
+    // anche se non collegate a originali). Esclude bozze e fatture stornate.
+    // Vantaggio: gestisce correttamente NC multi-fattura, NC non-collegate, NC
+    // che superano il totale del mese (riga esclusa se netto ≤ 0).
     if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
-      const taxable = window.FattureSelectors.all(currentProfile).filter(f =>
+      const all = window.FattureSelectors.all(currentProfile).filter(f =>
         f.stato !== 'bozza' &&
         f.stato !== 'stornata' &&
-        f.tipoDocumento !== 'TD04' &&
         Number(f.pagAnno) === year
       );
 
-      // 1. Cross-year: emesse in anni precedenti, incassate nell'anno corrente.
-      //    Label: mese di EMISSIONE + anno di emissione (es. "Gennaio 2024").
-      const crossCounts = {};
-      taxable
-        .filter(f => Number(f.issuedYear) && Number(f.issuedYear) < year)
-        .forEach(f => {
-          const netto = window.FattureSelectors.getNettoEffettivo(f);
-          if (netto <= 0) return;
-          const issuedM = Number(f.issuedMonth) || Number(f.pagMese) || 1;
-          const issuedY = Number(f.issuedYear);
-          const idx = crossCounts[issuedM] = (crossCounts[issuedM] || 0) + 1;
-          const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
-          items.push({
-            label: MONTHS[issuedM-1] + ' ' + issuedY + (desc ? ' - ' + desc : ''),
-            mese: issuedM, anno: issuedY, importo: netto, rate: perc,
-            isCrossYear: true,
-            key: 'cross_' + issuedY + '_' + issuedM + '_' + idx
-          });
-        });
-
-      // 2. Same-year: emesse E incassate nell'anno (no duplicazione cross-year).
-      //    Label: mese di EMISSIONE (es. "Febbraio"). Key per pagMese (compat saved keys).
-      const sameYear = taxable.filter(f => Number(f.issuedYear) === year);
-      for (let m = 1; m <= 12; m++) {
-        let idx = 0;
-        sameYear
-          .filter(f => Number(f.pagMese) === m)
-          .forEach(f => {
-            idx++;
-            const netto = window.FattureSelectors.getNettoEffettivo(f);
-            if (netto <= 0) return;
-            const issuedM = Number(f.issuedMonth) || m;
-            const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
-            items.push({
-              label: MONTHS[issuedM-1] + (desc ? ' - ' + desc : ''),
-              mese: m, anno: year, importo: netto, rate: perc,
-              key: 'cur_' + m + '_' + idx
-            });
-          });
+      function _clienteIdentity(f) {
+        const snap = f.clienteSnapshot || {};
+        const name = (snap.denominazione || snap.ragioneSociale ||
+          ((snap.nome || '') + ' ' + (snap.cognome || '')).trim() || 'Sconosciuto').trim();
+        const id = f.clienteId || snap.id || name;
+        return { id: String(id), name };
       }
+
+      // groupKey -> { isCross, issuedM, issuedY, cliName, cliId, netto }
+      const groups = {};
+      all.forEach(f => {
+        const issuedY = Number(f.issuedYear);
+        const issuedM = Number(f.issuedMonth) || Number(f.pagMese) || 1;
+        const isCross = issuedY && issuedY < year;
+        const cli = _clienteIdentity(f);
+        // Slug per il key (sostituisce caratteri non-alfanumerici)
+        const cliSlug = cli.id.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'sconosciuto';
+        const groupKey = isCross
+          ? `cross_${issuedY}_${issuedM}_${cliSlug}`
+          : `cur_${issuedM}_${cliSlug}`;
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            isCross, issuedM, issuedY: issuedY || year, cliName: cli.name,
+            netto: 0, key: groupKey
+          };
+        }
+        // TD01: somma netto effettivo (importo - ncTotaleImporto sull'originale)
+        // TD04: somma negativa dell'importo (per gestire NC non-collegate o multi-fattura)
+        const netto = window.FattureSelectors.getNettoEffettivo(f);
+        const segno = (f.tipoDocumento === 'TD04') ? -1 : 1;
+        groups[groupKey].netto += segno * Math.abs(netto);
+      });
+
+      // Sort: cross-year prima (per issuedY, issuedM), poi same-year (per issuedM, cliName)
+      const sortedKeys = Object.keys(groups).sort((a, b) => {
+        const ga = groups[a], gb = groups[b];
+        if (ga.isCross !== gb.isCross) return ga.isCross ? -1 : 1;
+        if (ga.isCross && ga.issuedY !== gb.issuedY) return ga.issuedY - gb.issuedY;
+        if (ga.issuedM !== gb.issuedM) return ga.issuedM - gb.issuedM;
+        return ga.cliName.localeCompare(gb.cliName);
+      });
+      sortedKeys.forEach(key => {
+        const g = groups[key];
+        // Skip righe con netto <= 0 (NC superano il totale fatture per quel cliente/mese)
+        const netto = Math.round((g.netto + Number.EPSILON) * 100) / 100;
+        if (netto <= 0) return;
+        const labelMonth = MONTHS[g.issuedM - 1] || '?';
+        const label = g.isCross
+          ? `${labelMonth} ${g.issuedY} - ${g.cliName}`
+          : `${labelMonth} - ${g.cliName}`;
+        items.push({
+          label, mese: g.issuedM, anno: g.issuedY,
+          importo: netto, rate: perc,
+          isCrossYear: g.isCross,
+          key: g.key
+        });
+      });
       return items;
     }
 
