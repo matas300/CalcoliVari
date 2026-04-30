@@ -14,26 +14,14 @@
     weights: [40, 60]
   };
 
-  function toNumber(value) {
-    const parsed = parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function ceil2(value) {
-    const num = toNumber(value);
-    if (!num) return 0;
-    const scaled = Math.abs(num) * 100;
-    const rounded = Math.ceil(scaled - 1e-9) / 100;
-    return num < 0 ? -rounded : rounded;
-  }
-
-  function euroToCents(amount) {
-    return Math.max(Math.round(toNumber(amount) * 100), 0);
-  }
-
-  function centsToEuro(cents) {
-    return cents / 100;
-  }
+  // Aritmetica condivisa: math-utils.js (UMD)
+  const _MU = (typeof MathUtils !== 'undefined') ? MathUtils
+    : (typeof require !== 'undefined' ? require('./math-utils.js') : null);
+  if (!_MU) throw new Error('tax-engine.js requires MathUtils — load math-utils.js first');
+  const toNumber = _MU.toNumber;
+  const ceil2 = _MU.ceil2;
+  const euroToCents = _MU.euroToCents;
+  const centsToEuro = _MU.centsToEuro;
 
   function stripHtml(text) {
     return String(text || '')
@@ -58,18 +46,7 @@
     return Number.isFinite(year) ? year : null;
   }
 
-  function splitAmountByWeights(amount, weights) {
-    const totalCents = euroToCents(amount);
-    const safeWeights = Array.isArray(weights) && weights.length ? weights : [1];
-    const totalWeight = safeWeights.reduce((sum, weight) => sum + toNumber(weight), 0) || 1;
-    let assigned = 0;
-    return safeWeights.map((weight, index) => {
-      if (index === safeWeights.length - 1) return centsToEuro(totalCents - assigned);
-      const share = Math.floor(totalCents * toNumber(weight) / totalWeight);
-      assigned += share;
-      return centsToEuro(share);
-    });
-  }
+  const splitAmountByWeights = _MU.splitAmountByWeights;
 
   function buildAccontoPlan(baseAmount, rules) {
     const cfg = Object.assign({}, DEFAULT_ACCONTO_RULES, rules || {});

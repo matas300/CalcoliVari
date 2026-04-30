@@ -1,5 +1,9 @@
 (function () {
   'use strict';
+  var _FR = (typeof ForfettarioRules !== 'undefined') ? ForfettarioRules
+    : (typeof window !== 'undefined' && window.ForfettarioRules) ? window.ForfettarioRules
+    : (typeof require !== 'undefined' ? require('./forfettario-rules.js') : null);
+  if (!_FR) throw new Error('dichiarazione-engine.js requires ForfettarioRules — load forfettario-rules.js first');
   var DichiarazioneEngine = {
     buildFrontespizio: function(profile, year, input) {
       var ana = (profile.settings && profile.settings.anagrafica) || {};
@@ -98,11 +102,8 @@
           contribVar = Math.round(redditoCassa * (aliqContrib / 100) * 100) / 100;
           contribFissi = 0;
         }
-        // Riduzione 35% INPS vale SOLO per artigiani/commercianti (art. 1 c. 77 L. 190/2014).
-        // Per gestione separata non si applica.
-        var riduzione = (settings.riduzione35 == 1
-          && (settings.inpsMode === 'artigiani_commercianti' || settings.inpsMode === 'artcom'))
-          ? 0.65 : 1;
+        // Riduzione 35% INPS via ForfettarioRules (art. 1 c. 77 L. 190/2014, solo art-comm).
+        var riduzione = _FR.getRiduzioneFactor(settings);
         lm3 = Math.round((contribFissi + contribVar) * riduzione * 100) / 100;
         lm3Source = 'fallback-competenza';
       }
@@ -197,11 +198,8 @@
     buildQuadroRR: function(yearData, settings, quadroLM, overrides) {
       overrides = overrides || {};
       var reddito = (quadroLM && quadroLM.LM4) ? quadroLM.LM4.value : 0;
-      // Riduzione 35% INPS vale SOLO per artigiani/commercianti (art. 1 c. 77 L. 190/2014).
-      // Per gestione separata non si applica.
-      var riduzione = (settings.riduzione35 == 1
-        && (settings.inpsMode === 'artigiani_commercianti' || settings.inpsMode === 'artcom'))
-        ? 0.65 : 1;
+      // Riduzione 35% INPS via ForfettarioRules (art. 1 c. 77 L. 190/2014, solo art-comm).
+      var riduzione = _FR.getRiduzioneFactor(settings);
 
       function rigo(val, desc, src) {
         return { value: Math.round(val * 100) / 100, descrizione: desc, source: src || 'computed' };

@@ -41,7 +41,7 @@
     return /^[A-Z0-9]{16}$/i.test(String(cf || '').trim());
   }
   function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
-    return marcaDaBollo && Number(imponibile) > 77.47;
+    return _FRFatt.isBolloDovuto(imponibile, marcaDaBollo);
   }
   // ─────────────────────────────────────────────────────────────────────────
   const DRAFT_TEMPLATE = {
@@ -119,51 +119,52 @@
     previewUrl: null
   };
 
-  function esc(value) {
-    if (typeof escapeHtml === 'function') return escapeHtml(value);
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  }
+  const _HtmlUtilsFatt = (typeof HtmlUtils !== 'undefined') ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null);
+  const esc = _HtmlUtilsFatt.escapeHtml;
+  const xmlEscape = _HtmlUtilsFatt.xmlEscape;
 
-  function round2(value) {
-    const n = parseFloat(value);
-    if (!Number.isFinite(n)) return 0;
-    return Math.round((n + Number.EPSILON) * 100) / 100;
-  }
+  const AppContext = (typeof window !== 'undefined' && window.AppContext) ? window.AppContext
+    : (typeof require !== 'undefined' ? require('./app-context.js') : null);
+  if (!AppContext) throw new Error('fatture-docs-feature.js requires AppContext — load app-context.js first');
 
-  function todayIso() {
-    const d = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
-  }
-  if (typeof window !== 'undefined') window.__todayIso = todayIso;
+  const _FRFatt = (typeof window !== 'undefined' && window.ForfettarioRules) ? window.ForfettarioRules
+    : (typeof require !== 'undefined' ? require('./forfettario-rules.js') : null);
+  if (!_FRFatt) throw new Error('fatture-docs-feature.js requires ForfettarioRules — load forfettario-rules.js first');
+  const BOLLO_THRESHOLD = _FRFatt.BOLLO_THRESHOLD;
 
+  const _ValidatorsFatt = (typeof window !== 'undefined' && window.FattureValidators) ? window.FattureValidators
+    : (typeof require !== 'undefined' ? require('./fatture-validators.js') : null);
+  if (!_ValidatorsFatt) throw new Error('fatture-docs-feature.js requires FattureValidators — load fatture-validators.js first');
+
+  const round2 = (typeof MathUtils !== 'undefined' && MathUtils.round2)
+    ? MathUtils.round2
+    : function (value) {
+        const n = parseFloat(value);
+        if (!Number.isFinite(n)) return 0;
+        return Math.round((n + Number.EPSILON) * 100) / 100;
+      };
+
+  // todayIso / addDaysIso / parseDateParts delegati a date-utils.js (DUP-6 risolto)
+  const _DateUtilsFatt = (typeof DateUtils !== 'undefined') ? DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null);
+  if (!_DateUtilsFatt) throw new Error('fatture-docs-feature.js requires DateUtils — load date-utils.js first');
+  const todayIso = _DateUtilsFatt.todayIso;
+  const parseDateParts = _DateUtilsFatt.parseDateParts;
+  // Wrapper compat: il chiamante può passare anche stringa ISO non valida o
+  // vuota; in quel caso la versione legacy ricadeva su today. Preserviamo.
   function addDaysIso(dateIso, days) {
-    const d = new Date(dateIso || todayIso());
-    if (Number.isNaN(d.getTime())) return todayIso();
-    d.setDate(d.getDate() + (parseInt(days, 10) || 0));
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+    var iso = (dateIso && typeof dateIso === 'string') ? dateIso : todayIso();
+    var out = _DateUtilsFatt.addDaysIso(iso, days);
+    return out || todayIso();
   }
-
-  function parseDateParts(dateIso) {
-    const parts = String(dateIso || '').split('-').map(v => parseInt(v, 10));
-    if (parts.length < 3 || parts.some(n => !Number.isFinite(n))) return null;
-    return { year: parts[0], month: parts[1], day: parts[2] };
-  }
+  // Compat: il test fatture-mark-stato-tz.test.js legge window.__todayIso.
+  // Manteniamo l'esposizione come passthrough.
+  if (typeof window !== 'undefined') window.__todayIso = todayIso;
 
   function parseMaybeNumber(value) {
     const n = parseFloat(String(value ?? '').replace(',', '.'));
     return Number.isFinite(n) ? n : 0;
-  }
-
-  function xmlEscape(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&apos;'
-    }[ch]));
   }
 
   function buildAnagraficaXml(cliente) {
@@ -184,13 +185,9 @@
     return '<Denominazione>' + xmlEscape(String(cliente.nome || '').slice(0, 80)) + '</Denominazione>';
   }
 
-  function formatPdfMoney(value) {
-    const amount = round2(value);
-    return `EUR ${amount.toLocaleString('it-IT', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
-  }
+  const _FormatUtilsFatt = (typeof FormatUtils !== 'undefined') ? FormatUtils
+    : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+  const formatPdfMoney = _FormatUtilsFatt.formatPdfMoney;
 
   function sanitizeDownloadFileName(value, fallback = 'documento') {
     const safe = String(value || fallback)
@@ -213,8 +210,12 @@
     return invoice && invoice.data ? String(invoice.data) : todayIso();
   }
 
+  const _StorageKeysFatt = (typeof window !== 'undefined' && window.StorageKeys) ? window.StorageKeys
+    : (typeof require !== 'undefined' ? require('./storage-keys.js') : null);
+  if (!_StorageKeysFatt) throw new Error('fatture-docs-feature.js requires StorageKeys — load storage-keys.js first');
+
   function getFattureEmesseStorageKey(profile = currentProfile) {
-    return `calcoliPIVA_${profile || 'default'}_fattureEmesse`;
+    return _StorageKeysFatt.fattureEmesse(profile || 'default');
   }
 
   function loadFattureEmesse(profile = currentProfile) {
@@ -394,7 +395,7 @@
   function syncBolloDefault() {
     const draft = currentDraft();
     const totals = computeDraftTotals(draft);
-    const thresholdHit = totals.subtotal + totals.contributoIntegrativo > 77.47;
+    const thresholdHit = totals.subtotal + totals.contributoIntegrativo > BOLLO_THRESHOLD;
     if (draft.bolloAuto !== false) {
       draft.marcaDaBollo = thresholdHit;
       const checkbox = document.getElementById('fatturaMarcaDaBollo');
@@ -428,7 +429,7 @@
   let _fattureFilter = 'tutte';
 
   function invoicesForYear(year) {
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     const all = window.FattureStorico ? window.FattureStorico.load(profile) : loadFattureEmesse(profile);
     return all.filter(inv => Number(inv.annoProgressivo) === Number(year));
   }
@@ -758,7 +759,7 @@
         || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem && sessionStorage.getItem('calcoliPIVA_profile'));
       var year = (typeof window !== 'undefined' && window.currentYear) || new Date().getFullYear();
       if (profile && year) {
-        var raw = localStorage.getItem('calcoliPIVA_' + profile + '_' + year);
+        var raw = localStorage.getItem(_StorageKeysFatt.yearData(profile, year));
         if (raw) {
           var parsed = JSON.parse(raw);
           if (parsed && parsed.settings && parsed.settings.regime) return parsed.settings.regime;
@@ -772,10 +773,7 @@
 
   function renderStep3Html() {
     const draft = currentDraft();
-    const isForfettarioRegime = (() => {
-      try { return (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; }
-      catch (_e) { return false; }
-    })();
+    const isForfettarioRegime = AppContext.getSettings().regime === 'forfettario';
     if (isForfettarioRegime && Number(draft.ritenuta) > 0) {
       _clearRitenutaForForfettario(draft);
     }
@@ -1112,15 +1110,9 @@
     if (sanitizedNum.length > 10) {
       errors.push('Numero fattura troppo lungo: "' + rawNum + '" diventa "' + sanitizedNum + '" (' + sanitizedNum.length + ' char) dopo normalizzazione SdI. Max 10 alfanumerici. Abbrevia la numerazione.');
     }
-    // C-A2 — forfettario esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014)
-    // Fonte: Circ. AdE 9/E 2019 §4.1. Il committente non deve operare ritenuta;
-    // se la trattiene per errore, il forfettario perde liquidità.
-    try {
-      var settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
-      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
-        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura e comunicare al committente la dichiarazione sostitutiva di non assoggettamento.");
-      }
-    } catch (_e) { /* getSettings non disponibile: skip */ }
+    // C-A2 — forfettario esonerato dalla ritenuta (DUP-1 risolto via FattureValidators)
+    var ritenutaErr = _ValidatorsFatt.validateRitenutaForfettario(draft, AppContext.getSettings(), { context: 'invio' });
+    if (ritenutaErr) errors.push(ritenutaErr);
     // A-A6 — cliente PA → CodiceIPA 6 caratteri alfanumerici (D.M. 55/2013 art. 2).
     // Senza codice IPA valido, SdI rifiuta con errore EC02. Il campo SDI è 7 char per
     // privati/PG, 6 char per PA (Indice IPA: https://indicepa.gov.it).
@@ -1131,22 +1123,12 @@
         errors.push('Cliente PA: il Codice IPA deve essere 6 caratteri alfanumerici (D.M. 55/2013 art. 2).');
       }
     }
-    // NR-2 — cliente IT deve avere P.IVA o CF (FatturaPA v1.2 §1.4.1.2).
-    // Senza almeno uno dei due, SdI rifiuta l'XML. Blocchiamo qui (pre-invio) per
-    // dare feedback immediato anziché far fallire la build XML in modo tardivo.
-    var clienteAnag = draft.cliente || draft.clienteSnapshot;
-    if (clienteAnag) {
-      var nazCli = String(clienteAnag.nazione || 'IT').toUpperCase();
-      if (nazCli === 'IT') {
-        var pivaRaw = String(clienteAnag.partitaIva || '').replace(/\s+/g, '');
-        var cfRaw = String(clienteAnag.codiceFiscale || '').trim();
-        var hasPiva = pivaRaw && (typeof isValidPartitaIvaIT === 'function' ? isValidPartitaIvaIT(pivaRaw) : pivaRaw.length === 11);
-        var hasCF = cfRaw && (typeof isValidCodiceFiscale === 'function' ? isValidCodiceFiscale(cfRaw) : cfRaw.length === 16);
-        if (!hasPiva && !hasCF) {
-          errors.push("Cliente IT deve avere almeno la P.IVA o il Codice Fiscale (FatturaPA v1.2 §1.4.1.2). SdI rifiuterà l'XML senza questo dato.");
-        }
-      }
-    }
+    // NR-2 — cliente IT P.IVA o CF (DUP-9 risolto via FattureValidators)
+    var clienteErr = _ValidatorsFatt.validateClienteIT(_ValidatorsFatt.resolveCliente(draft), {
+      isValidPartitaIvaIT: typeof isValidPartitaIvaIT === 'function' ? isValidPartitaIvaIT : null,
+      isValidCodiceFiscale: typeof isValidCodiceFiscale === 'function' ? isValidCodiceFiscale : null
+    });
+    if (clienteErr) errors.push(clienteErr);
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
@@ -1172,9 +1154,12 @@
       }
       const statoCorrente = draft.stato || 'bozza';
       if (statoCorrente === 'bozza') {
-        draft.stato = 'inviata';
-        if (!draft.dataInvioSdi) {
-          draft.dataInvioSdi = todayIso();
+        // DUP-2: state machine canonica
+        if (window.FattureStateMachine) {
+          window.FattureStateMachine.markInviata(draft);
+        } else {
+          draft.stato = 'inviata';
+          if (!draft.dataInvioSdi) draft.dataInvioSdi = todayIso();
         }
       }
     } else {
@@ -1264,7 +1249,7 @@
       state.numberAuto = true;
       // Pre-fill progressivo via FattureStorico per coerenza con storico unificato
       const annoOggi = new Date().getFullYear();
-      const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
       const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
       state.draft.numero = window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001');
@@ -1437,7 +1422,7 @@
     // totals.subtotal = imponibile (from computeDraftTotals)
     row('Imponibile', totals.subtotal || 0);
     if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
-    if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
+    if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > BOLLO_THRESHOLD) row('Marca da bollo', 2);
     if (Number(invoice.ritenuta) > 0) {
       doc.setTextColor.apply(doc, NEGATIVE);
       doc.text('Ritenuta', labelX, y);
@@ -1500,10 +1485,7 @@
     if (!parts) return String(iso || '');
     return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + parts.year;
   }
-  function formatEur(n) {
-    const v = Number(n) || 0;
-    return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
-  }
+  const formatEur = _FormatUtilsFatt.formatEur;
   function formatNumIt(n) {
     return Number(n).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }
@@ -1605,13 +1587,9 @@
         if (!hasPivaIT && !hasCF) errors.push('Cliente IT senza P.IVA valida né CF valido: SdI rifiuterà.');
       }
     }
-    // C-A2 bypass: blocca ritenuta su forfettario anche dai path preview/download XML
-    try {
-      const settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
-      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
-        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura prima di scaricare/visualizzare l'XML.");
-      }
-    } catch (_e) { /* settings non disponibili: skip */ }
+    // C-A2 bypass: blocca ritenuta forfettario su preview/download XML (DUP-1 v2)
+    const ritenutaErrXml = _ValidatorsFatt.validateRitenutaForfettario(draft, AppContext.getSettings(), { context: 'xml' });
+    if (ritenutaErrXml) errors.push(ritenutaErrXml);
     return { errors };
   }
 
@@ -1730,7 +1708,7 @@
     const emetteRimborsoBollo = !isNC
       && draft.marcaDaBollo === true
       && draft.bolloAddebitato === true
-      && (totals && (totals.subtotal || 0) > 77.47);
+      && (totals && (totals.subtotal || 0) > BOLLO_THRESHOLD);
     if (emetteRimborsoBollo) {
       lineNum++;
       dettaglioLinee.push(`    <DettaglioLinee>
@@ -2109,27 +2087,24 @@ ${dettaglioLinee.join('\n')}
   // Adesione una tantum, retroattiva alle fatture ancora nel cassetto.
 
   function _adeConservationFlagKey(profile) {
-    return 'calcoliPIVA_' + (profile || '_global') + '_adeConservationAcknowledged';
+    return _StorageKeysFatt.adeConservationAcknowledged(profile);
   }
   function isAdeConservationAcknowledged() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       return localStorage.getItem(_adeConservationFlagKey(profile)) === '1';
     } catch (_e) { return false; }
   }
   function acknowledgeAdeConservation() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       localStorage.setItem(_adeConservationFlagKey(profile), '1');
     } catch (_e) { /* best-effort */ }
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
   }
   function resetAdeConservationAck() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       localStorage.removeItem(_adeConservationFlagKey(profile));
     } catch (_e) { /* best-effort */ }
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
@@ -2271,7 +2246,7 @@ ${dettaglioLinee.join('\n')}
   }
 
   function _findOriginale(id) {
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const profile = AppContext.getProfile();
     const fatture = loadFattureEmesse(profile);
     return fatture.find(f => f.id === id);
   }
@@ -2362,9 +2337,8 @@ ${dettaglioLinee.join('\n')}
     let orig = getSavedInvoiceById(fatturaOriginaleId);
     if (!orig && window.FattureStorico) {
       const profiles = [
-        (typeof window.getProfile === 'function' ? window.getProfile() : null),
-        sessionStorage.getItem('currentProfile'),
-        sessionStorage.getItem('calcoliPIVA_profile')
+        AppContext.getProfile(),
+        sessionStorage.getItem('currentProfile')
       ].filter(Boolean);
       for (const p of profiles) {
         const storico = window.FattureStorico.load(p) || [];
@@ -2381,7 +2355,7 @@ ${dettaglioLinee.join('\n')}
       return;
     }
     const annoOggi = new Date().getFullYear();
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const profile = AppContext.getProfile();
     const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
     const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
     const draft = {
@@ -2596,9 +2570,7 @@ ${dettaglioLinee.join('\n')}
   function hardDeleteFattura(id) {
     const settings = (typeof data !== 'undefined' && data && data.settings) ? data.settings : {};
     if ((parseInt(settings.devHardDelete, 10) || 0) !== 1) return;
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
@@ -2651,18 +2623,19 @@ ${dettaglioLinee.join('\n')}
 
   // Quick actions on BOZZA rows in the main Fatture card
   function quickMarkInviataFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'bozza') return;
-    all[idx].stato = 'inviata';
-    if (!all[idx].dataInvioSdi) {
-      all[idx].dataInvioSdi = todayIso();
+    // DUP-2: state machine canonica
+    if (window.FattureStateMachine) {
+      window.FattureStateMachine.markInviata(all[idx]);
+    } else {
+      all[idx].stato = 'inviata';
+      if (!all[idx].dataInvioSdi) all[idx].dataInvioSdi = todayIso();
     }
     // F1+F2+F3: sync NC TD04 → originale se applicabile
     if (all[idx].tipoDocumento === 'TD04'
@@ -2675,9 +2648,7 @@ ${dettaglioLinee.join('\n')}
     if (typeof recalcAll === 'function') recalcAll();
   }
   function quickDeleteBozzaFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
@@ -2697,21 +2668,24 @@ ${dettaglioLinee.join('\n')}
     });
   }
   function quickMarkPagataFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'inviata') return;
-    const iso = todayIso();
-    const today = new Date(iso + 'T00:00:00');
-    all[idx].stato = 'pagata';
-    all[idx].dataPagamento = iso;
-    all[idx].pagMese = today.getMonth() + 1;
-    all[idx].pagAnno = today.getFullYear();
+    // DUP-2: state machine canonica
+    if (window.FattureStateMachine) {
+      window.FattureStateMachine.markPagata(all[idx]);
+    } else {
+      const iso = todayIso();
+      const today = new Date(iso + 'T00:00:00');
+      all[idx].stato = 'pagata';
+      all[idx].dataPagamento = iso;
+      all[idx].pagMese = today.getMonth() + 1;
+      all[idx].pagAnno = today.getFullYear();
+    }
     store.save(profile, all);
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
     if (typeof recalcAll === 'function') recalcAll();

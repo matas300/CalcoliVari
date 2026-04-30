@@ -3,6 +3,15 @@
   const STORAGE_PREFIX = 'calcoliPIVA_';
   const STORAGE_SUFFIX = '_fattureEmesse';
 
+  // todayIso TZ-safe via date-utils.js (DUP-6 risolto: niente più dipendenza da window.__todayIso)
+  const _DateUtilsStorico = (typeof window !== 'undefined' && window.DateUtils) ? window.DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null);
+  function _todayIso() {
+    return _DateUtilsStorico
+      ? _DateUtilsStorico.todayIso()
+      : new Date().toISOString().slice(0, 10);
+  }
+
   let _archivioStato = 'tutte';
 
   function storageKey(profile) {
@@ -213,16 +222,16 @@
   }
 
   function _markInviata(id, profile) {
-    const dataDefault = (typeof window !== 'undefined' && window.__todayIso)
-      ? window.__todayIso()
-      : new Date().toISOString().slice(0, 10);
+    const dataDefault = _todayIso();
     const data = prompt('Data invio SdI (YYYY-MM-DD):', dataDefault);
     if (!data) return;
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
     if (idx < 0) return;
-    fatture[idx].stato = 'inviata';
-    fatture[idx].dataInvioSdi = data;
+    // DUP-2: state machine canonica
+    var FSM = (typeof window !== 'undefined' && window.FattureStateMachine) ? window.FattureStateMachine : null;
+    if (FSM) FSM.markInviata(fatture[idx], { date: data });
+    else { fatture[idx].stato = 'inviata'; fatture[idx].dataInvioSdi = data; }
     // F1+F2+F3: sync NC TD04 → originale se applicabile
     if (fatture[idx].tipoDocumento === 'TD04'
         && fatture[idx].fatturaOriginaleId
@@ -236,9 +245,7 @@
 
   function _markPagata(id, profile) {
     // F3: validate ISO date format YYYY-MM-DD strict (no /, no DD-MM-YYYY)
-    const today = (typeof window !== 'undefined' && window.__todayIso)
-      ? window.__todayIso()
-      : new Date().toISOString().slice(0, 10);
+    const today = _todayIso();
     let data;
     while (true) {
       data = prompt('Data pagamento (formato YYYY-MM-DD, es. ' + today + '):', today);
@@ -260,15 +267,17 @@
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
     if (idx < 0) return;
-    fatture[idx].stato = 'pagata';
-    fatture[idx].dataPagamento = data;
-    // F2: aggiorna pagMese/pagAnno coerentemente (parità con quickMarkPagataFromCard).
-    // Senza questo i selettori per-cassa (getByPagAnno, getByMonth, getCrossYearPaidIn)
-    // non vedono la fattura come incassata nell'anno giusto.
-    const dt2 = new Date(data + 'T00:00:00');
-    if (!isNaN(dt2.getTime())) {
-      fatture[idx].pagMese = dt2.getMonth() + 1;
-      fatture[idx].pagAnno = dt2.getFullYear();
+    // DUP-2: state machine canonica (gestisce pagMese/pagAnno + validazione)
+    var FSM2 = (typeof window !== 'undefined' && window.FattureStateMachine) ? window.FattureStateMachine : null;
+    if (FSM2) FSM2.markPagata(fatture[idx], { date: data });
+    else {
+      fatture[idx].stato = 'pagata';
+      fatture[idx].dataPagamento = data;
+      const dt2 = new Date(data + 'T00:00:00');
+      if (!isNaN(dt2.getTime())) {
+        fatture[idx].pagMese = dt2.getMonth() + 1;
+        fatture[idx].pagAnno = dt2.getFullYear();
+      }
     }
     save(profile, fatture);
     const sel = document.getElementById('archivioAnnoSelect');
@@ -306,12 +315,15 @@
     const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? (m[3] + '/' + m[2] + '/' + m[1]) : (iso || '\u2014');
   }
-  function _formatEur(n) {
-    return (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
-  }
+  const _FormatUtilsStorico = (typeof FormatUtils !== 'undefined') ? FormatUtils
+    : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+  const _formatEur = _FormatUtilsStorico.formatEur;
+  const _FRStorico = (typeof window !== 'undefined' && window.ForfettarioRules) ? window.ForfettarioRules
+    : (typeof require !== 'undefined' ? require('./forfettario-rules.js') : null);
+  const _BOLLO_THRESHOLD = _FRStorico ? _FRStorico.BOLLO_THRESHOLD : 77.47;
   function _calcTotale(f) {
     const imp = (f.righe || []).reduce((s, r) => s + (Number(r.quantita) || 0) * (Number(r.prezzoUnitario) || 0), 0);
-    const bollo = (f.marcaDaBollo && imp > 77.47) ? 2 : 0;
+    const bollo = (f.marcaDaBollo && imp > _BOLLO_THRESHOLD) ? 2 : 0;
     return imp + bollo + (Number(f.contributoIntegrativo) || 0) - (Number(f.ritenuta) || 0);
   }
 

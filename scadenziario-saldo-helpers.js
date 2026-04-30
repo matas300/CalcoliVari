@@ -19,11 +19,11 @@
 // viene contato correttamente sul lato imposte. Non c'è doppio conteggio
 // perché un pagamento ha un solo `scheduleKey`.
 (function () {
-  function ceil2(n) {
-    var v = parseFloat(n);
-    if (!isFinite(v)) return 0;
-    return Math.ceil(v * 100) / 100;
-  }
+  // Aritmetica condivisa: math-utils.js (UMD)
+  var _MU = (typeof MathUtils !== 'undefined') ? MathUtils
+    : (typeof require !== 'undefined' ? require('./math-utils.js') : null);
+  if (!_MU) throw new Error('scadenziario-saldo-helpers.js requires MathUtils — load math-utils.js first');
+  var ceil2 = _MU.ceil2;
 
   function sumPagamentiForSaldoKeys(pagamenti, keys) {
     if (!Array.isArray(pagamenti) || pagamenti.length === 0) return 0;

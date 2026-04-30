@@ -68,6 +68,10 @@ global.test = test;
 global.expect = expect;
 
 // Load test files
+require('./math-utils.test.js');
+require('./html-utils.test.js');
+require('./format-utils.test.js');
+require('./date-utils.test.js');
 require('./dichiarazione-engine.test.js');
 require('./dichiarazione-quadro-lm-completo.test.js');
 require('./dichiarazione-quadro-rr-completo.test.js');
@@ -109,6 +113,11 @@ require('./fatture-xml-cliente-ue.test.js');
 require('./dichiarazione-cassa-non-gestita.test.js');
 require('./dichiarazione-rr-gs-acconti-rx-clamp.test.js');
 require('./fatture-mark-stato-tz.test.js');
+require('./app-context.test.js');
+require('./storage-keys.test.js');
+require('./forfettario-rules.test.js');
+require('./fatture-validators.test.js');
+require('./fatture-state-machine.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

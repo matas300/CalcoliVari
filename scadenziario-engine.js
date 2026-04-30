@@ -5,18 +5,12 @@
     root.ScadenziarioEngine = factory();
   }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  function toNumber(value) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : 0;
-  }
-
-  function ceil2(value) {
-    const num = toNumber(value);
-    if (!num) return 0;
-    const scaled = Math.abs(num) * 100;
-    const rounded = Math.ceil(scaled - 1e-9) / 100;
-    return num < 0 ? -rounded : rounded;
-  }
+  // Aritmetica condivisa: math-utils.js (UMD)
+  const _MU = (typeof MathUtils !== 'undefined') ? MathUtils
+    : (typeof require !== 'undefined' ? require('./math-utils.js') : null);
+  if (!_MU) throw new Error('scadenziario-engine.js requires MathUtils — load math-utils.js first');
+  const toNumber = _MU.toNumber;
+  const ceil2 = _MU.ceil2;
 
   function sumPaymentEvents(events) {
     return ceil2((events || []).reduce(function (sum, event) {

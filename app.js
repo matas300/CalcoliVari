@@ -1,3 +1,25 @@
+// ═══════════════════ Aritmetica condivisa (math-utils.js) ═══════════════════
+const _MathUtils = (typeof window !== 'undefined' && window.MathUtils)
+  ? window.MathUtils
+  : (typeof MathUtils !== 'undefined' ? MathUtils
+    : (typeof require !== 'undefined' ? require('./math-utils.js') : null));
+if (!_MathUtils) throw new Error('app.js requires MathUtils — load math-utils.js first');
+const ceil2 = _MathUtils.ceil2;
+const euroToCents = _MathUtils.euroToCents;
+const centsToEuro = _MathUtils.centsToEuro;
+const splitAmountByWeights = _MathUtils.splitAmountByWeights;
+
+// ═══════════════════ Date helpers (date-utils.js) ═══════════════════
+const _DateUtils = (typeof window !== 'undefined' && window.DateUtils)
+  ? window.DateUtils
+  : (typeof DateUtils !== 'undefined' ? DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null));
+if (!_DateUtils) throw new Error('app.js requires DateUtils — load date-utils.js first');
+const getEaster = _DateUtils.getEaster;
+const isHoliday = _DateUtils.isHoliday;
+const pad2 = _DateUtils.pad2;
+const parseIsoDate = _DateUtils.parseIsoDate;
+
 // ═══════════════════ Profili / Login ═══════════════════
 const PROFILE_HASHES = {
   'd9b5e452afd6cdea8583147634c3f85a0ba60fc17ad5e6f069a99d3b4ec35194': 'Mattia',
@@ -388,7 +410,6 @@ const ACTIVITY_INFO = {
   'Malattia':  { label: 'Malattia',  color: 'var(--color-cal-malattia)', dark: false },
   'Donazione': { label: 'Donazione', color: 'var(--color-cal-donazione)', dark: false },
 };
-const HOLIDAYS = [[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
 const PAYMENT_TYPES = {
   tasse:      { label: 'Tasse', color: 'var(--red)' },
   contributi: { label: 'Contributi', color: 'var(--yellow)' },
@@ -515,7 +536,7 @@ function calcInailPremio(year, tassoPerMille) {
 // Imposta di bollo: 2€ per ogni fattura con importo > 77.47€
 // Scadenze: Q1 → 31/5, Q2 → 30/9, Q3 → 30/11, Q4 → 28/2 anno successivo
 // Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo (L. 73/2022 art. 3)
-const BOLLO_SOGLIA = 77.47;
+const BOLLO_SOGLIA = window.ForfettarioRules.BOLLO_THRESHOLD;
 const BOLLO_IMPORTO = 2.00;
 const BOLLO_DIFFERIMENTO_SOGLIA = 5000; // EUR — L. 73/2022 art. 3
 const BOLLO_QUARTERS = [
@@ -837,13 +858,14 @@ function isClosedFiscalYear(year) {
 }
 
 // ═══════════════════ Storage ═══════════════════
-function storageKey(y) { return 'calcoliPIVA_' + currentProfile + '_' + (y || currentYear); }
+// Wrapper sopra StorageKeys (UMD). Mantengono firma legacy (default a currentProfile/Year)
+// e fallback a 'default' invece di '_global' del modulo per backward compat con dati esistenti.
+function storageKey(y) { return window.StorageKeys.yearData(currentProfile, y || currentYear); }
 function profileStorageKey(profile = currentProfile) {
-  return 'calcoliPIVA_profile_' + (profile || 'default');
+  return window.StorageKeys.profileFiscal(profile || 'default');
 }
-
 function clientiStorageKey(profile = currentProfile) {
-  return 'calcoliPIVA_' + (profile || 'default') + '_clienti';
+  return window.StorageKeys.clienti(profile || 'default');
 }
 
 function getProfileFiscalDefaults(profile = currentProfile) {
@@ -1305,7 +1327,7 @@ function syncProfileFieldsToSettings(settings, year) {
 function syncProfileFiscalToStoredYears() {
   const profile = getProfileFiscalData();
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
@@ -1602,9 +1624,9 @@ function loadYearData(y) {
 
 function migrateProfileFiscalToSettings() {
   if (!currentProfile) return;
-  const flagKey = `calcoliPIVA_${currentProfile}_profileFiscalMigrated`;
+  const flagKey = window.StorageKeys.profileFiscalMigrated(currentProfile);
   if (localStorage.getItem(flagKey) === '1') return;
-  const srcKey = `calcoliPIVA_${currentProfile}_profileFiscal`;
+  const srcKey = window.StorageKeys.profileFiscalLegacy(currentProfile);
   const raw = localStorage.getItem(srcKey);
   if (!raw) { localStorage.setItem(flagKey, '1'); return; }
   let src; try { src = JSON.parse(raw); } catch { src = null; }
@@ -1686,7 +1708,7 @@ function saveYearData(year, yearData) {
 
 function getStoredYears(maxYear = currentYear) {
   const years = new Set([maxYear]);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
     if (!key.startsWith(prefix)) continue;
@@ -1699,7 +1721,7 @@ function getStoredYears(maxYear = currentYear) {
 
 function getAllStoredYears() {
   const years = new Set([currentYear]);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
     if (!key.startsWith(prefix)) continue;
@@ -1867,7 +1889,7 @@ function propagateAnagraficaAttivitaAcrossYears() {
   if (!currentProfile || !data || !data.settings) return;
   const ana = data.settings.anagrafica || {};
   const att = data.settings.attivita || {};
-  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
@@ -1885,7 +1907,7 @@ function propagateAnagraficaAttivitaAcrossYears() {
 // C4: al login, raccogli anagrafica/attivita da ogni anno (first-non-empty-wins) e propaga
 function backfillAnagraficaAttivitaFromAllYears() {
   if (!currentProfile) return;
-  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   const mergedAna = { ...(data.settings.anagrafica || {}) };
   const mergedAtt = { ...(data.settings.attivita || {}) };
   const fillFrom = (src, target) => {
@@ -1979,7 +2001,7 @@ function getGiorniIncassoProfile() {
   try {
     var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
     if (!profile) return null;
-    var raw = localStorage.getItem('calcoliPIVA_' + profile + '_giorniIncasso');
+    var raw = localStorage.getItem(window.StorageKeys.giorniIncasso(profile));
     if (raw === null || raw === '') return null;
     var parsed;
     try { parsed = JSON.parse(raw); } catch (_) { parsed = raw; }
@@ -1994,7 +2016,7 @@ function setGiorniIncassoProfile(val) {
     if (!profile) return;
     var n = parseFloat(val);
     if (!isFinite(n)) n = 30;
-    localStorage.setItem('calcoliPIVA_' + profile + '_giorniIncasso', JSON.stringify(n));
+    localStorage.setItem(window.StorageKeys.giorniIncasso(profile), JSON.stringify(n));
     if (typeof syncProfileMetaToCloud === 'function') {
       try { syncProfileMetaToCloud(profile); } catch (_) {}
     }
@@ -2021,26 +2043,7 @@ function changeYear(d) {
 }
 
 // ═══════════════════ Date helpers ═══════════════════
-function getEaster(year) {
-  const a = year % 19, b = Math.floor(year/100), c = year % 100;
-  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
-  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
-  const i = Math.floor(c/4), k = c % 4;
-  const l = (32+2*e+2*i-h-k) % 7;
-  const m = Math.floor((a+11*h+22*l)/451);
-  return [Math.floor((h+l-7*m+114)/31), ((h+l-7*m+114) % 31) + 1];
-}
-
-function isHoliday(year, month, day) {
-  for (const [hm, hd] of HOLIDAYS) if (month === hm && day === hd) return true;
-  const [em, ed] = getEaster(year);
-  const easter = new Date(year, em - 1, ed);
-  const mon = new Date(easter); mon.setDate(mon.getDate() + 1);
-  if (month === em && day === ed) return true;
-  if (month === (mon.getMonth() + 1) && day === mon.getDate()) return true;
-  return false;
-}
-
+// getEaster, isHoliday, pad2, parseIsoDate aliasati da date-utils.js (vedi top file)
 function getDefaultActivity(year, month, day) {
   const d = new Date(year, month - 1, day);
   const dow = d.getDay();
@@ -2090,14 +2093,14 @@ function getFattureFromYearData(yearData, month, year) {
 // Helper: get all fattureEmesse for the current profile (from FattureStorico or localStorage)
 function _getFattureEmesse(profile) {
   if (window.FattureStorico) return window.FattureStorico.load(profile);
-  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  const key = window.StorageKeys.fattureEmesse(profile);
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; }
 }
 
 // Helper: save updated list back
 function _saveFattureEmesse(profile, list) {
   if (window.FattureStorico) { window.FattureStorico.save(profile, list); return; }
-  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  const key = window.StorageKeys.fattureEmesse(profile);
   localStorage.setItem(key, JSON.stringify(list));
 }
 
@@ -2532,7 +2535,7 @@ function calcForfettarioValues(tot, settings, year) {
   const imponibile = tot * coeff;
   const inps = calcInpsContributions(imponibile, s, year);
   const cF = inps.cF, cV = inps.cV, cT = inps.cT;
-  const rid = s.riduzione35 == 1 && inps.mode === 'artigiani_commercianti' ? 0.65 : 1;
+  const rid = window.ForfettarioRules.getRiduzioneFactor({ riduzione35: s.riduzione35, inpsMode: inps.mode });
   const cFR = cF * rid, cVR = cV * rid, cTR = cFR + cVR;
   // Imposta sostitutiva: base = imponibile − contributi INPS effettivamente versati (deducibili)
   const tasse = Math.max((imponibile - cT) * imp, 0);
@@ -2961,23 +2964,15 @@ function getEffectiveNetto() {
 }
 
 // ═══════════════════ Formatting ═══════════════════
-function ceil2(n) {
-  if (n === undefined || n === null || isNaN(n)) return n;
-  const scaled = Math.abs(Number(n)) * 100;
-  const rounded = Math.ceil(scaled - 1e-9) / 100;
-  return Number(n) < 0 ? -rounded : rounded;
-}
+// ceil2 importato da math-utils.js (vedi top-of-file)
 
 function getCSSVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function fmt(n) {
-  if (n === undefined || n === null || isNaN(n)) return '\u2014';
-  var v = ceil2(n) + 0;
-  return v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20AC';
-}
-function fmtPct(n) { return (n * 100).toFixed(1) + '%'; }
+const _FormatUtilsApp = window.FormatUtils || (typeof require !== 'undefined' ? require('./format-utils.js') : null);
+const fmt = _FormatUtilsApp.formatEurOrDash;
+const fmtPct = _FormatUtilsApp.formatPct;
 function row(label, val, cls, valCls) {
   return `<div class="row ${cls||''}"><label>${label}</label><span class="val ${valCls||''}">${val}</span></div>`;
 }
@@ -3071,14 +3066,12 @@ function getProfileRegimeHistory() {
     .sort((a, b) => a.year - b.year);
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+const _HtmlUtils = (typeof window !== 'undefined' && window.HtmlUtils)
+  ? window.HtmlUtils
+  : (typeof HtmlUtils !== 'undefined' ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null));
+if (!_HtmlUtils) throw new Error('app.js requires HtmlUtils — load html-utils.js first');
+const escapeHtml = _HtmlUtils.escapeHtml;
 
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
@@ -3694,18 +3687,7 @@ function reopenPaidScheduleItem(scheduleKey) {
   removePagamentoByScheduleKey(scheduleKey);
 }
 
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-function parseIsoDate(value) {
-  if (!value) return null;
-  const parts = String(value).split('-').map(v => parseInt(v, 10));
-  if (parts.length !== 3 || parts.some(v => !Number.isFinite(v))) return null;
-  const [year, month, day] = parts;
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
-  return { year, month, day };
-}
+// pad2 e parseIsoDate aliasati da date-utils.js (vedi top file)
 
 function formatPaymentDateDisplay(value) {
   const parsed = parseIsoDate(value);
@@ -4093,25 +4075,7 @@ function buildPagamentiSection(options) {
   return h;
 }
 
-function euroToCents(amount) {
-  return Math.max(Math.round((parseFloat(amount) || 0) * 100), 0);
-}
-
-function centsToEuro(cents) {
-  return cents / 100;
-}
-
-function splitAmountByWeights(amount, weights) {
-  const totalCents = euroToCents(amount);
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
-  let assigned = 0;
-  return weights.map((weight, idx) => {
-    if (idx === weights.length - 1) return centsToEuro(totalCents - assigned);
-    const share = Math.floor(totalCents * weight / totalWeight);
-    assigned += share;
-    return centsToEuro(share);
-  });
-}
+// euroToCents / centsToEuro / splitAmountByWeights importati da math-utils.js (vedi top-of-file)
 
 function buildAccontoPlan(baseAmount) {
   const base = centsToEuro(euroToCents(baseAmount));
@@ -4125,21 +4089,19 @@ function buildAccontoPlan(baseAmount) {
   return { base, total: base, first, second, mode: 'double' };
 }
 
+// Wrapper attorno a DateUtils.buildRolledDueDate: la versione UMD ritorna
+// {year, month, day} mentre i consumer in app.js richiedono anche
+// `date` (oggetto Date), `iso` (YYYY-MM-DD) e `label` (DD MMM YYYY).
 function buildRolledDueDate(year, month, day) {
-  const d = new Date(year, month - 1, day);
-  while (d.getDay() === 0 || d.getDay() === 6 || isHoliday(d.getFullYear(), d.getMonth() + 1, d.getDate())) {
-    d.setDate(d.getDate() + 1);
-  }
-  const rolledYear = d.getFullYear();
-  const rolledMonth = d.getMonth() + 1;
-  const rolledDay = d.getDate();
+  const r = _DateUtils.buildRolledDueDate(year, month, day);
+  const d = new Date(r.year, r.month - 1, r.day);
   return {
-    year: rolledYear,
-    month: rolledMonth,
-    day: rolledDay,
+    year: r.year,
+    month: r.month,
+    day: r.day,
     date: d,
-    iso: `${rolledYear}-${pad2(rolledMonth)}-${pad2(rolledDay)}`,
-    label: `${pad2(rolledDay)} ${MONTHS_SHORT[rolledMonth - 1]} ${rolledYear}`
+    iso: `${r.year}-${pad2(r.month)}-${pad2(r.day)}`,
+    label: `${pad2(r.day)} ${MONTHS_SHORT[r.month - 1]} ${r.year}`
   };
 }
 
@@ -5802,14 +5764,14 @@ function exportScadenzeIcs(year) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   try {
-    localStorage.setItem('calcoliPIVA_' + currentProfile + '_icsExported_' + y, String(Date.now()));
+    localStorage.setItem(window.StorageKeys.icsExported(currentProfile, y), String(Date.now()));
   } catch (e) { /* ignore quota errors */ }
   if (typeof renderRiepilogo === 'function') renderRiepilogo();
 }
 
 function isIcsDownloaded(profile, year) {
   try {
-    return !!localStorage.getItem('calcoliPIVA_' + profile + '_icsExported_' + year);
+    return !!localStorage.getItem(window.StorageKeys.icsExported(profile, year));
   } catch (e) { return false; }
 }
 
@@ -5842,7 +5804,7 @@ function buildCrossYearReminderBannerHtml() {
   if (!currentProfile) return '';
   if (S().regime !== 'forfettario') return ''; // solo per forfettario (criterio cassa)
   // dismiss flag: una volta dismissed nel mese corrente, non riappare
-  var flagKey = 'calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear;
+  var flagKey = window.StorageKeys.crossYearReminderDismissed(currentProfile, currentYear);
   try { if (localStorage.getItem(flagKey) === '1') return ''; } catch (_e) { /* best-effort */ }
   // Conta fatture 'inviata' (emesse ma non ancora pagate)
   var nInviate = 0;
@@ -5871,7 +5833,7 @@ function buildCrossYearReminderBannerHtml() {
 function dismissCrossYearReminder() {
   if (!currentProfile || !currentYear) return;
   try {
-    localStorage.setItem('calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear, '1');
+    localStorage.setItem(window.StorageKeys.crossYearReminderDismissed(currentProfile, currentYear), '1');
   } catch (_e) { /* best-effort */ }
   var el = document.getElementById('cross-year-banner-root');
   if (el) el.remove();
@@ -6682,7 +6644,7 @@ function exportData() {
   const allData = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key.startsWith('calcoliPIVA_' + currentProfile + '_')) allData[key] = JSON.parse(localStorage.getItem(key));
+    if (key.startsWith(window.StorageKeys.profilePrefix(currentProfile))) allData[key] = JSON.parse(localStorage.getItem(key));
   }
   const profileKey = profileStorageKey(currentProfile);
   if (localStorage.getItem(profileKey)) allData[profileKey] = JSON.parse(localStorage.getItem(profileKey));
@@ -6697,7 +6659,7 @@ function importData(e) {
   const reader = new FileReader();
   reader.onload = ev => {
     const allData = JSON.parse(ev.target.result);
-    const prefix = 'calcoliPIVA_' + currentProfile + '_';
+    const prefix = window.StorageKeys.profilePrefix(currentProfile);
     const profileKey = profileStorageKey(currentProfile);
     for (const [key, val] of Object.entries(allData)) {
       if (key.startsWith(prefix) || key === profileKey) localStorage.setItem(key, JSON.stringify(val));

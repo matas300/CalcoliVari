@@ -39,15 +39,9 @@
     };
   }
 
-  function escapeText(value) {
-    if (typeof escapeHtml === 'function') return escapeHtml(value == null ? '' : String(value));
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  const _HtmlUtilsOcr = (typeof HtmlUtils !== 'undefined') ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null);
+  const escapeText = _HtmlUtilsOcr.escapeHtml;
 
   function isPdfFile(file) {
     if (!file) return false;
