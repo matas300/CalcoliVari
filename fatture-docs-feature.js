@@ -1557,26 +1557,142 @@
     return buildFatturaElettronicaXml(draft, { fatturaOriginale });
   }
 
+  // ── Sub-funzioni di buildFatturaElettronicaXml (Sprint 4.2) ──────────────
+  // Decomposizione interna per leggibilità. Output XML byte-identico:
+  // i test snapshot fatture-xml-*.test.js validano l'invarianza.
+
+  // R6 — NC date >= original invoice date.
+  function _validateNCDate(draft) {
+    if (!(draft._isNC === true || draft.tipoDocumento === 'TD04')) return;
+    var origRef = draft._originalForValidation;
+    if (!origRef && draft.fatturaOriginaleId
+        && typeof window !== 'undefined' && window.FattureStorico
+        && typeof window.FattureStorico.load === 'function') {
+      try {
+        var allOrig = window.FattureStorico.load(currentProfile) || [];
+        for (var i = 0; i < allOrig.length; i++) {
+          if (allOrig[i] && allOrig[i].id === draft.fatturaOriginaleId) { origRef = allOrig[i]; break; }
+        }
+      } catch (e) { /* noop */ }
+    }
+    if (origRef && origRef.data && draft.data && String(draft.data) < String(origRef.data)) {
+      throw new Error('Data NC (' + draft.data + ') anteriore alla fattura originale (' + origRef.data + '). La nota di credito non può precedere l’emissione originale.');
+    }
+  }
+
+  // Costruisce l'array di <DettaglioLinee> + flag rimborso bollo.
+  // A-A7 v2: rimborso bollo solo TD01 con marcaDaBollo+bolloAddebitato e imponibile > 77,47 €.
+  function _buildXmlDettaglioLinee(draft, isNC, sign, totals, naturaLinea) {
+    var lineNum = 0;
+    var lines = (draft.righe || []).map(function (line) {
+      lineNum++;
+      var qta = parseMaybeNumber(line.quantita) || 1;
+      var pu = round2(parseMaybeNumber(line.prezzoUnitario));
+      var tot = round2(qta * pu * sign);
+      return '    <DettaglioLinee>\n' +
+        '      <NumeroLinea>' + lineNum + '</NumeroLinea>\n' +
+        '      <Descrizione>' + xmlEscape(line.descrizione || 'Prestazione professionale') + '</Descrizione>\n' +
+        '      <Quantita>' + fmtXmlNum(qta) + '</Quantita>\n' +
+        '      <PrezzoUnitario>' + fmtXmlNum(pu) + '</PrezzoUnitario>\n' +
+        '      <PrezzoTotale>' + fmtXmlNum(tot) + '</PrezzoTotale>\n' +
+        '      <AliquotaIVA>0.00</AliquotaIVA>\n' +
+        '      <Natura>' + naturaLinea + '</Natura>\n' +
+        '    </DettaglioLinee>';
+    });
+
+    var emetteRimborsoBollo = !isNC
+      && draft.marcaDaBollo === true
+      && draft.bolloAddebitato === true
+      && (totals && (totals.subtotal || 0) > BOLLO_THRESHOLD);
+    if (emetteRimborsoBollo) {
+      lineNum++;
+      lines.push('    <DettaglioLinee>\n' +
+        '      <NumeroLinea>' + lineNum + '</NumeroLinea>\n' +
+        '      <Descrizione>Rimborso imposta di bollo</Descrizione>\n' +
+        '      <Quantita>1.00</Quantita>\n' +
+        '      <PrezzoUnitario>2.00</PrezzoUnitario>\n' +
+        '      <PrezzoTotale>2.00</PrezzoTotale>\n' +
+        '      <AliquotaIVA>0.00</AliquotaIVA>\n' +
+        '      <Natura>N1</Natura>\n' +
+        '    </DettaglioLinee>');
+    }
+    return { dettaglioLinee: lines, emetteRimborsoBollo: emetteRimborsoBollo };
+  }
+
+  // F7 — ImportoRitenuta segue il segno; AliquotaRitenuta resta positiva.
+  function _buildXmlDatiRitenuta(draft, sign) {
+    if (!(Number(draft.ritenuta) > 0)) return '';
+    var tipo = draft.tipoRitenuta || 'RT02';
+    var caus = (draft.causaleRitenuta || 'A').toUpperCase().slice(0, 2);
+    return '\n      <DatiRitenuta>\n' +
+      '        <TipoRitenuta>' + tipo + '</TipoRitenuta>\n' +
+      '        <ImportoRitenuta>' + fmtXmlNum(Number(draft.ritenuta) * sign) + '</ImportoRitenuta>\n' +
+      '        <AliquotaRitenuta>' + Number(draft.aliquotaRitenuta || 0).toFixed(2) + '</AliquotaRitenuta>\n' +
+      '        <CausalePagamento>' + xmlEscape(caus) + '</CausalePagamento>\n' +
+      '      </DatiRitenuta>';
+  }
+
+  // NC — DatiFattureCollegate (XSD: dentro DatiGenerali, dopo DatiGeneraliDocumento).
+  function _buildXmlDatiFattureCollegate(isNC, fatturaOriginale) {
+    if (!isNC || !fatturaOriginale) return '';
+    return '\n    <DatiFattureCollegate>\n' +
+      '      <RiferimentoNumeroLinea>1</RiferimentoNumeroLinea>\n' +
+      '      <IdDocumento>' + xmlEscape(String(fatturaOriginale.numero || '')) + '</IdDocumento>\n' +
+      '      <Data>' + xmlEscape(String(fatturaOriginale.data || '')) + '</Data>\n' +
+      '    </DatiFattureCollegate>';
+  }
+
+  // Identificativo fiscale cessionario — branchata su estero/IT-PIVA/IT-privato.
+  // NR-3: strip prefisso paese duplicato per esteri (FatturaPA v1.2 §2.1.2.6).
+  function _buildXmlCessionarioFiscale(cliente, clientePivaRaw, clientePivaValida, clienteEstero, cliNaz, clienteCF, clientePiva) {
+    if (clienteEstero) {
+      var vatEstero = clientePivaRaw || clienteCF;
+      if (!vatEstero) {
+        console.warn('Cliente estero senza VAT né CF: XML potrebbe essere rifiutato da SdI');
+        return '';
+      }
+      var vatCodice = vatEstero.replace(new RegExp('^' + cliNaz, 'i'), '').trim() || vatEstero;
+      return '\n        <IdFiscaleIVA>\n' +
+        '          <IdPaese>' + cliNaz + '</IdPaese>\n' +
+        '          <IdCodice>' + xmlEscape(vatCodice) + '</IdCodice>\n' +
+        '        </IdFiscaleIVA>';
+    }
+    if (clientePivaValida) {
+      var out = '\n        <IdFiscaleIVA>\n' +
+        '          <IdPaese>IT</IdPaese>\n' +
+        '          <IdCodice>' + xmlEscape(clientePiva) + '</IdCodice>\n' +
+        '        </IdFiscaleIVA>';
+      if (clienteCF) out += '\n        <CodiceFiscale>' + xmlEscape(clienteCF) + '</CodiceFiscale>';
+      return out;
+    }
+    if (!clienteCF) {
+      console.warn('Cessionario privato senza CF: XML potrebbe essere rifiutato da SdI');
+      return '';
+    }
+    return '\n        <CodiceFiscale>' + xmlEscape(clienteCF) + '</CodiceFiscale>';
+  }
+
+  // C3 — XSD element order (fatturaordinaria_v1.2.xsd §2.1.1):
+  // TipoDocumento → Divisa → Data → Numero → DatiRitenuta → DatiBollo → ImportoTotaleDocumento → Causale.
+  function _buildXmlDatiGeneraliDocumento(tipoDoc, draft, totals, sign, xmlRitenuta, datiBollo, causaleXml) {
+    var parts = [];
+    parts.push('<TipoDocumento>' + xmlEscape(tipoDoc) + '</TipoDocumento>');
+    parts.push('<Divisa>EUR</Divisa>');
+    parts.push('<Data>' + xmlEscape(draft.data) + '</Data>');
+    parts.push('<Numero>' + xmlEscape(draft.numero) + '</Numero>');
+    if (xmlRitenuta && String(xmlRitenuta).trim()) parts.push(String(xmlRitenuta).trim());
+    if (datiBollo && String(datiBollo).trim()) parts.push(String(datiBollo).trim());
+    parts.push('<ImportoTotaleDocumento>' + fmtXmlNum(round2(totals.total * sign)) + '</ImportoTotaleDocumento>');
+    if (causaleXml && String(causaleXml).trim()) parts.push(String(causaleXml).trim());
+    return '<DatiGeneraliDocumento>' + parts.join('') + '</DatiGeneraliDocumento>';
+  }
+
   function buildFatturaElettronicaXml(draft, opts = {}) {
     const isNC = draft._isNC === true || draft.tipoDocumento === 'TD04';
     const tipoDoc = isNC ? 'TD04' : 'TD01';
     const sign = isNC ? -1 : 1;
 
-    // R6 — validate NC date >= original invoice date (fiscally NC cannot precede the invoice it stornas).
-    if (isNC) {
-      var origRef = draft._originalForValidation;
-      if (!origRef && draft.fatturaOriginaleId && typeof window !== 'undefined' && window.FattureStorico && typeof window.FattureStorico.load === 'function') {
-        try {
-          var allOrig = window.FattureStorico.load(currentProfile) || [];
-          for (var i = 0; i < allOrig.length; i++) {
-            if (allOrig[i] && allOrig[i].id === draft.fatturaOriginaleId) { origRef = allOrig[i]; break; }
-          }
-        } catch (e) { /* noop */ }
-      }
-      if (origRef && origRef.data && draft.data && String(draft.data) < String(origRef.data)) {
-        throw new Error('Data NC (' + draft.data + ') anteriore alla fattura originale (' + origRef.data + '). La nota di credito non può precedere l\u2019emissione originale.');
-      }
-    }
+    _validateNCDate(draft);
 
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
@@ -1637,46 +1753,10 @@
     // Imponibile = somma righe (bollo e contributo integrativo esclusi dall'XML SdI)
     const imponibile = round2(totals.subtotal);
 
-    // Lines
-    let lineNum = 0;
-    const dettaglioLinee = (draft.righe || []).map(line => {
-      lineNum++;
-      const qta = parseMaybeNumber(line.quantita) || 1;
-      const pu = round2(parseMaybeNumber(line.prezzoUnitario));
-      const tot = round2(qta * pu * sign);
-      return `    <DettaglioLinee>
-      <NumeroLinea>${lineNum}</NumeroLinea>
-      <Descrizione>${xmlEscape(line.descrizione || 'Prestazione professionale')}</Descrizione>
-      <Quantita>${fmtXmlNum(qta)}</Quantita>
-      <PrezzoUnitario>${fmtXmlNum(pu)}</PrezzoUnitario>
-      <PrezzoTotale>${fmtXmlNum(tot)}</PrezzoTotale>
-      <AliquotaIVA>0.00</AliquotaIVA>
-      <Natura>${naturaLinea}</Natura>
-    </DettaglioLinee>`;
-    });
-
-    // A-A7 — riga "Rimborso imposta di bollo" quando addebitato al cliente.
-    // Risoluzione AdE 444/E del 18/11/2008: il bollo addebitato è un rimborso
-    // (fuori campo IVA art. 15 DPR 633/72, Natura N1). Mai su TD04 (NC):
-    // il bollo dell'originale resta a carico emittente (Ris. AdE 98/E 2003).
-    // A-A7 v2: soglia 77,47 € coerente con applicaBolloSeDovuto (D.M. 17/06/2014 art. 6)
-    // "superiore a" 77,47 → operatore strict >; totals già calcolato a riga 1630
-    const emetteRimborsoBollo = !isNC
-      && draft.marcaDaBollo === true
-      && draft.bolloAddebitato === true
-      && (totals && (totals.subtotal || 0) > BOLLO_THRESHOLD);
-    if (emetteRimborsoBollo) {
-      lineNum++;
-      dettaglioLinee.push(`    <DettaglioLinee>
-      <NumeroLinea>${lineNum}</NumeroLinea>
-      <Descrizione>Rimborso imposta di bollo</Descrizione>
-      <Quantita>1.00</Quantita>
-      <PrezzoUnitario>2.00</PrezzoUnitario>
-      <PrezzoTotale>2.00</PrezzoTotale>
-      <AliquotaIVA>0.00</AliquotaIVA>
-      <Natura>N1</Natura>
-    </DettaglioLinee>`);
-    }
+    // Lines + rimborso bollo — delegato a _buildXmlDettaglioLinee
+    const lineeResult = _buildXmlDettaglioLinee(draft, isNC, sign, totals, naturaLinea);
+    const dettaglioLinee = lineeResult.dettaglioLinee;
+    const emetteRimborsoBollo = lineeResult.emetteRimborsoBollo;
 
     // Contributo integrativo: si applica SOLO alle casse autonome (es. TC01 avvocati,
     // TC02 ingegneri). Gestione separata INPS (TC22) non ha integrativo. Finché non
@@ -1684,45 +1764,12 @@
     // campo è valorizzato per evitare XML fiscalmente non conforme (lo standard
     // Fiscozen per gestione separata non emette integrativo — vedi campioni).
 
-    // Fix #7 — DatiBollo solo se imponibile > 77,47 AND marcaDaBollo flag; mai su NC (spec §6).
-    // F7 rationale: il bollo della fattura originale resta a carico dell'emittente anche in caso
-    // di storno; la NC non genera obbligo di bollo autonomo (Risoluzione AdE 98/E del 2003
-    // e prassi consolidata). Se mai dovesse servire — caso straordinario — il campo marcaDaBollo
-    // sulla NC è lasciato editabile ma bypassato qui.
-    const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo)) ? `
-      <DatiBollo>
-        <BolloVirtuale>SI</BolloVirtuale>
-        <ImportoBollo>2.00</ImportoBollo>
-      </DatiBollo>` : '';
-
-    // Fix #9 — DatiRitenuta dentro DatiGeneraliDocumento (prima di ImportoTotaleDocumento).
-    // F7 — ImportoRitenuta segue il segno del documento: per TD04 la ritenuta va negativa
-    // per mantenere il bilancio con ImportoPagamento (che già applica sign in riga 1721).
-    // AliquotaRitenuta resta positiva: è una percentuale, non un importo.
-    let xmlRitenuta = '';
-    if (Number(draft.ritenuta) > 0) {
-      const tipo = draft.tipoRitenuta || 'RT02';
-      const caus = (draft.causaleRitenuta || 'A').toUpperCase().slice(0, 2);
-      xmlRitenuta = `
-      <DatiRitenuta>
-        <TipoRitenuta>${tipo}</TipoRitenuta>
-        <ImportoRitenuta>${fmtXmlNum(Number(draft.ritenuta) * sign)}</ImportoRitenuta>
-        <AliquotaRitenuta>${Number(draft.aliquotaRitenuta || 0).toFixed(2)}</AliquotaRitenuta>
-        <CausalePagamento>${xmlEscape(caus)}</CausalePagamento>
-      </DatiRitenuta>`;
-    }
-
-    // NC — DatiFattureCollegate (XSD: inside DatiGenerali, after DatiGeneraliDocumento)
-    let datiCollegate = '';
-    if (isNC && opts.fatturaOriginale) {
-      const orig = opts.fatturaOriginale;
-      datiCollegate = `
-    <DatiFattureCollegate>
-      <RiferimentoNumeroLinea>1</RiferimentoNumeroLinea>
-      <IdDocumento>${xmlEscape(String(orig.numero || ''))}</IdDocumento>
-      <Data>${xmlEscape(String(orig.data || ''))}</Data>
-    </DatiFattureCollegate>`;
-    }
+    // DatiBollo / DatiRitenuta / DatiFattureCollegate — delegati ai sub-helpers
+    const datiBollo = (!isNC && applicaBolloSeDovuto(totals.subtotal, draft.marcaDaBollo))
+      ? '\n      <DatiBollo>\n        <BolloVirtuale>SI</BolloVirtuale>\n        <ImportoBollo>2.00</ImportoBollo>\n      </DatiBollo>'
+      : '';
+    const xmlRitenuta = _buildXmlDatiRitenuta(draft, sign);
+    const datiCollegate = _buildXmlDatiFattureCollegate(isNC, opts.fatturaOriginale);
 
     const causale = String(draft.note || '').trim();
     const causaleXml = causale ? `
@@ -1755,53 +1802,13 @@
     const cfCedenteXml = profile.codiceFiscale
       ? `\n        <CodiceFiscale>${xmlEscape(profile.codiceFiscale)}</CodiceFiscale>` : '';
 
-    // Client fiscal ID:
-    //  - estero con codice fiscale estero (in campo partitaIva) → IdFiscaleIVA con IdPaese=cliNaz, niente CF
-    //  - IT con P.IVA valida → IdFiscaleIVA IT + CodiceFiscale se presente
-    //  - IT privato → solo CodiceFiscale
-    let cessionarioFiscaleXml = '';
-    if (clienteEstero) {
-      // Estero: accetta piva "grezza" (non deve passare validazione IT)
-      const vatEstero = clientePivaRaw || clienteCF;
-      if (vatEstero) {
-        // NR-3: strip prefisso paese se duplicato (FatturaPA v1.2 §2.1.2.6)
-        const vatCodice = vatEstero.replace(new RegExp('^' + cliNaz, 'i'), '').trim() || vatEstero;
-        cessionarioFiscaleXml = `
-        <IdFiscaleIVA>
-          <IdPaese>${cliNaz}</IdPaese>
-          <IdCodice>${xmlEscape(vatCodice)}</IdCodice>
-        </IdFiscaleIVA>`;
-      } else {
-        console.warn('Cliente estero senza VAT né CF: XML potrebbe essere rifiutato da SdI');
-      }
-    } else if (clientePivaValida) {
-      cessionarioFiscaleXml = `
-        <IdFiscaleIVA>
-          <IdPaese>IT</IdPaese>
-          <IdCodice>${xmlEscape(clientePiva)}</IdCodice>
-        </IdFiscaleIVA>`;
-      if (clienteCF) cessionarioFiscaleXml += `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
-    } else {
-      if (!clienteCF) {
-        console.warn('Cessionario privato senza CF: XML potrebbe essere rifiutato da SdI');
-      }
-      if (clienteCF) cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
-    }
-
-    // C3 — XSD element order guarantee (fatturaordinaria_v1.2.xsd §2.1.1)
-    // Ordine richiesto: TipoDocumento → Divisa → Data → Numero → DatiRitenuta → DatiBollo →
-    // ImportoTotaleDocumento → Causale. L'interpolazione inline è fragile; costruiamo la
-    // sezione via array per garantire l'ordine strutturalmente.
-    var dgParts = [];
-    dgParts.push('<TipoDocumento>' + xmlEscape(tipoDoc) + '</TipoDocumento>');
-    dgParts.push('<Divisa>EUR</Divisa>');
-    dgParts.push('<Data>' + xmlEscape(draft.data) + '</Data>');
-    dgParts.push('<Numero>' + xmlEscape(draft.numero) + '</Numero>');
-    if (xmlRitenuta && String(xmlRitenuta).trim()) dgParts.push(String(xmlRitenuta).trim());
-    if (datiBollo && String(datiBollo).trim()) dgParts.push(String(datiBollo).trim());
-    dgParts.push('<ImportoTotaleDocumento>' + fmtXmlNum(round2(totals.total * sign)) + '</ImportoTotaleDocumento>');
-    if (causaleXml && String(causaleXml).trim()) dgParts.push(String(causaleXml).trim());
-    var datiGeneraliDocumentoXml = '<DatiGeneraliDocumento>' + dgParts.join('') + '</DatiGeneraliDocumento>';
+    // Client fiscal ID + DatiGeneraliDocumento — delegati ai sub-helpers
+    const cessionarioFiscaleXml = _buildXmlCessionarioFiscale(
+      cliente, clientePivaRaw, clientePivaValida, clienteEstero, cliNaz, clienteCF, clientePiva
+    );
+    const datiGeneraliDocumentoXml = _buildXmlDatiGeneraliDocumento(
+      tipoDoc, draft, totals, sign, xmlRitenuta, datiBollo, causaleXml
+    );
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12"
