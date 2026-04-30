@@ -203,58 +203,8 @@ function updateProfileAvatar() {
   avatarBtn.setAttribute('title', displayName);
 }
 
-// ═══════════════════ Sidebar drawer (mobile) ═══════════════════
-function toggleSidebar() {
-  const el = document.getElementById('sidebar');
-  if (!el) return;
-  el.classList.contains('open') ? closeSidebar() : openSidebar();
-}
-function openSidebar() {
-  const el = document.getElementById('sidebar');
-  const btn = document.getElementById('navToggle');
-  if (!el) return;
-  el.classList.add('open');
-  btn?.setAttribute('aria-expanded', 'true');
-  if (window.matchMedia('(max-width: 768px)').matches) {
-    document.body.style.overflow = 'hidden';
-  }
-}
-function closeSidebar() {
-  const el = document.getElementById('sidebar');
-  const btn = document.getElementById('navToggle');
-  if (!el) return;
-  el.classList.remove('open');
-  btn?.setAttribute('aria-expanded', 'false');
-  document.body.style.overflow = '';
-}
-
-const SIDEBAR_COLLAPSED_KEY = 'calcoliPIVA_sidebarCollapsed';
-function applySidebarCollapsed(collapsed) {
-  document.body.classList.toggle('sidebar-collapsed', !!collapsed);
-  const btn = document.querySelector('.sb-collapse-btn');
-  if (btn) {
-    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    btn.title = collapsed ? 'Espandi barra laterale' : 'Comprimi barra laterale';
-  }
-}
-function toggleSidebarCollapsed() {
-  const next = !document.body.classList.contains('sidebar-collapsed');
-  applySidebarCollapsed(next);
-  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch (e) {}
-}
-function initSidebarCollapsed() {
-  let stored = '0';
-  try { stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) || '0'; } catch (e) {}
-  applySidebarCollapsed(stored === '1');
-  // Mirror each sb-item label into data-tab-label so the collapsed-rail tooltip can show it
-  document.querySelectorAll('.sb-item').forEach(btn => {
-    const label = btn.querySelector('.sb-label');
-    if (label && !btn.getAttribute('data-tab-label')) {
-      btn.setAttribute('data-tab-label', label.textContent.trim());
-    }
-  });
-}
-document.addEventListener('DOMContentLoaded', initSidebarCollapsed);
+// Sidebar drawer + collapse estratti in app-shell.js
+// (window.toggleSidebar / openSidebar / closeSidebar / toggleSidebarCollapsed / initSidebarCollapsed).
 
 function toggleProfileMenu() {
   const menu = document.getElementById('profileMenu');
@@ -6502,89 +6452,8 @@ function recalcAll() {
   if (S().regime === 'ordinario') renderSpese();
 }
 
-// ═══════════════════ Tab navigation ═══════════════════
-function switchToTab(tab) {
-  document.querySelectorAll('.sb-item[data-tab]').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  const navBtn = document.querySelector(`.sb-item[data-tab="${tab}"]`);
-  if (navBtn) navBtn.classList.add('active');
-  const tabEl = document.getElementById('tab-' + tab);
-  if (tabEl) tabEl.classList.add('active');
-  try { localStorage.setItem('calcoliPIVA_activeTab', tab); } catch (_) {}
-  // mount Dichiarazione wizard when switching to that tab
-  if (tab === 'dichiarazione' && window.DichiarazioneUI) {
-    window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
-  }
-  // render card A (fatture emesse) when switching to fatture tab
-  // (lo storico ora vive nel modale, aperto on-demand)
-  if (tab === 'fatture') {
-    // Migrazione legacy one-shot per-anno (unificazione store)
-    if (window.FattureMigration && typeof window.FattureMigration.migrateLegacyYear === 'function') {
-      try {
-        for (let y = 2020; y <= new Date().getFullYear() + 1; y++) {
-          const yd = loadYearData(y);
-          if (yd && yd.fatture && !yd._fattureMigratedAt) {
-            const res = window.FattureMigration.migrateLegacyYear(currentProfile, y, yd);
-            if (res.migrated > 0) console.log('[fatture-migration] anno', y, '→', res.migrated, 'righe migrate');
-            yd._fattureMigratedAt = new Date().toISOString();
-            saveYearData(y, yd);
-          }
-        }
-      } catch (err) { console.warn('[fatture-migration] errore', err); }
-    }
-    if (typeof window.renderFattureDocsSection === 'function') {
-      window.renderFattureDocsSection();
-    }
-  }
-  if (tab === 'profilo-personale') renderProfiloPersonale();
-  else if (tab === 'profilo-piva') renderProfiloPiva();
-  else if (tab === 'riepilogo') renderRiepilogo();
-  // Chiudi drawer mobile dopo cambio tab
-  if (window.matchMedia('(max-width: 768px)').matches) {
-    closeSidebar();
-  }
-  window.scrollTo(0, 0);
-}
-
-function openDichiarazione() {
-  switchToTab('dichiarazione');
-}
-document.querySelector('.sidebar')?.addEventListener('click', e => {
-  const btn = e.target.closest('.sb-item[data-tab]');
-  if (!btn) return;
-  switchToTab(btn.dataset.tab);
-});
-
-// ═══════════════════ Mobile nav labels ═══════════════════
-const NAV_LABELS = {
-  calcolo:        { full: null, short: 'Regime' }, // full set by applySettings
-  accantonamento: { full: 'Tasse Accantonate', short: 'Tasse' },
-  scadenziario:   { full: 'Scadenze', short: 'Scad.' },
-  calendar:       { full: 'Calendario', short: 'Calend.' },
-  fatture:        { full: 'Fatture', short: 'Fatture' },
-  budget:         { full: 'Budget', short: 'Budget' },
-  clienti:        { full: 'Clienti', short: 'Clienti' },
-  spese:          { full: 'Spese', short: 'Spese' },
-  dichiarazione:  { full: 'Dichiarazione', short: 'Dichiar.' },
-  settings:       { full: 'Impostazioni', short: 'Impost.' }
-};
-function updateNavLabels() {
-  // Con la sidebar, l'etichetta sta dentro .sb-label (mantiene l'icona accanto)
-  document.querySelectorAll('.sb-item[data-tab]').forEach(btn => {
-    const tab = btn.dataset.tab;
-    const lbl = NAV_LABELS[tab];
-    if (!lbl) return;
-    const labelEl = btn.querySelector('.sb-label');
-    if (!labelEl) return;
-    if (tab === 'calcolo') {
-      const regime = S().regime === 'forfettario' ? 'Forfettario' : 'Ordinario';
-      labelEl.textContent = 'Regime ' + regime;
-    } else {
-      labelEl.textContent = lbl.full;
-    }
-  });
-}
-window.addEventListener('resize', updateNavLabels);
+// Tab navigation + mobile nav labels estratti in app-shell.js
+// (window.switchToTab / openDichiarazione / updateNavLabels / NAV_LABELS).
 
 // exportData / importData estratte in app-export.js (window.exportData / window.importData).
 
