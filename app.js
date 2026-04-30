@@ -7,16 +7,16 @@ const PROFILE_HASHES = {
 };
 const PROFILE_FISCAL_LIBRARY = {
   Mattia: {
-    nome: 'Mattia Rossi',
-    codiceFiscale: 'RSSMTT96P21A944T',
-    partitaIva: '04239481205',
+    nome: '',
+    codiceFiscale: '',
+    partitaIva: '',
     indirizzo: '',
     cap: '',
     citta: '',
     provincia: '',
     nazione: 'IT',
-    ateco: '62.10.00',
-    atecoDescrizione: 'Attivita di programmazione informatica',
+    ateco: '',
+    atecoDescrizione: '',
     iban: '',
     modalitaPagamento: 'Bonifico bancario',
     coefficiente: 67,
@@ -27,10 +27,10 @@ const PROFILE_FISCAL_LIBRARY = {
     usaInpsUfficiale: 1,
     riduzione35: 0,
     limiteForfettario: 85000,
-    inailTasso: 5.19,
+    inailTasso: 0,
     agevolazioneStartUp: 0,
     primoAnnoAgevolato: 0,
-    note: 'Profilo reale con transizione ordinario -> forfettario dal 2025.'
+    note: ''
   },
   Peru: {
     nome: 'Peru',
