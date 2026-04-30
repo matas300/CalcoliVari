@@ -1233,28 +1233,15 @@
   }
 
   // --- MOTORE PDF MINIMALISTA (jsPDF) ---
-  function buildInvoicePdfMinimal(invoice) {
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      throw new Error('jsPDF non disponibile (verifica caricamento html2pdf bundle)');
-    }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  // Sub-helpers PDF (Sprint 4.3): ogni funzione disegna una sezione, mutando
+  // doc e ritornando la nuova y. Stessa sequenza di chiamate dell'inline
+  // originale → output PDF byte-identico.
 
-    const INK     = [18, 26, 36];
-    const MUTED   = [100, 116, 139];
-    const BORDER  = [226, 232, 240];
-    const ACCENT  = [60, 143, 145];
-    const NEGATIVE = [200, 50, 50];
+  function _pdfDrawIntestazioneAndParti(doc, invoice, ctx, y, isNC) {
+    var INK = ctx.INK, MUTED = ctx.MUTED, BORDER = ctx.BORDER;
+    var PAGE_W = ctx.PAGE_W, MARGIN = ctx.MARGIN, CONTENT_W = ctx.CONTENT_W;
+    var titolo = isNC ? 'NOTA DI CREDITO' : 'FATTURA';
 
-    const PAGE_W = 210;
-    const MARGIN = 20;
-    const CONTENT_W = PAGE_W - MARGIN * 2;
-    let y = MARGIN;
-
-    const isNC = invoice.tipoDocumento === 'TD04';
-    const titolo = isNC ? 'NOTA DI CREDITO' : 'FATTURA';
-
-    // Header
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
     doc.setTextColor.apply(doc, INK);
@@ -1270,14 +1257,12 @@
       y += 5;
     }
 
-    // Linea separatrice
     doc.setDrawColor.apply(doc, BORDER);
     doc.setLineWidth(0.2);
     doc.line(MARGIN, y, PAGE_W - MARGIN, y);
     y += 6;
 
-    // Due colonne emittente/destinatario
-    const colW = CONTENT_W / 2 - 5;
+    var colW = CONTENT_W / 2 - 5;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, MUTED);
@@ -1288,34 +1273,39 @@
     doc.setFontSize(10);
     doc.setTextColor.apply(doc, INK);
 
-    const emittente = invoice._emittente || {};
-    const cliente = invoice.clienteSnapshot || {};
-    const emLines = [
+    var emittente = invoice._emittente || {};
+    var cliente = invoice.clienteSnapshot || {};
+    var emLines = [
       emittente.denominazione || (emittente.nome + ' ' + (emittente.cognome || '')).trim(),
       emittente.partitaIva ? 'P.IVA ' + emittente.partitaIva : '',
       emittente.codiceFiscale ? 'CF ' + emittente.codiceFiscale : '',
       [emittente.indirizzo, emittente.cap, emittente.comune || emittente.citta, emittente.provincia].filter(Boolean).join(' ')
     ].filter(Boolean);
-    const clLines = [
+    var clLines = [
       cliente.denominazione || (cliente.nome + ' ' + (cliente.cognome || '')).trim(),
       cliente.partitaIva ? 'P.IVA ' + cliente.partitaIva : (cliente.codiceFiscale ? 'CF ' + cliente.codiceFiscale : ''),
       [cliente.indirizzo, cliente.cap, cliente.comune || cliente.citta, cliente.provincia].filter(Boolean).join(' ')
     ].filter(Boolean);
 
-    let yL = y, yR = y;
-    emLines.forEach(line => { doc.text(line, MARGIN, yL); yL += 5; });
-    clLines.forEach(line => { doc.text(line, MARGIN + colW + 10, yR); yR += 5; });
+    var yL = y, yR = y;
+    emLines.forEach(function (line) { doc.text(line, MARGIN, yL); yL += 5; });
+    clLines.forEach(function (line) { doc.text(line, MARGIN + colW + 10, yR); yR += 5; });
     y = Math.max(yL, yR) + 4;
 
     doc.setDrawColor.apply(doc, BORDER);
     doc.line(MARGIN, y, PAGE_W - MARGIN, y);
     y += 6;
+    return y;
+  }
 
-    // Tabella righe
-    const colDesc = MARGIN;
-    const colQta  = MARGIN + 100;
-    const colUnit = MARGIN + 130;
-    const colTot  = PAGE_W - MARGIN;
+  function _pdfDrawTabellaRighe(doc, invoice, ctx, y, isNC) {
+    var INK = ctx.INK, MUTED = ctx.MUTED, BORDER = ctx.BORDER, NEGATIVE = ctx.NEGATIVE;
+    var PAGE_W = ctx.PAGE_W, PAGE_H = ctx.PAGE_H, MARGIN = ctx.MARGIN, FOOTER_RESERVE = ctx.FOOTER_RESERVE;
+
+    var colDesc = MARGIN;
+    var colQta  = MARGIN + 100;
+    var colUnit = MARGIN + 130;
+    var colTot  = PAGE_W - MARGIN;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, MUTED);
@@ -1330,19 +1320,17 @@
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor.apply(doc, INK);
-    const PAGE_H = 297;
-    const FOOTER_RESERVE = 60;
-    (invoice.righe || []).forEach(r => {
+    (invoice.righe || []).forEach(function (r) {
       if (y > PAGE_H - FOOTER_RESERVE) {
         doc.addPage();
         y = MARGIN;
       }
-      const desc   = String(r.descrizione || '');
-      const qta    = Number(r.quantita) || 0;
-      const prezzo = Number(r.prezzoUnitario) || 0;
-      const totRiga = qta * prezzo * (isNC ? -1 : 1);
-      const wrapped = doc.splitTextToSize(desc, 95);
-      wrapped.forEach((line, idx) => {
+      var desc = String(r.descrizione || '');
+      var qta = Number(r.quantita) || 0;
+      var prezzo = Number(r.prezzoUnitario) || 0;
+      var totRiga = qta * prezzo * (isNC ? -1 : 1);
+      var wrapped = doc.splitTextToSize(desc, 95);
+      wrapped.forEach(function (line, idx) {
         doc.text(line, colDesc, y);
         if (idx === 0) {
           doc.text(formatNumIt(qta), colQta, y, { align: 'right' });
@@ -1359,12 +1347,14 @@
     doc.setDrawColor.apply(doc, BORDER);
     doc.line(MARGIN, y, PAGE_W - MARGIN, y);
     y += 6;
+    return y;
+  }
 
-    // Riepilogo
-    const totals = invoice._totals || {};
-    const sign = isNC ? -1 : 1;
-    const labelX = PAGE_W - MARGIN - 60;
-    const valX   = PAGE_W - MARGIN;
+  function _pdfDrawRiepilogoTotali(doc, invoice, totals, sign, ctx, y) {
+    var INK = ctx.INK, ACCENT = ctx.ACCENT, NEGATIVE = ctx.NEGATIVE;
+    var PAGE_W = ctx.PAGE_W, MARGIN = ctx.MARGIN;
+    var labelX = PAGE_W - MARGIN - 60;
+    var valX   = PAGE_W - MARGIN;
     doc.setFontSize(10);
 
     function row(label, val, opts) {
@@ -1375,7 +1365,6 @@
       doc.text(formatEur(val * sign), valX, y, { align: 'right' });
       y += 5;
     }
-    // totals.subtotal = imponibile (from computeDraftTotals)
     row('Imponibile', totals.subtotal || 0);
     if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
     if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > BOLLO_THRESHOLD) row('Marca da bollo', 2);
@@ -1386,7 +1375,6 @@
       doc.setTextColor.apply(doc, INK);
       y += 5;
     }
-    // Linea accent teal sopra il totale
     doc.setDrawColor.apply(doc, ACCENT);
     doc.setLineWidth(0.4);
     doc.line(labelX, y, valX, y);
@@ -1394,16 +1382,20 @@
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text('TOTALE', labelX, y);
-    // totals.total = totale finale (from computeDraftTotals)
     doc.text(formatEur((totals.total || 0) * sign), valX, y, { align: 'right' });
     y += 10;
+    return y;
+  }
 
-    // Pagamento
+  function _pdfDrawFooterLegale(doc, invoice, ctx, y, isForfettario) {
+    var MUTED = ctx.MUTED, BORDER = ctx.BORDER;
+    var PAGE_W = ctx.PAGE_W, MARGIN = ctx.MARGIN, CONTENT_W = ctx.CONTENT_W;
+
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor.apply(doc, MUTED);
     if (invoice.modalitaPagamento) {
-      doc.text('Pagamento: ' + invoice.modalitaPagamento + (invoice.scadenzaPagamento ? ' \u2014 Scadenza ' + formatDateIt(invoice.scadenzaPagamento) : ''), MARGIN, y);
+      doc.text('Pagamento: ' + invoice.modalitaPagamento + (invoice.scadenzaPagamento ? ' — Scadenza ' + formatDateIt(invoice.scadenzaPagamento) : ''), MARGIN, y);
       y += 4;
     }
     if (invoice.iban) {
@@ -1411,17 +1403,9 @@
       y += 4;
     }
 
-    // Footer legale — A-A8: dicitura forfettario obbligatoria (D.L. 119/2018 art. 1 c. 909)
-    // NR-10: fail loud se il regime non è determinabile, mai PDF con dicitura ambigua
-    // (art. 6 c. 1 D.Lgs. 471/1997 — sanzione 250-2000 € per omessa indicazione).
-    let isForfettario;
-    try {
-      isForfettario = _resolveRegimeForPdf() === 'forfettario';
-    } catch (resolveErr) {
-      throw resolveErr;
-    }
-    const customNote = (invoice.note && String(invoice.note).trim()) ? String(invoice.note).trim() : '';
-    const noteToPrint = customNote || (isForfettario ? DEFAULT_FORFETTARIO_NOTE : '');
+    // A-A8: dicitura forfettario obbligatoria (D.L. 119/2018 art. 1 c. 909)
+    var customNote = (invoice.note && String(invoice.note).trim()) ? String(invoice.note).trim() : '';
+    var noteToPrint = customNote || (isForfettario ? DEFAULT_FORFETTARIO_NOTE : '');
     if (noteToPrint) {
       y += 4;
       doc.setDrawColor.apply(doc, BORDER);
@@ -1430,8 +1414,44 @@
       y += 5;
       doc.setFontSize(8);
       doc.setTextColor.apply(doc, MUTED);
-      doc.splitTextToSize(noteToPrint, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+      doc.splitTextToSize(noteToPrint, CONTENT_W).forEach(function (line) { doc.text(line, MARGIN, y); y += 3.5; });
     }
+    return y;
+  }
+
+  function buildInvoicePdfMinimal(invoice) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error('jsPDF non disponibile (verifica caricamento html2pdf bundle)');
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+    // Layout + palette (Espresso & Mint)
+    const ctx = {
+      INK:      [18, 26, 36],
+      MUTED:    [100, 116, 139],
+      BORDER:   [226, 232, 240],
+      ACCENT:   [60, 143, 145],
+      NEGATIVE: [200, 50, 50],
+      PAGE_W: 210,
+      PAGE_H: 297,
+      MARGIN: 20,
+      CONTENT_W: 210 - 20 * 2,
+      FOOTER_RESERVE: 60
+    };
+    let y = ctx.MARGIN;
+
+    const isNC = invoice.tipoDocumento === 'TD04';
+    const totals = invoice._totals || {};
+    const sign = isNC ? -1 : 1;
+
+    y = _pdfDrawIntestazioneAndParti(doc, invoice, ctx, y, isNC);
+    y = _pdfDrawTabellaRighe(doc, invoice, ctx, y, isNC);
+    y = _pdfDrawRiepilogoTotali(doc, invoice, totals, sign, ctx, y);
+
+    // A-A8 / NR-10: regime fail-loud (D.L. 119/2018 + art. 6 D.Lgs. 471/1997)
+    const isForfettario = _resolveRegimeForPdf() === 'forfettario';
+    y = _pdfDrawFooterLegale(doc, invoice, ctx, y, isForfettario);
 
     return doc;
   }
