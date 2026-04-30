@@ -522,6 +522,10 @@
       ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + '<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
       : '';
 
+    // F4: banner cross-year a dicembre (replicato anche qui per visibilità)
+    const crossYearBannerHtml = (typeof window !== 'undefined' && typeof window.buildCrossYearReminderBannerHtml === 'function')
+      ? (window.buildCrossYearReminderBannerHtml() || '') : '';
+
     // F1: banner conservazione AdE — visibile finché l'utente non conferma l'adesione
     const ackedConservation = (typeof isAdeConservationAcknowledged === 'function')
       ? isAdeConservationAcknowledged() : true;
@@ -546,6 +550,7 @@
           '</div>' +
         '</div>' +
         summaryHtml +
+        crossYearBannerHtml +
         conservationBanner +
         '<div class="fatture-filters" role="tablist" aria-label="Filtro stato fatture">' +
           '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='tutte') + '" onclick="window.setFattureFilter(\'tutte\')">Tutte (' + cTutte + ')</button>' +
