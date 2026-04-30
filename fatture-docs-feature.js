@@ -2,44 +2,21 @@
 (function () {
   const DEFAULT_FORFETTARIO_NOTE = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 — regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
   const DEFAULT_BONIFICO = 'Bonifico bancario';
-  // FatturaPA ModalitaPagamento codes (spec v1.2)
-  const MODALITA_TO_MP = {
-    'bonifico':       'MP05',
-    'bonifico bancario': 'MP05',
-    'assegno':        'MP01',
-    'assegno circolare': 'MP02',
-    'contanti':       'MP10',
-    'carta di credito': 'MP08',
-    'carta':          'MP08',
-    'paypal':         'MP08',
-    'rid':            'MP09',
-    'sepa':           'MP15',
-    'giroconto':      'MP06',
-    'compensazione':  'MP07',
-  };
-  function modalitaToCodiceMP(str) {
-    const key = String(str || '').toLowerCase().trim();
-    for (const [k, v] of Object.entries(MODALITA_TO_MP)) {
-      if (key.includes(k)) return v;
-    }
-    return 'MP05'; // default bonifico
-  }
-  const XML_NAMESPACE = 'http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2';
-  const XML_FORFETTARIO_REGIME = 'RF19'; // kept for backward compat; buildFatturaElettronicaXml now reads settings
 
-  // ── FatturaPA validation helpers (Task 5 audit) ──────────────────────────
-  function sanitizeProgressivoInvio(s) {
-    return String(s || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) || '00001';
-  }
-  function isValidPartitaIvaIT(s) {
-    return /^\d{11}$/.test(String(s || '').replace(/\s+/g, ''));
-  }
-  function isValidCodiceFiscale(cf) {
-    if (typeof window.DichiarazioneEngine?.validateCodiceFiscale === 'function') {
-      return window.DichiarazioneEngine.validateCodiceFiscale(cf);
-    }
-    return /^[A-Z0-9]{16}$/i.test(String(cf || '').trim());
-  }
+  // ── XML helpers delegati a fatture-xml-helpers.js (Sprint 4) ─────────────
+  const _XmlHelpers = (typeof window !== 'undefined' && window.FattureXmlHelpers) ? window.FattureXmlHelpers
+    : (typeof require !== 'undefined' ? require('./fatture-xml-helpers.js') : null);
+  if (!_XmlHelpers) throw new Error('fatture-docs-feature.js requires FattureXmlHelpers — load fatture-xml-helpers.js first');
+  const MODALITA_TO_MP = _XmlHelpers.MODALITA_TO_MP;
+  const modalitaToCodiceMP = _XmlHelpers.modalitaToCodiceMP;
+  const XML_NAMESPACE = _XmlHelpers.XML_NAMESPACE;
+  const XML_FORFETTARIO_REGIME = _XmlHelpers.XML_FORFETTARIO_REGIME;
+  const sanitizeProgressivoInvio = _XmlHelpers.sanitizeProgressivoInvio;
+  const isValidPartitaIvaIT = _XmlHelpers.isValidPartitaIvaIT;
+  const isValidCodiceFiscale = _XmlHelpers.isValidCodiceFiscale;
+  const parseMaybeNumber = _XmlHelpers.parseMaybeNumber;
+  const fmtXmlNum = _XmlHelpers.fmtXmlNum;
+  const buildAnagraficaXml = _XmlHelpers.buildAnagraficaXml;
   function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
     return _FRFatt.isBolloDovuto(imponibile, marcaDaBollo);
   }
@@ -162,28 +139,7 @@
   // Manteniamo l'esposizione come passthrough.
   if (typeof window !== 'undefined') window.__todayIso = todayIso;
 
-  function parseMaybeNumber(value) {
-    const n = parseFloat(String(value ?? '').replace(',', '.'));
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function buildAnagraficaXml(cliente) {
-    var denom = String((cliente.denominazione || cliente.ragioneSociale || '')).trim();
-    var nome = String(cliente.nome || '').trim();
-    var cognome = String(cliente.cognome || '').trim();
-    var piva = String(cliente.partitaIva || '').replace(/\D/g, '');
-    var hasPiva = piva.length === 11;
-    if (denom) {
-      return '<Denominazione>' + xmlEscape(denom.slice(0, 80)) + '</Denominazione>';
-    }
-    if (hasPiva) {
-      return '<Denominazione>' + xmlEscape((nome || piva).slice(0, 80)) + '</Denominazione>';
-    }
-    if (nome && cognome) {
-      return '<Nome>' + xmlEscape(nome.slice(0, 60)) + '</Nome><Cognome>' + xmlEscape(cognome.slice(0, 60)) + '</Cognome>';
-    }
-    return '<Denominazione>' + xmlEscape(String(cliente.nome || '').slice(0, 80)) + '</Denominazione>';
-  }
+  // parseMaybeNumber e buildAnagraficaXml delegati a fatture-xml-helpers.js (Sprint 4)
 
   const _FormatUtilsFatt = (typeof FormatUtils !== 'undefined') ? FormatUtils
     : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
@@ -1539,7 +1495,7 @@
   }
 
   // ── XML helpers ─────────────────────────────────────────────
-  function fmtXmlNum(n) { return round2(n).toFixed(2); }
+  // fmtXmlNum delegato a fatture-xml-helpers.js (Sprint 4)
 
   function downloadTextFile(fileName, content) {
     const blob = new Blob([content], { type: 'application/xml;charset=utf-8' });
