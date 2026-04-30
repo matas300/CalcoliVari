@@ -174,6 +174,65 @@ describe('app bootstrap (jsdom)', function () {
     });
   });
 
+  test('IdTrasmittente.IdCodice: per PF (CF 16 char) usa CF, non P.IVA — fix scarto SdI 00300', function () {
+    return new Promise(function (resolve, reject) {
+      setTimeout(function () {
+        try {
+          var win = dom.window;
+          // Profilo PF (forfettario tipico)
+          win.getProfileFiscalData = function () {
+            return {
+              partitaIva: '04171311204',
+              codiceFiscale: 'PRGDVD96M13A944I',  // 16 char = PF
+              nome: 'Davide', cognome: 'Perugini',
+              indirizzo: 'Via Test 1', cap: '00100', citta: 'Roma',
+              provincia: 'RM', nazione: 'IT', iban: ''
+            };
+          };
+          win.currentProfile = 'TestPF';
+          win.data = win.data || {};
+          win.data.settings = { regime: 'forfettario' };
+          var draftPF = {
+            id: 't1', numero: '2026/001', data: '2026-04-30', tipoDocumento: 'TD01',
+            note: '', righe: [{ quantita: 1, prezzoUnitario: 100, descrizione: 'X' }],
+            modalitaPagamento: 'bonifico', scadenzaPagamento: '2026-05-30',
+            ritenuta: 0, marcaDaBollo: false,
+            clienteSnapshot: {
+              denominazione: 'ACME', partitaIva: '11223344556',
+              indirizzo: 'V', cap: '20100', citta: 'Milano', provincia: 'MI',
+              nazione: 'IT', tipoCliente: 'PG'
+            }
+          };
+          var xmlPF = win.buildFatturaElettronicaXml(draftPF);
+          // Estraggo IdTrasmittente.IdCodice (path 1.1.1.2) — primo IdCodice nel doc
+          var pfMatch = xmlPF.match(/<IdTrasmittente>[\s\S]*?<IdCodice>([^<]+)<\/IdCodice>/);
+          if (!pfMatch) return reject(new Error('IdTrasmittente.IdCodice not found'));
+          if (pfMatch[1] !== 'PRGDVD96M13A944I') {
+            return reject(new Error('PF: IdTrasmittente.IdCodice deve essere CF, trovato: ' + pfMatch[1]));
+          }
+
+          // Profilo PG (società con CF=P.IVA 11 cifre): IdTrasmittente.IdCodice = P.IVA
+          win.getProfileFiscalData = function () {
+            return {
+              partitaIva: '12345678901',
+              codiceFiscale: '12345678901',  // 11 cifre = CF coincide con P.IVA (PG)
+              nome: 'ACME', cognome: 'SRL',
+              indirizzo: 'V', cap: '20100', citta: 'Milano',
+              provincia: 'MI', nazione: 'IT', iban: ''
+            };
+          };
+          var xmlPG = win.buildFatturaElettronicaXml(draftPF);
+          var pgMatch = xmlPG.match(/<IdTrasmittente>[\s\S]*?<IdCodice>([^<]+)<\/IdCodice>/);
+          if (!pgMatch) return reject(new Error('IdTrasmittente.IdCodice not found (PG)'));
+          if (pgMatch[1] !== '12345678901') {
+            return reject(new Error('PG: IdTrasmittente.IdCodice deve essere P.IVA, trovato: ' + pgMatch[1]));
+          }
+          resolve();
+        } catch (e) { reject(e); }
+      }, 1500);
+    });
+  });
+
   test('Bare-name lookup cross-script: escapeHtml accessibile da nuovo <script>', function () {
     return new Promise(function (resolve, reject) {
       setTimeout(function () {

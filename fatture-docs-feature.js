@@ -1770,6 +1770,16 @@
     const profileCognome = String(profile.cognome || '').trim()
       || String(profile.nome || currentProfile).trim().split(/\s+/).slice(-1)[0];
 
+    // IdTrasmittente.IdCodice (path 1.1.1.2): identificativo fiscale del soggetto
+    // trasmittente. Per persona fisica autotrasmittente (regime forfettario) deve
+    // essere il CODICE FISCALE (16 char alfanumerico), NON la P.IVA. SdI scarta con
+    // errore 00300 "IdCodice non valido" se viene messa la P.IVA per PF: cerca
+    // l'identificativo in AT come trasmittente abilitato e per PF lo trova solo via CF.
+    // Per PG il CF coincide con la P.IVA (11 cifre) quindi nessun cambio effettivo.
+    const cfTrim = String(profile.codiceFiscale || '').trim().toUpperCase();
+    const isPersonaFisicaCF = /^[A-Z0-9]{16}$/.test(cfTrim);
+    const trasmittenteIdCodice = isPersonaFisicaCF ? cfTrim : piva;
+
     // Natura + riferimento normativo — forfettario RF19 sempre N2.2.
     // art. 1 c. 58 L. 190/2014 + Circ. AdE 9/E 2019 §4.1: fuori campo IVA,
     // non ex artt. 7-7septies DPR 633/72. N2.1 è riservata al regime ordinario.
@@ -1847,7 +1857,7 @@
     <DatiTrasmissione>
       <IdTrasmittente>
         <IdPaese>IT</IdPaese>
-        <IdCodice>${xmlEscape(piva)}</IdCodice>
+        <IdCodice>${xmlEscape(trasmittenteIdCodice)}</IdCodice>
       </IdTrasmittente>
       <ProgressivoInvio>${progressivo}</ProgressivoInvio>
       <FormatoTrasmissione>FPR12</FormatoTrasmissione>
