@@ -64,7 +64,7 @@
     }
     const ocrModal = document.getElementById('ocrPagamentoModal');
     if (ocrModal && ocrModal.classList.contains('open')) {
-      closeOcrPagamentoModal();
+      if (typeof window.closeOcrPagamentoModal === 'function') window.closeOcrPagamentoModal();
       return;
     }
   });
