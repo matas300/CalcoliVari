@@ -93,6 +93,87 @@ describe('app bootstrap (jsdom)', function () {
     });
   });
 
+  test('XML generato: Causale e Descrizione conformi XSD Latin-1 (no em-dash, smart quotes, ecc.)', function () {
+    return new Promise(function (resolve, reject) {
+      setTimeout(function () {
+        try {
+          var win = dom.window;
+          win.getProfileFiscalData = function () {
+            return {
+              partitaIva: '12345678901', codiceFiscale: 'PRURSS80A01H501Z',
+              nome: 'Mario', cognome: 'Peru',
+              indirizzo: 'Via Roma 1', cap: '00100', citta: 'Roma',
+              provincia: 'RM', nazione: 'IT',
+              iban: 'IT60X0542811101000000123456'
+            };
+          };
+          win.currentProfile = 'Peru';
+          win.data = win.data || {};
+          win.data.settings = { regime: 'forfettario' };
+
+          var draft = {
+            id: 't1', numero: '2026/001', data: '2026-04-30',
+            tipoDocumento: 'TD01',
+            note: "Operazione effettuata ai sensi dell'art. 1 — regime forfettario — fine.",
+            righe: [{ quantita: 1, prezzoUnitario: 100, descrizione: 'Servizio “premium” – 2026 € 100' }],
+            modalitaPagamento: 'bonifico',
+            scadenzaPagamento: '2026-05-30',
+            ritenuta: 0, marcaDaBollo: false,
+            clienteSnapshot: {
+              denominazione: 'Café — Münster Co.',
+              partitaIva: '11223344556',
+              indirizzo: 'Straße der République 1',
+              cap: '20100', citta: 'Milano', provincia: 'MI',
+              nazione: 'IT', tipoCliente: 'PG'
+            }
+          };
+          var xml = win.buildFatturaElettronicaXml(draft);
+
+          function extractTexts(tag) {
+            var re = new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>', 'g');
+            var out = []; var m = xml.match(re) || [];
+            m.forEach(function (raw) {
+              var inner = raw.replace(new RegExp('^<' + tag + '>'), '').replace(new RegExp('<\\/' + tag + '>$'), '');
+              out.push(inner);
+            });
+            return out;
+          }
+          var fields = ['Causale', 'Descrizione', 'Denominazione', 'Nome', 'Cognome', 'Indirizzo', 'Comune'];
+          var problems = [];
+          fields.forEach(function (tag) {
+            extractTexts(tag).forEach(function (v) {
+              for (var i = 0; i < v.length; i++) {
+                var code = v.charCodeAt(i);
+                if (code > 0xFF) {
+                  problems.push('<' + tag + '>: char U+' + code.toString(16).toUpperCase().padStart(4,'0') + ' in "' + v + '"');
+                  break;
+                }
+              }
+            });
+          });
+          if (problems.length > 0) {
+            return reject(new Error('Campi XSD String*LatinType con caratteri fuori range:\n  - ' + problems.join('\n  - ')));
+          }
+          var causaleArr = extractTexts('Causale');
+          if (!causaleArr.length) return reject(new Error('Causale tag missing'));
+          if (causaleArr[0].indexOf('—') !== -1) return reject(new Error('em-dash ancora in Causale: ' + causaleArr[0]));
+          if (causaleArr[0].indexOf(' - regime') === -1) return reject(new Error('em-dash non sostituito da hyphen: ' + causaleArr[0]));
+
+          var descArr = extractTexts('Descrizione');
+          var descPremium = descArr.find(function (d) { return d.indexOf('premium') !== -1; });
+          if (!descPremium) return reject(new Error('Descrizione premium missing'));
+          if (descPremium.indexOf('“') !== -1 || descPremium.indexOf('”') !== -1) {
+            return reject(new Error('smart quotes ancora in Descrizione: ' + descPremium));
+          }
+          if (descPremium.indexOf('€') !== -1) {
+            return reject(new Error('€ ancora in Descrizione: ' + descPremium));
+          }
+          resolve();
+        } catch (e) { reject(e); }
+      }, 1500);
+    });
+  });
+
   test('Bare-name lookup cross-script: escapeHtml accessibile da nuovo <script>', function () {
     return new Promise(function (resolve, reject) {
       setTimeout(function () {

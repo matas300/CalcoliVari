@@ -1,6 +1,9 @@
 /* Fatture PDF feature: create, preview, persist, and sync invoice history */
 (function () {
-  const DEFAULT_FORFETTARIO_NOTE = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 — regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
+  // Default Causale forfettario (art. 1 c. 54-89 L. 190/2014, D.L. 119/2018).
+  // Solo caratteri ASCII + Latin-1 per compliance XSD String200LatinType.
+  // (Il sanitizer comunque normalizza a runtime se l'utente sostituisce la nota.)
+  const DEFAULT_FORFETTARIO_NOTE = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 - regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
   const DEFAULT_BONIFICO = 'Bonifico bancario';
 
   // ── XML helpers delegati a fatture-xml-helpers.js (Sprint 4) ─────────────
@@ -16,6 +19,7 @@
   const isValidCodiceFiscale = _XmlHelpers.isValidCodiceFiscale;
   const parseMaybeNumber = _XmlHelpers.parseMaybeNumber;
   const fmtXmlNum = _XmlHelpers.fmtXmlNum;
+  const sanitizeXmlLatin1 = _XmlHelpers.sanitizeXmlLatin1;
   const buildAnagraficaXml = _XmlHelpers.buildAnagraficaXml;
   function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
     return _FRFatt.isBolloDovuto(imponibile, marcaDaBollo);
@@ -1609,9 +1613,11 @@
       var qta = parseMaybeNumber(line.quantita) || 1;
       var pu = round2(parseMaybeNumber(line.prezzoUnitario));
       var tot = round2(qta * pu * sign);
+      // Descrizione: sanitize Latin-1 (XSD String1000LatinType) + xmlEscape
+      var descSanitized = sanitizeXmlLatin1(line.descrizione || 'Prestazione professionale').slice(0, 1000);
       return '    <DettaglioLinee>\n' +
         '      <NumeroLinea>' + lineNum + '</NumeroLinea>\n' +
-        '      <Descrizione>' + xmlEscape(line.descrizione || 'Prestazione professionale') + '</Descrizione>\n' +
+        '      <Descrizione>' + xmlEscape(descSanitized) + '</Descrizione>\n' +
         '      <Quantita>' + fmtXmlNum(qta) + '</Quantita>\n' +
         '      <PrezzoUnitario>' + fmtXmlNum(pu) + '</PrezzoUnitario>\n' +
         '      <PrezzoTotale>' + fmtXmlNum(tot) + '</PrezzoTotale>\n' +
@@ -1791,9 +1797,10 @@
     const xmlRitenuta = _buildXmlDatiRitenuta(draft, sign);
     const datiCollegate = _buildXmlDatiFattureCollegate(isNC, opts.fatturaOriginale);
 
-    const causale = String(draft.note || '').trim();
+    // Causale: sanitize Latin-1 (XSD String200LatinType) + xmlEscape, slice 200
+    const causale = sanitizeXmlLatin1(String(draft.note || '').trim()).slice(0, 200);
     const causaleXml = causale ? `
-      <Causale>${xmlEscape(causale.slice(0, 200))}</Causale>` : '';
+      <Causale>${xmlEscape(causale)}</Causale>` : '';
 
     const ibanXml = String(profile.iban || '').trim()
       ? `\n        <IBAN>${xmlEscape(profile.iban.replace(/\s/g, ''))}</IBAN>` : '';
@@ -1801,20 +1808,21 @@
     const scadenzaXml = draft.scadenzaPagamento
       ? `\n        <DataScadenzaPagamento>${xmlEscape(draft.scadenzaPagamento)}</DataScadenzaPagamento>` : '';
 
-    // Client sede — validateFatturaForXml garantisce non-empty per clienti IT.
+    // Client sede — sanitize Latin-1 (XSD String60LatinType) + xmlEscape.
+    // validateFatturaForXml garantisce non-empty per clienti IT.
     // Per estero: se provincia/cap mancanti, usiamo fallback minimali conformi XSD
     // (CAP "00000" accettato da SdI per nazioni ≠ IT).
-    const cliInd = xmlEscape(String(cliente.indirizzo || '').slice(0, 60));
+    const cliInd = xmlEscape(sanitizeXmlLatin1(cliente.indirizzo || '').slice(0, 60));
     const cliCap = clienteEstero
       ? (String(cliente.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5) || '00000')
       : String(cliente.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
-    const cliCom = xmlEscape(String(cliente.citta || '').slice(0, 60));
+    const cliCom = xmlEscape(sanitizeXmlLatin1(cliente.citta || '').slice(0, 60));
     const cliProv = clienteEstero ? '' : String(cliente.provincia || '').slice(0, 2).trim().toUpperCase();
     const cliProvXml = cliProv ? `\n        <Provincia>${xmlEscape(cliProv)}</Provincia>` : '';
 
-    const cedInd = xmlEscape(String(profile.indirizzo || '').slice(0, 60));
+    const cedInd = xmlEscape(sanitizeXmlLatin1(profile.indirizzo || '').slice(0, 60));
     const cedCap = String(profile.cap || '').replace(/\D/g, '').padStart(5, '0').slice(0, 5);
-    const cedCom = xmlEscape(String(profile.citta || '').slice(0, 60));
+    const cedCom = xmlEscape(sanitizeXmlLatin1(profile.citta || '').slice(0, 60));
     const cedProv = String(profile.provincia || '').slice(0, 2).trim();
     const cedNaz = String(profile.nazione || 'IT').slice(0, 2).toUpperCase();
     const cedProvXml = cedProv ? `\n        <Provincia>${xmlEscape(cedProv)}</Provincia>` : '';
@@ -1852,8 +1860,8 @@
           <IdCodice>${xmlEscape(piva)}</IdCodice>
         </IdFiscaleIVA>${cfCedenteXml}
         <Anagrafica>
-          <Nome>${xmlEscape(profileNome)}</Nome>
-          <Cognome>${xmlEscape(profileCognome)}</Cognome>
+          <Nome>${xmlEscape(sanitizeXmlLatin1(profileNome).slice(0, 60))}</Nome>
+          <Cognome>${xmlEscape(sanitizeXmlLatin1(profileCognome).slice(0, 60))}</Cognome>
         </Anagrafica>
         <RegimeFiscale>${regimeFiscale}</RegimeFiscale>
       </DatiAnagrafici>

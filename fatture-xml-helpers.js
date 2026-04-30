@@ -77,13 +77,40 @@
     return MathUtils.round2(n).toFixed(2);
   }
 
+  // sanitizeXmlLatin1 — Conformità FatturaPA v1.2 String*LatinType.
+  // I tipi String35LatinType, String60LatinType, String80LatinType, String200LatinType,
+  // String1000LatinType usano pattern XSD `[\p{IsBasicLatin}\p{IsLatin-1Supplement}]{1,N}`
+  // (Basic Latin U+0000-U+007F + Latin-1 Supplement U+00A0-U+00FF).
+  // Caratteri tipici outside this range (em-dash, smart quotes, ellipsis, €, ™, …) vengono
+  // mappati a equivalenti ASCII/Latin-1; il resto stripato. Applica a Causale (200), Descrizione (1000),
+  // Denominazione/Nome/Cognome/Indirizzo/Comune (60/80) prima dell'xmlEscape.
+  function sanitizeXmlLatin1(s) {
+    if (s == null) return '';
+    var str = String(s);
+    // NFC normalize: pre-compone diacritici decomposti (es. "café" da macOS/iOS spesso è
+    // U+0065 + U+0301 invece di U+00E9). Senza normalize, il combining U+0301 cadrebbe
+    // fuori Latin-1 e verrebbe strippato → "cafe". Con NFC resta "café" (U+00E9 in Latin-1).
+    if (typeof str.normalize === 'function') str = str.normalize('NFC');
+    return str
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')   // strip control chars (mantieni \t \n \r)
+      .replace(/[‘’‚‛′]/g, "'")          // ‘ ’ ‚ ‛ ′ → '
+      .replace(/[“”„‟″]/g, '"')          // “ ” „ ‟ ″ → "
+      .replace(/[‐‑‒–—―]/g, '-')    // ‐ ‑ ‒ – — ― → -
+      .replace(/…/g, '...')                                  // … → ...
+      .replace(/€/g, 'EUR')                                  // € (fuori Latin-1) → EUR
+      .replace(/•/g, '-')                                    // • → -
+      .replace(/™/g, '(TM)')                                 // ™ → (TM)
+      .replace(/[^\x00-\xFF]/g, '');                              // strip resto (CJK, emoji, BOM, ZWS, ecc.)
+  }
+
   // CessionarioCommittente.DatiAnagrafici.Anagrafica children.
   // Regola: Denominazione (PG/cliente con P.IVA) XOR Nome+Cognome (PF senza P.IVA).
+  // Sanitize Latin-1 prima dell'escape per conformità XSD String*LatinType.
   function buildAnagraficaXml(cliente) {
     var c = cliente || {};
-    var denom = String(c.denominazione || c.ragioneSociale || '').trim();
-    var nome = String(c.nome || '').trim();
-    var cognome = String(c.cognome || '').trim();
+    var denom = sanitizeXmlLatin1(c.denominazione || c.ragioneSociale || '').trim();
+    var nome = sanitizeXmlLatin1(c.nome || '').trim();
+    var cognome = sanitizeXmlLatin1(c.cognome || '').trim();
     var piva = String(c.partitaIva || '').replace(/\D/g, '');
     var hasPiva = piva.length === 11;
     var xe = HtmlUtils.xmlEscape;
@@ -96,7 +123,7 @@
     if (nome && cognome) {
       return '<Nome>' + xe(nome.slice(0, 60)) + '</Nome><Cognome>' + xe(cognome.slice(0, 60)) + '</Cognome>';
     }
-    return '<Denominazione>' + xe(String(c.nome || '').slice(0, 80)) + '</Denominazione>';
+    return '<Denominazione>' + xe(sanitizeXmlLatin1(c.nome || '').slice(0, 80)) + '</Denominazione>';
   }
 
   return {
@@ -109,6 +136,7 @@
     isValidCodiceFiscale: isValidCodiceFiscale,
     parseMaybeNumber: parseMaybeNumber,
     fmtXmlNum: fmtXmlNum,
+    sanitizeXmlLatin1: sanitizeXmlLatin1,
     buildAnagraficaXml: buildAnagraficaXml
   };
 }));

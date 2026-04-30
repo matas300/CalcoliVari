@@ -124,3 +124,68 @@ describe('fatture-xml-helpers — costanti', function () {
     expect(H.XML_FORFETTARIO_REGIME).toBe('RF19');
   });
 });
+
+describe('fatture-xml-helpers — sanitizeXmlLatin1', function () {
+  test('em-dash U+2014 → trattino ASCII', function () {
+    expect(H.sanitizeXmlLatin1('a — b')).toBe('a - b');
+  });
+  test('en-dash U+2013 → trattino ASCII', function () {
+    expect(H.sanitizeXmlLatin1('a – b')).toBe('a - b');
+  });
+  test('smart single quotes U+2018/U+2019 → ASCII apostrofo', function () {
+    expect(H.sanitizeXmlLatin1('l’art.')).toBe("l'art.");
+    expect(H.sanitizeXmlLatin1('‘test’')).toBe("'test'");
+  });
+  test('smart double quotes U+201C/U+201D → ASCII quote', function () {
+    expect(H.sanitizeXmlLatin1('“ciao”')).toBe('"ciao"');
+  });
+  test('ellipsis U+2026 → tre punti ASCII', function () {
+    expect(H.sanitizeXmlLatin1('eccetera…')).toBe('eccetera...');
+  });
+  test('€ U+20AC → EUR', function () {
+    expect(H.sanitizeXmlLatin1('100€')).toBe('100EUR');
+  });
+  test('Latin-1 chars (à è ò ç ñ) preservati', function () {
+    expect(H.sanitizeXmlLatin1('caffè à Bologna ñ')).toBe('caffè à Bologna ñ');
+  });
+  test('Caratteri completamente fuori range (CJK, emoji) stripati', function () {
+    expect(H.sanitizeXmlLatin1('test 漢字 🚀 fine')).toBe('test   fine');
+  });
+  test('null/undefined/empty → stringa vuota', function () {
+    expect(H.sanitizeXmlLatin1(null)).toBe('');
+    expect(H.sanitizeXmlLatin1(undefined)).toBe('');
+    expect(H.sanitizeXmlLatin1('')).toBe('');
+  });
+  test('Causale forfettario default (em-dash interno) sanificata', function () {
+    var note = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 — regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
+    var sanitized = H.sanitizeXmlLatin1(note);
+    expect(sanitized.indexOf('—')).toBe(-1);
+    expect(sanitized.indexOf(' - regime forfettario')).toBeGreaterThan(0);
+  });
+  test('NFC normalize: "café" decomposto (e + combining acute) preservato come precomposto', function () {
+    var decomposed = 'café';  // e + combining U+0301
+    var sanitized = H.sanitizeXmlLatin1(decomposed);
+    expect(sanitized).toBe('café');  // U+00E9 (Latin-1)
+  });
+  test('Control chars (eccetto \\t \\n \\r) strippati', function () {
+    var dirty = 'prepost';
+    expect(H.sanitizeXmlLatin1(dirty)).toBe('prepost');
+  });
+  test('Tab, newline, carriage return preservati', function () {
+    expect(H.sanitizeXmlLatin1('a\tb\nc\rd')).toBe('a\tb\nc\rd');
+  });
+});
+
+describe('fatture-xml-helpers — buildAnagraficaXml sanifica input', function () {
+  test('Denominazione con em-dash → output con trattino', function () {
+    var xml = H.buildAnagraficaXml({ denominazione: 'AT&T—Cox Inc.' });
+    expect(xml.indexOf('—')).toBe(-1);
+    expect(xml.indexOf('AT&amp;T-Cox Inc.')).toBeGreaterThan(-1);
+  });
+  test('Nome con smart quote → ASCII apostrofo (escape XML lo rende &apos;)', function () {
+    var xml = H.buildAnagraficaXml({ nome: "L’Oréal", cognome: 'Italia' });
+    // sanitize: ’ → ', poi xmlEscape: ' → &apos;
+    expect(xml.indexOf('L&apos;Oréal')).toBeGreaterThan(-1);
+    expect(xml.indexOf('’')).toBe(-1);
+  });
+});
