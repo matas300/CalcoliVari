@@ -108,7 +108,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 - **INPS fixed** (artigiani/commercianti): 4 quarterly rates on May 16, Aug 20, Nov 16, Feb 16 (next year)
 - **INPS variable** (contributi eccedenti il minimale): same saldo/acconto structure as imposta sostitutiva
 - **Saldo** = actual tax/contribution for the year minus acconti already paid
-- **Thresholds**: < 51.65€ = no acconti; < 257.52€ = single acconto in November (100%); otherwise 40/60 split
+- **Thresholds**: < 51.65€ = no acconti; ≤ 257.52€ = single acconto in November (100%); otherwise 40/60 split (operatore inclusivo per art. 17 c. 3 DPR 435/2001)
 
 #### First-Year Onboarding
 - When no previous year data exists in localStorage, the schedule builder uses `primoAnno*` settings as fallback
@@ -178,10 +178,10 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 |---|---|
 | `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
 | `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
-| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: INPS sezione I (artigiani/commercianti) or sezione II (gestione separata) |
+| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: sezione I (artigiani/commercianti) con RR7 acconti versati lett da pagamenti, o sezione II (gestione separata) con RR21 simmetrico (v3 fix 2026-04-30). Aliquota GS fallback 26.07% (Circ. INPS 26/2025 + 8/2026). Warning `RR_CASSA_NON_GESTITA` se inpsMode fuori whitelist (CASSE-1) e `RR_RIDUZIONE35_VERIFICA` se riduzione35 attiva (deve essere comunicata a INPS, art. 1 c. 77 L. 190/2014) |
 | `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
 | `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
-| `buildQuadroRW(contiEsteri)` | Quadro RW: conti e investimenti esteri (one rigo per account) |
+| `buildQuadroRW(contiEsteri)` | Quadro RW: conti esteri, immobili, criptovalute. Calcola IVAFE (2‰ finanziari), IVIE (4‰ prima casa / 10,6‰ altri), IC (2‰ cripto, L. 197/2022). Sanitize: `valoreFinale<0 → 0+warning`, `quotaPossesso` clampata in [0,1]+warning. `icRigoDovuto` e `totali.icTotale` esposti in PDF/CSV (C-A3 v2 fix 2026-04-29) |
 | `buildCondizionali(input, yearData)` | Conditional quadri: quadroRN (annoMisto), quadroCE (imposteEstere) |
 | `buildDichiarazione(year, profile, input)` | Assembles all quadri into the full dichiarazione object |
 | `validateDichiarazione(dich)` | Returns `{ errors, warnings }` arrays; errors block export, warnings are confirmable |
@@ -189,7 +189,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 
 #### Exports (`DichiarazioneExports`)
 - **C2 — JSON + CSV zip**: `DichiarazioneExports.exportC2(dich)` — zips a structured JSON and a human-readable CSV of all righi values
-- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout
+- **C3 — PDF ministeriale**: `DichiarazioneExports.exportC3(dich)` — generates a print-ready PDF mimicking the Modello Redditi PF layout. **Watermark "BOZZA" diagonale** + **footer disclaimer** "Non sostituisce la dichiarazione telematica (art. 3 DPR 322/1998)" su ogni pagina (C-A4, post-audit 2026-04-29)
 
 #### Unit Tests
 - `test/dichiarazione-engine.test.js` — 39 tests covering all engine functions
@@ -226,7 +226,7 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **XML generation** (`fatture-docs-feature.js`): produces FatturaPA v1.2 XML compliant with AdE spec (`http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2`)
 - **`buildFatturaElettronicaXml(draft, opts)`**: genera XML TD01 (fattura) o TD04 (nota di credito) a seconda di `opts.isNC`; quando isNC=true, applica segni negativi agli importi e inserisce `DatiFattureCollegate` con `IdDocumento`/`Data` dalla fattura originale
 - **`buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale)`**: wrapper per generazione NC
-- **XML audit fixes (11 punti conformità AdE v1.2):**
+- **XML audit fixes (20 punti conformità AdE v1.2):**
   - `sanitizeProgressivoInvio` — max 10 char alfanumerici
   - `isValidPartitaIvaIT` — 11 cifre IT
   - `isValidCodiceFiscale` — 16 char + check digit
@@ -238,6 +238,15 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
   - Contributo integrativo su riga separata con propria `Natura`
   - `DatiPagamento.ImportoPagamento` = totale lordo − ritenuta
   - XSD element order in `DatiGeneraliDocumento`: Numero → DatiRitenuta → DatiBollo → ImportoTotaleDocumento → Causale
+  - **C-A2** (post-audit 2026-04-29): `validateDraftForInvio` blocca `ritenuta > 0` quando `regime === 'forfettario'` (art. 1 c. 67 L. 190/2014); UI nasconde la checkbox; `__clearRitenutaForForfettario` azzera valori stale a render time
+  - **A-A6** (post-audit 2026-04-29): cliente con `tipoCliente ∈ {'PF','PG','PA','Estero'}` (default 'PG'); per PA il `CodiceDestinatario` deve essere IPA 6 char alfanumerici (D.M. 55/2013); validate blocca formato errato
+  - **A-A7** (post-audit 2026-04-29): se `marcaDaBollo && bolloAddebitato` su TD01, emette `<DettaglioLinee>` "Rimborso imposta di bollo" con `Natura=N1` + secondo `<DatiRiepilogo>` (Ris. AdE 444/E 2008). Esclusa su TD04.
+  - **A-A8** (post-audit 2026-04-29): footer PDF fattura con dicitura art. 1 c. 54-89 L. 190/2014 emessa SOLO per regime forfettario (D.L. 119/2018)
+  - **C-A2 bypass XML** (post-audit v2 2026-04-29): `validateFatturaForXml` contiene anch'esso il check ritenuta-forfettario; `previewFatturaXml` chiama `validateFatturaForXml` prima della build; `downloadFatturaXml` lo chiamava già. Esposta `window.__validateFatturaForXml` per test
+  - **NR-2** (post-audit v2 2026-04-29): `validateDraftForInvio` blocca cliente IT senza P.IVA né CF (FatturaPA v1.2 §1.4.1.2). Replica del check già presente in `validateFatturaForXml`, fail-fast nel path "Invia"
+  - **NR-3** (post-audit v2 2026-04-29): cliente UE → strip prefisso paese duplicato da `IdCodice` (es. `DE123456789` con `IdPaese=DE` → `IdCodice=123456789`). Regex case-insensitive con fallback al valore originale (FatturaPA v1.2 §2.1.2.6)
+  - **A-A7 v2** (post-audit v2 2026-04-29): `emetteRimborsoBollo` rispetta soglia 77,47 € (D.M. 17/06/2014 art. 6) — coerente con `applicaBolloSeDovuto` per evitare XML con riga rimborso senza `<DatiBollo>`
+  - **NR-10** (post-audit v2 2026-04-29): `_resolveRegimeForPdf()` con fallback chain `getSettings → localStorage → throw esplicito`. Mai PDF con dicitura forfettario silenziosamente assente. Esposta `window.__resolveRegimeForPdf` per test
 - **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
 - **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
 - **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"

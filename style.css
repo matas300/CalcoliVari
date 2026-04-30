@@ -3943,6 +3943,71 @@ body.sidebar-collapsed .sb-profile-wrap .profile-menu.profile-menu-sidebar {
     min-height: 38px; font-size: 16px;
   }
   .year-selector button { width: 38px; height: 38px; }
+
+  /* ─────────────────────────────────────────────────────────────────
+   * Mobile readability overrides — font scale-up
+   * I valori desktop (13px sb-item, 10px section label, 0.72-0.85rem
+   * UI testo) sono troppo piccoli su touch device. Bump a misure
+   * leggibili senza richiedere zoom.
+   * ───────────────────────────────────────────────────────────────── */
+
+  /* Sidebar menu (drawer mobile): voci nav più grandi e tap area più alta */
+  .sb-item {
+    font-size: 16px;
+    padding: 12px 14px;
+    line-height: 1.3;
+    gap: 12px;
+  }
+  .sb-ico { width: 22px; height: 22px; }
+  .sb-ico svg { width: 22px; height: 22px; }
+  .sb-section-label {
+    font-size: 12px;
+    letter-spacing: .08em;
+    padding: var(--space-3) var(--space-3) var(--space-2);
+  }
+  .sb-profile { padding: 12px; gap: 12px; }
+  .sb-profile .sb-name { font-size: 15px; font-weight: 600; }
+  .sb-profile .sb-meta { font-size: 12px; }
+
+  /* Topbar mobile: titolo e indicatore sync più leggibili */
+  .mobile-topbar-title { font-size: 17px; }
+  .sync-indicator-mobile { font-size: 12px; }
+  .nav-toggle svg { width: 24px; height: 24px; }
+
+  /* Tabelle e righe dati: testo a 14-15px invece di 12-13 */
+  .row label { font-size: 14px; }
+  .row .val { font-size: 15px; }
+  .fatture-table { font-size: 14px; }
+  .accant-table { font-size: 14px; }
+  .accant-table th { font-size: 13px; }
+  .monthly-breakdown { font-size: 14px; }
+
+  /* Card/panel headings */
+  .fatture-docs-copy h4 { font-size: 1.15rem; }
+  .fatture-docs-copy p,
+  .fattura-sheet-copy p { font-size: 14px; line-height: 1.55; }
+  .fatture-docs-kicker { font-size: 11px; }
+
+  /* Badge/stato/etichette piccole */
+  .badge-stato { font-size: 11px; }
+  .scad-note { font-size: 13px; }
+
+  /* Settings */
+  .settings-group label { font-size: 14px; }
+
+  /* Status boxes già flex-column sopra: bump del testo */
+  .status-text h4 { font-size: 1rem; }
+  .status-text p { font-size: 14px; }
+
+  /* Login screen */
+  .login-box .login-tagline { font-size: .85rem; }
+  .login-box p { font-size: .95rem; }
+
+  /* Bottone year-selector: numero anno più visibile */
+  .year-selector span { font-size: 1.2rem; min-width: 56px; }
+
+  /* Dashboard summary tiles */
+  .chart-legend-item { font-size: .95rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3956,8 +4021,8 @@ body.sidebar-collapsed .sb-profile-wrap .profile-menu.profile-menu-sidebar {
   .panel { padding: 10px 8px; }
   .profile-meta-strip { grid-template-columns: 1fr; }
   .profile-hero-stats { grid-template-columns: 1fr; }
-  .accant-table td, .fatture-table td { font-size: .8rem; }
-  .accant-table td::before, .fatture-table td::before { font-size: .72rem; }
+  .accant-table td, .fatture-table td { font-size: .9rem; }
+  .accant-table td::before, .fatture-table td::before { font-size: .8rem; }
 
   /* Pagamenti: stack to single column on very small screens */
   .pagamenti-row, .pagamenti-header {
@@ -3967,11 +4032,11 @@ body.sidebar-collapsed .sb-profile-wrap .profile-menu.profile-menu-sidebar {
   .pagamenti-row > * { grid-column: 1 / -1; }
   .pagamenti-row .btn-del { justify-self: end; }
 
-  /* Scadenziario: fix overflow */
+  /* Scadenziario: fix overflow + leggibilità */
   .scad-range { white-space: normal; word-break: break-word; }
   .scad-advanced-grid { grid-template-columns: 1fr; }
-  .scad-main { font-size: .84rem; }
-  .scad-sub { font-size: .68rem; }
+  .scad-main { font-size: .95rem; }
+  .scad-sub { font-size: .8rem; }
 }
 
 /* Light theme mobile card overrides */

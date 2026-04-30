@@ -1,6 +1,6 @@
 /* Fatture PDF feature: create, preview, persist, and sync invoice history */
 (function () {
-  const DEFAULT_FORFETTARIO_NOTE = "Operazione senza applicazione dell'IVA ai sensi dell'art.1 commi 54-89 L.190/2014 e successive modifiche";
+  const DEFAULT_FORFETTARIO_NOTE = "Operazione effettuata ai sensi dell'art. 1, commi da 54 a 89, della L. 190/2014 — regime forfettario, operazione in franchigia IVA e senza ritenuta d'acconto.";
   const DEFAULT_BONIFICO = 'Bonifico bancario';
   // FatturaPA ModalitaPagamento codes (spec v1.2)
   const MODALITA_TO_MP = {
@@ -163,6 +163,24 @@
       '"': '&quot;',
       "'": '&apos;'
     }[ch]));
+  }
+
+  function buildAnagraficaXml(cliente) {
+    var denom = String((cliente.denominazione || cliente.ragioneSociale || '')).trim();
+    var nome = String(cliente.nome || '').trim();
+    var cognome = String(cliente.cognome || '').trim();
+    var piva = String(cliente.partitaIva || '').replace(/\D/g, '');
+    var hasPiva = piva.length === 11;
+    if (denom) {
+      return '<Denominazione>' + xmlEscape(denom.slice(0, 80)) + '</Denominazione>';
+    }
+    if (hasPiva) {
+      return '<Denominazione>' + xmlEscape((nome || piva).slice(0, 80)) + '</Denominazione>';
+    }
+    if (nome && cognome) {
+      return '<Nome>' + xmlEscape(nome.slice(0, 60)) + '</Nome><Cognome>' + xmlEscape(cognome.slice(0, 60)) + '</Cognome>';
+    }
+    return '<Denominazione>' + xmlEscape(String(cliente.nome || '').slice(0, 80)) + '</Denominazione>';
   }
 
   function formatPdfMoney(value) {
@@ -696,8 +714,52 @@
     `;
   }
 
+  function _clearRitenutaForForfettario(draft) {
+    draft.ritenuta = 0;
+    draft.aliquotaRitenuta = 0;
+    draft.tipoRitenuta = '';
+    draft.causaleRitenuta = '';
+  }
+  if (typeof window !== 'undefined') window.__clearRitenutaForForfettario = _clearRitenutaForForfettario;
+
+  // NR-10 — fallback chain robusto per regime PDF (art. 6 c. 1 D.Lgs. 471/1997)
+  // Mai PDF con dicitura legale silenziosamente assente: se il regime non è
+  // determinabile, throw esplicito così l'utente è avvisato.
+  function _resolveRegimeForPdf() {
+    // 1. Try getSettings (path normale)
+    try {
+      if (typeof getSettings === 'function') {
+        var s = getSettings();
+        if (s && s.regime) return s.regime;
+      }
+    } catch (_e) { /* fallthrough */ }
+    // 2. Fallback diretto a localStorage
+    try {
+      var profile = (typeof window !== 'undefined' && window.currentProfile)
+        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem && sessionStorage.getItem('calcoliPIVA_profile'));
+      var year = (typeof window !== 'undefined' && window.currentYear) || new Date().getFullYear();
+      if (profile && year) {
+        var raw = localStorage.getItem('calcoliPIVA_' + profile + '_' + year);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.settings && parsed.settings.regime) return parsed.settings.regime;
+        }
+      }
+    } catch (_e) { /* fallthrough */ }
+    // 3. Last resort: throw — mai dicitura silenziosamente assente
+    throw new Error('PDF fattura: impossibile determinare il regime fiscale per la dicitura legale (NR-10).');
+  }
+  if (typeof window !== 'undefined') window.__resolveRegimeForPdf = _resolveRegimeForPdf;
+
   function renderStep3Html() {
     const draft = currentDraft();
+    const isForfettarioRegime = (() => {
+      try { return (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; }
+      catch (_e) { return false; }
+    })();
+    if (isForfettarioRegime && Number(draft.ritenuta) > 0) {
+      _clearRitenutaForForfettario(draft);
+    }
     return `
       <div class="fattura-form-grid">
         <label class="fattura-field">
@@ -718,6 +780,14 @@
             <span style="font-size:10px; color:var(--color-text-faint); text-transform:uppercase; letter-spacing:.04em;">Addebita al cliente</span>
           </div>
         </label>
+        ${isForfettarioRegime ? `
+        <div class="fattura-field fattura-field-wide">
+          <span>Ritenuta d'acconto</span>
+          <div style="font-size:11px; color:var(--color-text-muted); padding:6px 0;">
+            Non applicabile: il regime forfettario è esonerato dalla ritenuta (art. 1 c. 67 L. 190/2014).
+          </div>
+        </div>
+        ` : `
         <div class="fattura-field fattura-field-wide">
           <span>Ritenuta d'acconto</span>
           <div class="fattura-bollo-wrap">
@@ -744,6 +814,7 @@
             </div>
           </div>
         </div>
+        `}
         <label class="fattura-field fattura-field-wide">
           <span>Nota</span>
           <textarea id="fatturaNota" rows="2" oninput="updateFatturaDraftField('note', this.value)">${esc(draft.note)}</textarea>
@@ -1014,6 +1085,49 @@
     }
     if (!draft.scadenzaPagamento) errors.push('Imposta la scadenza di pagamento.');
     if (!draft.numero) errors.push('Numero fattura mancante.');
+    // R5 — ProgressivoInvio max 10 alfanumerici (FatturaPA §1.1.2).
+    // Il sanitize rimuove separatori e tronca: due numeri diversi con stesso troncato
+    // collidono nella catena SdI. Blocchiamo upfront.
+    const rawNum = String(draft.numero || '').trim();
+    const sanitizedNum = rawNum.replace(/[^A-Za-z0-9]/g, '');
+    if (sanitizedNum.length > 10) {
+      errors.push('Numero fattura troppo lungo: "' + rawNum + '" diventa "' + sanitizedNum + '" (' + sanitizedNum.length + ' char) dopo normalizzazione SdI. Max 10 alfanumerici. Abbrevia la numerazione.');
+    }
+    // C-A2 — forfettario esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014)
+    // Fonte: Circ. AdE 9/E 2019 §4.1. Il committente non deve operare ritenuta;
+    // se la trattiene per errore, il forfettario perde liquidità.
+    try {
+      var settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
+      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura e comunicare al committente la dichiarazione sostitutiva di non assoggettamento.");
+      }
+    } catch (_e) { /* getSettings non disponibile: skip */ }
+    // A-A6 — cliente PA → CodiceIPA 6 caratteri alfanumerici (D.M. 55/2013 art. 2).
+    // Senza codice IPA valido, SdI rifiuta con errore EC02. Il campo SDI è 7 char per
+    // privati/PG, 6 char per PA (Indice IPA: https://indicepa.gov.it).
+    var clientePAref = draft.cliente || draft.clienteSnapshot;
+    if (clientePAref && clientePAref.tipoCliente === 'PA') {
+      var ipa = String(clientePAref.codiceSDI || '').trim();
+      if (!/^[A-Z0-9]{6}$/i.test(ipa)) {
+        errors.push('Cliente PA: il Codice IPA deve essere 6 caratteri alfanumerici (D.M. 55/2013 art. 2).');
+      }
+    }
+    // NR-2 — cliente IT deve avere P.IVA o CF (FatturaPA v1.2 §1.4.1.2).
+    // Senza almeno uno dei due, SdI rifiuta l'XML. Blocchiamo qui (pre-invio) per
+    // dare feedback immediato anziché far fallire la build XML in modo tardivo.
+    var clienteAnag = draft.cliente || draft.clienteSnapshot;
+    if (clienteAnag) {
+      var nazCli = String(clienteAnag.nazione || 'IT').toUpperCase();
+      if (nazCli === 'IT') {
+        var pivaRaw = String(clienteAnag.partitaIva || '').replace(/\s+/g, '');
+        var cfRaw = String(clienteAnag.codiceFiscale || '').trim();
+        var hasPiva = pivaRaw && (typeof isValidPartitaIvaIT === 'function' ? isValidPartitaIvaIT(pivaRaw) : pivaRaw.length === 11);
+        var hasCF = cfRaw && (typeof isValidCodiceFiscale === 'function' ? isValidCodiceFiscale(cfRaw) : cfRaw.length === 16);
+        if (!hasPiva && !hasCF) {
+          errors.push("Cliente IT deve avere almeno la P.IVA o il Codice Fiscale (FatturaPA v1.2 §1.4.1.2). SdI rifiuterà l'XML senza questo dato.");
+        }
+      }
+    }
     // F4 — NC: la data della nota di credito non può essere anteriore alla fattura originale
     if (draft.tipoDocumento === 'TD04' && draft.fatturaOriginaleId && draft.data) {
       const orig = getSavedInvoiceById(draft.fatturaOriginaleId);
@@ -1337,16 +1451,27 @@
       y += 4;
     }
 
-    // Footer legale (forfettario)
-    y += 4;
-    doc.setDrawColor.apply(doc, BORDER);
-    doc.setLineWidth(0.2);
-    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
-    y += 5;
-    doc.setFontSize(8);
-    doc.setTextColor.apply(doc, MUTED);
-    const note = invoice.note || DEFAULT_FORFETTARIO_NOTE;
-    doc.splitTextToSize(note, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+    // Footer legale — A-A8: dicitura forfettario obbligatoria (D.L. 119/2018 art. 1 c. 909)
+    // NR-10: fail loud se il regime non è determinabile, mai PDF con dicitura ambigua
+    // (art. 6 c. 1 D.Lgs. 471/1997 — sanzione 250-2000 € per omessa indicazione).
+    let isForfettario;
+    try {
+      isForfettario = _resolveRegimeForPdf() === 'forfettario';
+    } catch (resolveErr) {
+      throw resolveErr;
+    }
+    const customNote = (invoice.note && String(invoice.note).trim()) ? String(invoice.note).trim() : '';
+    const noteToPrint = customNote || (isForfettario ? DEFAULT_FORFETTARIO_NOTE : '');
+    if (noteToPrint) {
+      y += 4;
+      doc.setDrawColor.apply(doc, BORDER);
+      doc.setLineWidth(0.2);
+      doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+      y += 5;
+      doc.setFontSize(8);
+      doc.setTextColor.apply(doc, MUTED);
+      doc.splitTextToSize(noteToPrint, CONTENT_W).forEach(line => { doc.text(line, MARGIN, y); y += 3.5; });
+    }
 
     return doc;
   }
@@ -1461,6 +1586,13 @@
         if (!hasPivaIT && !hasCF) errors.push('Cliente IT senza P.IVA valida né CF valido: SdI rifiuterà.');
       }
     }
+    // C-A2 bypass: blocca ritenuta su forfettario anche dai path preview/download XML
+    try {
+      const settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
+      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+        errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura prima di scaricare/visualizzare l'XML.");
+      }
+    } catch (_e) { /* settings non disponibili: skip */ }
     return { errors };
   }
 
@@ -1476,6 +1608,22 @@
     const isNC = draft._isNC === true || draft.tipoDocumento === 'TD04';
     const tipoDoc = isNC ? 'TD04' : 'TD01';
     const sign = isNC ? -1 : 1;
+
+    // R6 — validate NC date >= original invoice date (fiscally NC cannot precede the invoice it stornas).
+    if (isNC) {
+      var origRef = draft._originalForValidation;
+      if (!origRef && draft.fatturaOriginaleId && typeof window !== 'undefined' && window.FattureStorico && typeof window.FattureStorico.load === 'function') {
+        try {
+          var allOrig = window.FattureStorico.load(currentProfile) || [];
+          for (var i = 0; i < allOrig.length; i++) {
+            if (allOrig[i] && allOrig[i].id === draft.fatturaOriginaleId) { origRef = allOrig[i]; break; }
+          }
+        } catch (e) { /* noop */ }
+      }
+      if (origRef && origRef.data && draft.data && String(draft.data) < String(origRef.data)) {
+        throw new Error('Data NC (' + draft.data + ') anteriore alla fattura originale (' + origRef.data + '). La nota di credito non può precedere l\u2019emissione originale.');
+      }
+    }
 
     const profile = getProfileFiscalData();
     const cliente = draft.clienteSnapshot || {};
@@ -1509,13 +1657,17 @@
 
     // CodiceDestinatario:
     //  - cliente estero → XXXXXXX (convenzione FatturaPA per operazioni transfrontaliere)
-    //  - cliente IT con SDI valorizzato → quello
+    //  - cliente PA → Codice IPA 6 char alfanumerici as-is (D.M. 55/2013 art. 2)
+    //  - cliente IT con SDI valorizzato → quello (7 char, padded)
     //  - cliente IT privato o senza SDI → 0000000
+    const isClientePA = cliente.tipoCliente === 'PA';
     const codiceSDI = clienteEstero
       ? 'XXXXXXX'
-      : (clientePivaValida
-          ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
-          : String(cliente.codiceSDI || '').trim() || '0000000');
+      : (isClientePA
+          ? String(cliente.codiceSDI || '').trim().toUpperCase()
+          : (clientePivaValida
+              ? String(cliente.codiceSDI || '0000000').trim().padEnd(7, '0').slice(0, 7)
+              : String(cliente.codiceSDI || '').trim() || '0000000'));
 
     // Cedente Nome/Cognome dal profilo fiscale (campi già separati in getProfileFiscalData)
     const profileNome = String(profile.nome || '').replace(String(profile.cognome || ''), '').trim()
@@ -1523,13 +1675,11 @@
     const profileCognome = String(profile.cognome || '').trim()
       || String(profile.nome || currentProfile).trim().split(/\s+/).slice(-1)[0];
 
-    // Natura + riferimento normativo (forfettario)
-    //  - cliente IT → N2.2 + art. 1 c. 54-89 L. 190/2014
-    //  - cliente estero → N2.1 (operazioni non soggette art. 7-7septies DPR 633/72)
-    const naturaLinea = clienteEstero ? 'N2.1' : 'N2.2';
-    const riferimentoNormativo = clienteEstero
-      ? 'Operazioni non soggette a IVA ai sensi degli articoli da 7 a 7-septies del DPR 633/1972'
-      : "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
+    // Natura + riferimento normativo — forfettario RF19 sempre N2.2.
+    // art. 1 c. 58 L. 190/2014 + Circ. AdE 9/E 2019 §4.1: fuori campo IVA,
+    // non ex artt. 7-7septies DPR 633/72. N2.1 è riservata al regime ordinario.
+    const naturaLinea = 'N2.2';
+    const riferimentoNormativo = "Regime forfettario: operazione in franchigia IVA e senza ritenuta d'acconto Art.1 c.54-89 L.190/2014";
 
     // Imponibile = somma righe (bollo e contributo integrativo esclusi dall'XML SdI)
     const imponibile = round2(totals.subtotal);
@@ -1551,6 +1701,29 @@
       <Natura>${naturaLinea}</Natura>
     </DettaglioLinee>`;
     });
+
+    // A-A7 — riga "Rimborso imposta di bollo" quando addebitato al cliente.
+    // Risoluzione AdE 444/E del 18/11/2008: il bollo addebitato è un rimborso
+    // (fuori campo IVA art. 15 DPR 633/72, Natura N1). Mai su TD04 (NC):
+    // il bollo dell'originale resta a carico emittente (Ris. AdE 98/E 2003).
+    // A-A7 v2: soglia 77,47 € coerente con applicaBolloSeDovuto (D.M. 17/06/2014 art. 6)
+    // "superiore a" 77,47 → operatore strict >; totals già calcolato a riga 1630
+    const emetteRimborsoBollo = !isNC
+      && draft.marcaDaBollo === true
+      && draft.bolloAddebitato === true
+      && (totals && (totals.subtotal || 0) > 77.47);
+    if (emetteRimborsoBollo) {
+      lineNum++;
+      dettaglioLinee.push(`    <DettaglioLinee>
+      <NumeroLinea>${lineNum}</NumeroLinea>
+      <Descrizione>Rimborso imposta di bollo</Descrizione>
+      <Quantita>1.00</Quantita>
+      <PrezzoUnitario>2.00</PrezzoUnitario>
+      <PrezzoTotale>2.00</PrezzoTotale>
+      <AliquotaIVA>0.00</AliquotaIVA>
+      <Natura>N1</Natura>
+    </DettaglioLinee>`);
+    }
 
     // Contributo integrativo: si applica SOLO alle casse autonome (es. TC01 avvocati,
     // TC02 ingegneri). Gestione separata INPS (TC22) non ha integrativo. Finché non
@@ -1638,10 +1811,12 @@
       // Estero: accetta piva "grezza" (non deve passare validazione IT)
       const vatEstero = clientePivaRaw || clienteCF;
       if (vatEstero) {
+        // NR-3: strip prefisso paese se duplicato (FatturaPA v1.2 §2.1.2.6)
+        const vatCodice = vatEstero.replace(new RegExp('^' + cliNaz, 'i'), '').trim() || vatEstero;
         cessionarioFiscaleXml = `
         <IdFiscaleIVA>
           <IdPaese>${cliNaz}</IdPaese>
-          <IdCodice>${xmlEscape(vatEstero)}</IdCodice>
+          <IdCodice>${xmlEscape(vatCodice)}</IdCodice>
         </IdFiscaleIVA>`;
       } else {
         console.warn('Cliente estero senza VAT né CF: XML potrebbe essere rifiutato da SdI');
@@ -1659,6 +1834,21 @@
       }
       if (clienteCF) cessionarioFiscaleXml = `\n        <CodiceFiscale>${xmlEscape(clienteCF)}</CodiceFiscale>`;
     }
+
+    // C3 — XSD element order guarantee (fatturaordinaria_v1.2.xsd §2.1.1)
+    // Ordine richiesto: TipoDocumento → Divisa → Data → Numero → DatiRitenuta → DatiBollo →
+    // ImportoTotaleDocumento → Causale. L'interpolazione inline è fragile; costruiamo la
+    // sezione via array per garantire l'ordine strutturalmente.
+    var dgParts = [];
+    dgParts.push('<TipoDocumento>' + xmlEscape(tipoDoc) + '</TipoDocumento>');
+    dgParts.push('<Divisa>EUR</Divisa>');
+    dgParts.push('<Data>' + xmlEscape(draft.data) + '</Data>');
+    dgParts.push('<Numero>' + xmlEscape(draft.numero) + '</Numero>');
+    if (xmlRitenuta && String(xmlRitenuta).trim()) dgParts.push(String(xmlRitenuta).trim());
+    if (datiBollo && String(datiBollo).trim()) dgParts.push(String(datiBollo).trim());
+    dgParts.push('<ImportoTotaleDocumento>' + fmtXmlNum(round2(totals.total * sign)) + '</ImportoTotaleDocumento>');
+    if (causaleXml && String(causaleXml).trim()) dgParts.push(String(causaleXml).trim());
+    var datiGeneraliDocumentoXml = '<DatiGeneraliDocumento>' + dgParts.join('') + '</DatiGeneraliDocumento>';
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <p:FatturaElettronica versione="FPR12"
@@ -1697,7 +1887,7 @@
     <CessionarioCommittente>
       <DatiAnagrafici>${cessionarioFiscaleXml}
         <Anagrafica>
-          <Denominazione>${xmlEscape(String(cliente.nome || '').slice(0, 80))}</Denominazione>
+          ${buildAnagraficaXml(cliente)}
         </Anagrafica>
       </DatiAnagrafici>
       <Sede>
@@ -1710,13 +1900,7 @@
   </FatturaElettronicaHeader>
   <FatturaElettronicaBody>
     <DatiGenerali>
-      <DatiGeneraliDocumento>
-        <TipoDocumento>${tipoDoc}</TipoDocumento>
-        <Divisa>EUR</Divisa>
-        <Data>${xmlEscape(draft.data)}</Data>
-        <Numero>${xmlEscape(draft.numero)}</Numero>${xmlRitenuta}${datiBollo}
-        <ImportoTotaleDocumento>${fmtXmlNum(round2(totals.total * sign))}</ImportoTotaleDocumento>${causaleXml}
-      </DatiGeneraliDocumento>${datiCollegate}
+      ${datiGeneraliDocumentoXml}${datiCollegate}
     </DatiGenerali>
     <DatiBeniServizi>
 ${dettaglioLinee.join('\n')}
@@ -1726,7 +1910,14 @@ ${dettaglioLinee.join('\n')}
         <ImponibileImporto>${fmtXmlNum(round2(imponibile * sign))}</ImponibileImporto>
         <Imposta>0.00</Imposta>
         <RiferimentoNormativo>${xmlEscape(riferimentoNormativo)}</RiferimentoNormativo>
-      </DatiRiepilogo>
+      </DatiRiepilogo>${emetteRimborsoBollo ? `
+      <DatiRiepilogo>
+        <AliquotaIVA>0.00</AliquotaIVA>
+        <Natura>N1</Natura>
+        <ImponibileImporto>2.00</ImponibileImporto>
+        <Imposta>0.00</Imposta>
+        <RiferimentoNormativo>Rimborso imposta di bollo - Escluso art. 15 DPR 633/72 (Ris. AdE 444/E 2008)</RiferimentoNormativo>
+      </DatiRiepilogo>` : ''}
     </DatiBeniServizi>${clienteEstero ? '' : `
     <DatiPagamento>
       <CondizioniPagamento>TP02</CondizioniPagamento>
@@ -1894,6 +2085,12 @@ ${dettaglioLinee.join('\n')}
     try {
       const saved = saveFatturaDraft(true);
       if (!saved) return;
+      // C-A2 bypass: validate prima della preview
+      const validation = validateFatturaForXml(saved);
+      if (validation.errors && validation.errors.length) {
+        showFatturaToast(validation.errors[0], 'error');
+        return;
+      }
       const xml = (saved.tipoDocumento === 'TD04' && saved.fatturaOriginaleId)
         ? buildFatturaElettronicaXmlNC(saved, _findOriginale(saved.fatturaOriginaleId))
         : buildFatturaElettronicaXml(saved);
@@ -2198,6 +2395,8 @@ ${dettaglioLinee.join('\n')}
   window.openFatturaDaCalendarioPicker = openFatturaDaCalendarioPicker;
   window.openFatturaDaCalendario = openFatturaDaCalendario;
   window.buildFatturaElettronicaXmlNC = buildFatturaElettronicaXmlNC;
+  window.buildFatturaElettronicaXml = buildFatturaElettronicaXml;
+  window.__buildAnagraficaXml = buildAnagraficaXml;
   window.normalizeInvoice = normalizeInvoice;
   window.openFatturaModal = openFatturaModal;
   window.closeFatturaModal = closeFatturaModal;
@@ -2208,6 +2407,8 @@ ${dettaglioLinee.join('\n')}
   window.addFatturaLine = addFatturaLine;
   window.removeFatturaLine = removeFatturaLine;
   window.saveFatturaDraft = saveFatturaDraft;
+  window.__validateDraftForInvio = validateDraftForInvio;
+  window.__validateFatturaForXml = validateFatturaForXml;
   window.previewFatturaPdf = previewFatturaPdf;
   window.downloadFatturaPdf = downloadFatturaPdf;
   window.downloadFatturaXml = downloadFatturaXml;

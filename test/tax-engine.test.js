@@ -26,6 +26,14 @@ describe('buildAccontoPlan — threshold logic', function () {
     expect(plan.second).toBe(150);
   });
 
+  test('esattamente 257.52 → unico acconto (mode single, non split)', function () {
+    var plan = TE.buildAccontoPlan(257.52);
+    expect(plan.mode).toBe('single');
+    expect(plan.total).toBe(257.52);
+    expect(plan.first).toBe(0);
+    expect(plan.second).toBe(257.52);
+  });
+
   test('sopra 257.52 → due acconti split 40/60 (mode double)', function () {
     var plan = TE.buildAccontoPlan(1000);
     expect(plan.mode).toBe('double');

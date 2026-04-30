@@ -69,6 +69,8 @@ global.expect = expect;
 
 // Load test files
 require('./dichiarazione-engine.test.js');
+require('./dichiarazione-quadro-lm-completo.test.js');
+require('./dichiarazione-quadro-rr-completo.test.js');
 require('./tax-engine.test.js');
 require('./fatture-storico.test.js');
 require('./fatture-selectors.test.js');
@@ -81,6 +83,31 @@ require('./fatture-import-xml.test.js');
 require('./fatture-import-nuove.test.js');
 require('./fatture-import-legacy.test.js');
 require('./fatture-nc-sync.test.js');
+require('./fatture-xml-anagrafica.test.js');
+require('./fatture-xml-natura.test.js');
+require('./fatture-xml-element-order.test.js');
+require('./fatture-xml-progressivo.test.js');
+require('./fatture-xml-nc-date.test.js');
+require('./dichiarazione-lm3-per-cassa.test.js');
+require('./scadenziario-saldo-acconti-pagati.test.js');
+require('./dichiarazione-startup-aliquota.test.js');
+require('./dichiarazione-rw-soglie.test.js');
+require('./dichiarazione-rw-cripto.test.js');
+require('./dichiarazione-rw-cripto-export.test.js');
+require('./dichiarazione-perdite-scadenza.test.js');
+require('./dichiarazione-limite-forfettario.test.js');
+require('./scadenziario-nota-saldo-contrib-n1.test.js');
+require('./dichiarazione-rs-disclaimer.test.js');
+require('./fatture-ritenuta-forfettario.test.js');
+require('./fatture-ritenuta-forfettario-cleanup.test.js');
+require('./fatture-bollo-addebitato-xml.test.js');
+require('./fatture-cliente-pa.test.js');
+require('./fatture-pdf-regime-fallback.test.js');
+require('./dichiarazione-quadro-rr-aliquota-gs.test.js');
+require('./fatture-cliente-anagrafica-validate.test.js');
+require('./fatture-xml-cliente-ue.test.js');
+require('./dichiarazione-cassa-non-gestita.test.js');
+require('./dichiarazione-rr-gs-acconti-rx-clamp.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');

@@ -33,8 +33,21 @@
       if (dich.quadroRX) processQuadro('RX', dich.quadroRX);
       if (dich.quadroRW && dich.quadroRW.righi) {
         dich.quadroRW.righi.forEach(function(r, i) {
-          rows.push('RW,RW' + (i + 1) + ',' + (r.valoreFinale || 0) + ',' + r.paese + ',input');
+          var ic = r.icRigoDovuto || 0;
+          var ivafe = r.ivafeRigoDovuto || 0;
+          var ivie = r.ivieRigoDovuto || 0;
+          var labelTipo = (r.tipo || r.paese || '').toString().replace(/,/g, ';');
+          rows.push('RW,RW' + (i + 1) + ',' + (r.valoreFinale || 0) + ',"' + labelTipo + '",input');
+          if (ic > 0) rows.push('RW,RW' + (i + 1) + '_IC,' + ic + ',"IC cripto-attività 2‰",computed');
+          if (ivafe > 0) rows.push('RW,RW' + (i + 1) + '_IVAFE,' + ivafe + ',"IVAFE 2‰",computed');
+          if (ivie > 0) rows.push('RW,RW' + (i + 1) + '_IVIE,' + ivie + ',"IVIE",computed');
         });
+        if (dich.quadroRW.totali) {
+          var tRW = dich.quadroRW.totali;
+          if (tRW.icTotale > 0) rows.push('RW,_TOT_IC,' + tRW.icTotale + ',"IC totale cripto-attività",computed');
+          if (tRW.ivafeTotale > 0) rows.push('RW,_TOT_IVAFE,' + tRW.ivafeTotale + ',"IVAFE totale",computed');
+          if (tRW.ivieTotale > 0) rows.push('RW,_TOT_IVIE,' + tRW.ivieTotale + ',"IVIE totale",computed');
+        }
       }
       if (dich.quadroRN) rows.push('RN,redditoDipendente,' + (dich.quadroRN.redditoDipendente || 0) + ',Reddito da lavoro dipendente,input');
       if (dich.quadroCE) processQuadro('CE', dich.quadroCE);
@@ -262,11 +275,54 @@
           doc.setFont('helvetica', 'bold');
           doc.text('RW' + (i + 1), margin, y);
           doc.setFont('helvetica', 'normal');
-          doc.text(r.paese + ' \u2014 ' + r.tipoConto, margin + 22, y);
+          var label = (r.tipo === 'criptovalute')
+            ? ('Cripto-attivit\u00e0' + (r.exchange ? ' \u2014 ' + r.exchange : ''))
+            : ((r.paese || '') + ' \u2014 ' + (r.tipoConto || ''));
+          doc.text(label, margin + 22, y);
           var val = (r.valoreFinale || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
-          doc.text(val, pageW - margin, y, { align: 'right' });
+          var ic = r.icRigoDovuto || 0;
+          var ivafe = r.ivafeRigoDovuto || 0;
+          var ivie = r.ivieRigoDovuto || 0;
+          var imp = ic > 0 ? ic : (ivafe > 0 ? ivafe : ivie);
+          var impLabel = '';
+          if (ic > 0) impLabel = 'IC ' + ic.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          else if (ivafe > 0) impLabel = 'IVAFE ' + ivafe.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          else if (ivie > 0) impLabel = 'IVIE ' + ivie.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' \u20ac';
+          doc.text(val, pageW - margin - 40, y, { align: 'right' });
+          if (impLabel) doc.text(impLabel, pageW - margin, y, { align: 'right' });
           y += 7;
         });
+        // Totali imposte RW
+        if (dich.quadroRW.totali) {
+          var t = dich.quadroRW.totali;
+          y += 2;
+          doc.setFont('helvetica', 'bold');
+          if (t.icTotale > 0) {
+            checkPageBreak(13);
+            doc.text('Totale IC cripto-attivit\u00e0 (2\u2030): \u20ac ' + t.icTotale.toFixed(2), margin, y);
+            y += 6;
+            // IC-F24-1: codice tributo F24 per IC cripto (Ris. AdE 36/E del 14/06/2023)
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+            doc.text('Versamento F24: codice tributo 1727 \u2014 Sezione Erario (Ris. AdE 36/E del 14/06/2023)', margin, y);
+            doc.setFontSize(9);
+            doc.setTextColor(INK[0], INK[1], INK[2]);
+            doc.setFont('helvetica', 'bold');
+            y += 6;
+          }
+          if (t.ivafeTotale > 0) {
+            checkPageBreak(7);
+            doc.text('Totale IVAFE: \u20ac ' + t.ivafeTotale.toFixed(2), margin, y);
+            y += 6;
+          }
+          if (t.ivieTotale > 0) {
+            checkPageBreak(7);
+            doc.text('Totale IVIE: \u20ac ' + t.ivieTotale.toFixed(2), margin, y);
+            y += 6;
+          }
+          doc.setFont('helvetica', 'normal');
+        }
       }
 
       // Quadro RX
@@ -294,6 +350,44 @@
       }
 
       footer();
+
+      // C-A4: Watermark "BOZZA" + disclaimer trasmissione su ogni pagina
+      function addBozzaWatermark(d, pW, pH) {
+        d.saveGraphicsState && d.saveGraphicsState();
+        var hasGState = false;
+        try {
+          if (d.GState && d.setGState) {
+            d.setGState(new d.GState({ opacity: 0.15 }));
+            hasGState = true;
+          }
+        } catch (e) { hasGState = false; }
+        if (hasGState) {
+          d.setTextColor(180, 30, 30);
+        } else {
+          // Fallback: full-opacity ma colore chiaro
+          d.setTextColor(220, 200, 200);
+        }
+        d.setFontSize(60);
+        d.setFont('helvetica', 'bold');
+        d.text('BOZZA', pW / 2, pH / 2, { align: 'center', angle: 35 });
+        d.restoreGraphicsState && d.restoreGraphicsState();
+        // Footer disclaimer (sempre visibile, opacity normale)
+        d.setTextColor(120, 120, 120);
+        d.setFontSize(7);
+        d.setFont('helvetica', 'normal');
+        d.text(
+          'BOZZA — NON SOSTITUISCE LA DICHIARAZIONE TELEMATICA. La presentazione avviene esclusivamente via Entratel/Fisconline o intermediario abilitato (art. 3 DPR 322/1998).',
+          pW / 2, pH - 14, { align: 'center', maxWidth: pW - 20 }
+        );
+      }
+      var totalPages = doc.internal.getNumberOfPages();
+      var pW = doc.internal.pageSize.getWidth();
+      var pH = doc.internal.pageSize.getHeight();
+      for (var p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        addBozzaWatermark(doc, pW, pH);
+      }
+
       doc.save(filename);
     }
   };
