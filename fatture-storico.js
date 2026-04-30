@@ -3,6 +3,15 @@
   const STORAGE_PREFIX = 'calcoliPIVA_';
   const STORAGE_SUFFIX = '_fattureEmesse';
 
+  // todayIso TZ-safe via date-utils.js (DUP-6 risolto: niente più dipendenza da window.__todayIso)
+  const _DateUtilsStorico = (typeof window !== 'undefined' && window.DateUtils) ? window.DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null);
+  function _todayIso() {
+    return _DateUtilsStorico
+      ? _DateUtilsStorico.todayIso()
+      : new Date().toISOString().slice(0, 10);
+  }
+
   let _archivioStato = 'tutte';
 
   function storageKey(profile) {
@@ -213,9 +222,7 @@
   }
 
   function _markInviata(id, profile) {
-    const dataDefault = (typeof window !== 'undefined' && window.__todayIso)
-      ? window.__todayIso()
-      : new Date().toISOString().slice(0, 10);
+    const dataDefault = _todayIso();
     const data = prompt('Data invio SdI (YYYY-MM-DD):', dataDefault);
     if (!data) return;
     const fatture = load(profile);
@@ -236,9 +243,7 @@
 
   function _markPagata(id, profile) {
     // F3: validate ISO date format YYYY-MM-DD strict (no /, no DD-MM-YYYY)
-    const today = (typeof window !== 'undefined' && window.__todayIso)
-      ? window.__todayIso()
-      : new Date().toISOString().slice(0, 10);
+    const today = _todayIso();
     let data;
     while (true) {
       data = prompt('Data pagamento (formato YYYY-MM-DD, es. ' + today + '):', today);

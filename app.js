@@ -9,6 +9,17 @@ const euroToCents = _MathUtils.euroToCents;
 const centsToEuro = _MathUtils.centsToEuro;
 const splitAmountByWeights = _MathUtils.splitAmountByWeights;
 
+// ═══════════════════ Date helpers (date-utils.js) ═══════════════════
+const _DateUtils = (typeof window !== 'undefined' && window.DateUtils)
+  ? window.DateUtils
+  : (typeof DateUtils !== 'undefined' ? DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null));
+if (!_DateUtils) throw new Error('app.js requires DateUtils — load date-utils.js first');
+const getEaster = _DateUtils.getEaster;
+const isHoliday = _DateUtils.isHoliday;
+const pad2 = _DateUtils.pad2;
+const parseIsoDate = _DateUtils.parseIsoDate;
+
 // ═══════════════════ Profili / Login ═══════════════════
 const PROFILE_HASHES = {
   'd9b5e452afd6cdea8583147634c3f85a0ba60fc17ad5e6f069a99d3b4ec35194': 'Mattia',
@@ -399,7 +410,6 @@ const ACTIVITY_INFO = {
   'Malattia':  { label: 'Malattia',  color: 'var(--color-cal-malattia)', dark: false },
   'Donazione': { label: 'Donazione', color: 'var(--color-cal-donazione)', dark: false },
 };
-const HOLIDAYS = [[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
 const PAYMENT_TYPES = {
   tasse:      { label: 'Tasse', color: 'var(--red)' },
   contributi: { label: 'Contributi', color: 'var(--yellow)' },
@@ -2032,26 +2042,7 @@ function changeYear(d) {
 }
 
 // ═══════════════════ Date helpers ═══════════════════
-function getEaster(year) {
-  const a = year % 19, b = Math.floor(year/100), c = year % 100;
-  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
-  const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
-  const i = Math.floor(c/4), k = c % 4;
-  const l = (32+2*e+2*i-h-k) % 7;
-  const m = Math.floor((a+11*h+22*l)/451);
-  return [Math.floor((h+l-7*m+114)/31), ((h+l-7*m+114) % 31) + 1];
-}
-
-function isHoliday(year, month, day) {
-  for (const [hm, hd] of HOLIDAYS) if (month === hm && day === hd) return true;
-  const [em, ed] = getEaster(year);
-  const easter = new Date(year, em - 1, ed);
-  const mon = new Date(easter); mon.setDate(mon.getDate() + 1);
-  if (month === em && day === ed) return true;
-  if (month === (mon.getMonth() + 1) && day === mon.getDate()) return true;
-  return false;
-}
-
+// getEaster, isHoliday, pad2, parseIsoDate aliasati da date-utils.js (vedi top file)
 function getDefaultActivity(year, month, day) {
   const d = new Date(year, month - 1, day);
   const dow = d.getDay();
@@ -3695,18 +3686,7 @@ function reopenPaidScheduleItem(scheduleKey) {
   removePagamentoByScheduleKey(scheduleKey);
 }
 
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-function parseIsoDate(value) {
-  if (!value) return null;
-  const parts = String(value).split('-').map(v => parseInt(v, 10));
-  if (parts.length !== 3 || parts.some(v => !Number.isFinite(v))) return null;
-  const [year, month, day] = parts;
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
-  return { year, month, day };
-}
+// pad2 e parseIsoDate aliasati da date-utils.js (vedi top file)
 
 function formatPaymentDateDisplay(value) {
   const parsed = parseIsoDate(value);
@@ -4108,21 +4088,19 @@ function buildAccontoPlan(baseAmount) {
   return { base, total: base, first, second, mode: 'double' };
 }
 
+// Wrapper attorno a DateUtils.buildRolledDueDate: la versione UMD ritorna
+// {year, month, day} mentre i consumer in app.js richiedono anche
+// `date` (oggetto Date), `iso` (YYYY-MM-DD) e `label` (DD MMM YYYY).
 function buildRolledDueDate(year, month, day) {
-  const d = new Date(year, month - 1, day);
-  while (d.getDay() === 0 || d.getDay() === 6 || isHoliday(d.getFullYear(), d.getMonth() + 1, d.getDate())) {
-    d.setDate(d.getDate() + 1);
-  }
-  const rolledYear = d.getFullYear();
-  const rolledMonth = d.getMonth() + 1;
-  const rolledDay = d.getDate();
+  const r = _DateUtils.buildRolledDueDate(year, month, day);
+  const d = new Date(r.year, r.month - 1, r.day);
   return {
-    year: rolledYear,
-    month: rolledMonth,
-    day: rolledDay,
+    year: r.year,
+    month: r.month,
+    day: r.day,
     date: d,
-    iso: `${rolledYear}-${pad2(rolledMonth)}-${pad2(rolledDay)}`,
-    label: `${pad2(rolledDay)} ${MONTHS_SHORT[rolledMonth - 1]} ${rolledYear}`
+    iso: `${r.year}-${pad2(r.month)}-${pad2(r.day)}`,
+    label: `${pad2(r.day)} ${MONTHS_SHORT[r.month - 1]} ${r.year}`
   };
 }
 

@@ -132,26 +132,22 @@
         return Math.round((n + Number.EPSILON) * 100) / 100;
       };
 
-  function todayIso() {
-    const d = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
-  }
-  if (typeof window !== 'undefined') window.__todayIso = todayIso;
-
+  // todayIso / addDaysIso / parseDateParts delegati a date-utils.js (DUP-6 risolto)
+  const _DateUtilsFatt = (typeof DateUtils !== 'undefined') ? DateUtils
+    : (typeof require !== 'undefined' ? require('./date-utils.js') : null);
+  if (!_DateUtilsFatt) throw new Error('fatture-docs-feature.js requires DateUtils — load date-utils.js first');
+  const todayIso = _DateUtilsFatt.todayIso;
+  const parseDateParts = _DateUtilsFatt.parseDateParts;
+  // Wrapper compat: il chiamante può passare anche stringa ISO non valida o
+  // vuota; in quel caso la versione legacy ricadeva su today. Preserviamo.
   function addDaysIso(dateIso, days) {
-    const d = new Date(dateIso || todayIso());
-    if (Number.isNaN(d.getTime())) return todayIso();
-    d.setDate(d.getDate() + (parseInt(days, 10) || 0));
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+    var iso = (dateIso && typeof dateIso === 'string') ? dateIso : todayIso();
+    var out = _DateUtilsFatt.addDaysIso(iso, days);
+    return out || todayIso();
   }
-
-  function parseDateParts(dateIso) {
-    const parts = String(dateIso || '').split('-').map(v => parseInt(v, 10));
-    if (parts.length < 3 || parts.some(n => !Number.isFinite(n))) return null;
-    return { year: parts[0], month: parts[1], day: parts[2] };
-  }
+  // Compat: il test fatture-mark-stato-tz.test.js legge window.__todayIso.
+  // Manteniamo l'esposizione come passthrough.
+  if (typeof window !== 'undefined') window.__todayIso = todayIso;
 
   function parseMaybeNumber(value) {
     const n = parseFloat(String(value ?? '').replace(',', '.'));

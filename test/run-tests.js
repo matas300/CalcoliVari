@@ -71,6 +71,7 @@ global.expect = expect;
 require('./math-utils.test.js');
 require('./html-utils.test.js');
 require('./format-utils.test.js');
+require('./date-utils.test.js');
 require('./dichiarazione-engine.test.js');
 require('./dichiarazione-quadro-lm-completo.test.js');
 require('./dichiarazione-quadro-rr-completo.test.js');
