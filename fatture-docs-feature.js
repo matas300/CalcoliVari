@@ -522,6 +522,22 @@
       ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + '<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
       : '';
 
+    // F4: banner cross-year a dicembre (replicato anche qui per visibilità)
+    const crossYearBannerHtml = (typeof window !== 'undefined' && typeof window.buildCrossYearReminderBannerHtml === 'function')
+      ? (window.buildCrossYearReminderBannerHtml() || '') : '';
+
+    // F1: banner conservazione AdE — visibile finché l'utente non conferma l'adesione
+    const ackedConservation = (typeof isAdeConservationAcknowledged === 'function')
+      ? isAdeConservationAcknowledged() : true;
+    const conservationBanner = ackedConservation ? '' :
+      '<div class="ade-conservation-banner" role="status" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(46,170,220,.10);border:1px solid #2eaadc;color:#2eaadc;font-size:13px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:200px"><strong>Conservazione AdE 15 anni</strong> — gratis, una sola volta. Senza adesione AdE conserva le fatture solo 2 anni e poi le cancella (rischio reale in caso di accertamento).</div>'
+      + '<div style="display:flex;gap:8px;flex-shrink:0">'
+      + '<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="window.showAdeConservationGuide && window.showAdeConservationGuide()">Come aderire</button>'
+      + '<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="window.acknowledgeAdeConservation && window.acknowledgeAdeConservation()" title="Ho già aderito o non voglio essere ricordato">Già fatto</button>'
+      + '</div>'
+      + '</div>';
+
     const markup =
       '<div class="fatture-card">' +
         '<div class="fatture-card-head">' +
@@ -534,6 +550,8 @@
           '</div>' +
         '</div>' +
         summaryHtml +
+        crossYearBannerHtml +
+        conservationBanner +
         '<div class="fatture-filters" role="tablist" aria-label="Filtro stato fatture">' +
           '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='tutte') + '" onclick="window.setFattureFilter(\'tutte\')">Tutte (' + cTutte + ')</button>' +
           '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='inviata') + '" onclick="window.setFattureFilter(\'inviata\')">Da pagare (' + cInviate + ')</button>' +
@@ -2019,6 +2037,9 @@ ${dettaglioLinee.join('\n')}
       'Clicca <strong>\u201cTrasmetti un file\u201d</strong>, carica il file <code>' + fileCode + '</code> e conferma.'));
     stepsWrap.appendChild(makeSdiStep(5,
       'Attendi la <strong>ricevuta di presa in carico</strong>. Lo stato diventer\u00e0 <em>Consegnata</em> quando il cliente riceve la fattura.'));
+    stepsWrap.appendChild(makeSdiStep(6,
+      '<strong>Una volta sola, attiva la conservazione gratuita 15 anni</strong> dell\'AdE: senza adesione le fatture restano nel cassetto solo 2 anni. '
+      + '<button type="button" class="sdi-guide-link" style="background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;padding:0;font:inherit" onclick="window.showAdeConservationGuide && window.showAdeConservationGuide()">Vedi guida adesione &rarr;</button>'));
     guide.appendChild(stepsWrap);
 
     // Problems
@@ -2077,6 +2098,153 @@ ${dettaglioLinee.join('\n')}
     const m = document.getElementById('fatturaModal');
     if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
     document.body.classList.add('profile-modal-open');
+  }
+
+  // ─── F1: Conservazione AdE gratuita ─────────────────────────────────
+  // Servizio gratuito AdE accreditato AgID che conserva 15 anni le fatture
+  // elettroniche transitate da SdI (D.Lgs. 82/2005 + DPCM 3/12/2013 +
+  // D.M. 17/06/2014 + Provv. AdE 30/04/2018).
+  // Senza adesione AdE conserva solo 2 anni in modalità transito.
+  // Adesione una tantum, retroattiva alle fatture ancora nel cassetto.
+
+  function _adeConservationFlagKey(profile) {
+    return 'calcoliPIVA_' + (profile || '_global') + '_adeConservationAcknowledged';
+  }
+  function isAdeConservationAcknowledged() {
+    try {
+      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
+        || sessionStorage.getItem('calcoliPIVA_profile');
+      return localStorage.getItem(_adeConservationFlagKey(profile)) === '1';
+    } catch (_e) { return false; }
+  }
+  function acknowledgeAdeConservation() {
+    try {
+      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
+        || sessionStorage.getItem('calcoliPIVA_profile');
+      localStorage.setItem(_adeConservationFlagKey(profile), '1');
+    } catch (_e) { /* best-effort */ }
+    if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+  }
+  function resetAdeConservationAck() {
+    try {
+      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
+        || sessionStorage.getItem('calcoliPIVA_profile');
+      localStorage.removeItem(_adeConservationFlagKey(profile));
+    } catch (_e) { /* best-effort */ }
+    if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+  }
+
+  function _appendIntroPara(parent) {
+    // Helper: build intro paragraph via DOM nodes (no innerHTML on dynamic content)
+    const intro = document.createElement('div');
+    intro.className = 'sdi-guide-note';
+    intro.style.marginBottom = '12px';
+    const b1 = document.createElement('strong');
+    b1.textContent = 'Perché aderire: ';
+    intro.appendChild(b1);
+    intro.appendChild(document.createTextNode(
+      'AdE conserva automaticamente per 15 anni tutte le fatture (emesse e ricevute) transitate da SdI. È un servizio accreditato AgID, gratuito, equivalente ai conservatori privati. '
+    ));
+    const b2 = document.createElement('strong');
+    b2.textContent = 'Senza adesione le fatture restano nel cassetto solo 2 anni';
+    intro.appendChild(b2);
+    intro.appendChild(document.createTextNode(
+      ' e poi vengono cancellate — in caso di accertamento (5-7 anni) potresti non avere più la copia conservata a norma. Riferimenti: DPCM 3/12/2013, D.M. 17/06/2014, Provv. AdE 30/04/2018.'
+    ));
+    parent.appendChild(intro);
+  }
+
+  function renderAdeConservationGuideInto(modalContent) {
+    const guide = document.createElement('div');
+    guide.className = 'sdi-upload-guide ade-conservation-guide';
+
+    const h = document.createElement('div');
+    h.className = 'sdi-guide-title';
+    h.textContent = 'Conservazione AdE gratuita (15 anni)';
+    guide.appendChild(h);
+
+    _appendIntroPara(guide);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'sdi-guide-label';
+    lbl.textContent = 'Procedura — 5 minuti, una sola volta';
+    guide.appendChild(lbl);
+
+    const stepsWrap = document.createElement('div');
+    stepsWrap.className = 'sdi-steps-list';
+    stepsWrap.appendChild(makeSdiStep(1,
+      'Accedi al portale AdE con SPID, CIE o CNS: '
+      + '<a href="https://ivaservizi.agenziaentrate.gov.it/portale/" target="_blank" rel="noopener" class="sdi-guide-link">ivaservizi.agenziaentrate.gov.it/portale</a>'));
+    stepsWrap.appendChild(makeSdiStep(2,
+      'Apri <strong>"Fatture e Corrispettivi"</strong> dal menu servizi.'));
+    stepsWrap.appendChild(makeSdiStep(3,
+      'Nel menu di sinistra vai su <strong>"Conservazione" &rarr; "Adesione/Recesso al servizio di Conservazione"</strong>.'));
+    stepsWrap.appendChild(makeSdiStep(4,
+      'Clicca <strong>"Aderisci"</strong>, indica la <strong>PEC</strong> del titolare P.IVA dove ricevere il manuale di conservazione, accetta le condizioni di servizio.'));
+    stepsWrap.appendChild(makeSdiStep(5,
+      'Conferma con SPID/firma digitale. Riceverai una PEC con il <strong>Manuale di conservazione</strong> da archiviare. Da quel momento tutte le fatture sono conservate per 15 anni.'));
+    guide.appendChild(stepsWrap);
+
+    const notes = document.createElement('div');
+    notes.className = 'sdi-guide-problems';
+    const nt = document.createElement('div');
+    nt.className = 'sdi-guide-problems-title';
+    nt.textContent = 'Cose importanti da sapere';
+    notes.appendChild(nt);
+    notes.appendChild(makeSdiProblem('Costo',
+      'Zero. Sempre. È un servizio pubblico gratuito.'));
+    notes.appendChild(makeSdiProblem('Retroattività',
+      'L\'adesione copre anche le fatture degli ultimi <strong>2 anni</strong> ancora nel cassetto. Più aspetti, più ne perdi.'));
+    notes.appendChild(makeSdiProblem('Doppia conservazione',
+      'Compatibile con altri provider (Aruba, Fattureincloud, ecc.). Hai una copia in più senza conflitti.'));
+    notes.appendChild(makeSdiProblem('Forfettari',
+      'Anche per chi è in franchigia IVA: il D.M. 17/06/2014 art. 4 obbliga la conservazione delle fatture elettroniche emesse.'));
+    guide.appendChild(notes);
+
+    const actions = document.createElement('div');
+    actions.className = 'sdi-guide-actions';
+    const link = document.createElement('a');
+    link.href = 'https://ivaservizi.agenziaentrate.gov.it/portale/';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'btn-add sdi-portal-btn';
+    link.textContent = 'Apri portale AdE';
+    const ackBtn = document.createElement('button');
+    ackBtn.type = 'button';
+    ackBtn.className = 'btn-ghost';
+    ackBtn.textContent = 'Ho già aderito — non ricordarmelo più';
+    ackBtn.onclick = function () {
+      acknowledgeAdeConservation();
+      closeFatturaModal();
+    };
+    const closeB = document.createElement('button');
+    closeB.type = 'button';
+    closeB.className = 'btn-ghost';
+    closeB.textContent = 'Chiudi';
+    closeB.onclick = function () { closeFatturaModal(); };
+    actions.appendChild(link);
+    actions.appendChild(ackBtn);
+    actions.appendChild(closeB);
+    guide.appendChild(actions);
+
+    while (modalContent.firstChild) modalContent.removeChild(modalContent.firstChild);
+    modalContent.appendChild(guide);
+  }
+
+  function showAdeConservationGuide() {
+    const modalContent = document.getElementById('fatturaModalContent');
+    if (!modalContent) return;
+    renderAdeConservationGuideInto(modalContent);
+    const m = document.getElementById('fatturaModal');
+    if (m) { m.classList.add('open'); m.setAttribute('aria-hidden', 'false'); }
+    document.body.classList.add('profile-modal-open');
+  }
+
+  if (typeof window !== 'undefined') {
+    window.showAdeConservationGuide = showAdeConservationGuide;
+    window.isAdeConservationAcknowledged = isAdeConservationAcknowledged;
+    window.acknowledgeAdeConservation = acknowledgeAdeConservation;
+    window.resetAdeConservationAck = resetAdeConservationAck;
   }
 
   // ─── Task 8: Anteprima XML + Nota di credito da storico ─────────────────────

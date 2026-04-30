@@ -3382,6 +3382,13 @@ function renderRiepilogo() {
     if (existing) existing.remove();
     el.insertAdjacentHTML('afterbegin', banner);
   }
+  // F4: banner cross-year a dicembre (solo forfettario)
+  const crossYearBanner = buildCrossYearReminderBannerHtml();
+  if (crossYearBanner) {
+    const existingCY = document.getElementById('cross-year-banner-root');
+    if (existingCY) existingCY.remove();
+    el.insertAdjacentHTML('afterbegin', crossYearBanner);
+  }
 }
 
 function buildMonthlyTable(perc) {
@@ -5823,6 +5830,58 @@ function buildIcsBannerHtml() {
         '<button class="primary" type="button" onclick="exportScadenzeIcs(' + currentYear + ')">Scarica .ics</button>' +
       '</span>' +
     '</div>';
+}
+
+// F4: banner promemoria cross-year a dicembre.
+// Visibile solo in dicembre dell'anno corrente: ricorda che le fatture
+// emesse a dicembre ma incassate a gennaio entrano nei ricavi del nuovo
+// anno (criterio di cassa, art. 1 c. 64 L. 190/2014).
+// Conta le fatture 'inviata' emesse nel mese corrente per dare un numero
+// concreto, oppure fa un avviso generico se zero.
+function buildCrossYearReminderBannerHtml() {
+  var now = new Date();
+  if (now.getMonth() !== 11) return ''; // solo dicembre
+  if (currentYear !== now.getFullYear()) return '';
+  if (!currentProfile) return '';
+  if (S().regime !== 'forfettario') return ''; // solo per forfettario (criterio cassa)
+  // dismiss flag: una volta dismissed nel mese corrente, non riappare
+  var flagKey = 'calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear;
+  try { if (localStorage.getItem(flagKey) === '1') return ''; } catch (_e) { /* best-effort */ }
+  // Conta fatture 'inviata' (emesse ma non ancora pagate)
+  var nInviate = 0;
+  try {
+    if (window.FattureSelectors && typeof window.FattureSelectors.all === 'function') {
+      var all = window.FattureSelectors.all(currentProfile) || [];
+      nInviate = all.filter(function (f) {
+        return (f.stato || 'bozza') === 'inviata'
+          && Number(f.annoProgressivo) === currentYear;
+      }).length;
+    }
+  } catch (_e) { /* best-effort */ }
+  var msgCore = nInviate > 0
+    ? 'Hai <strong>' + nInviate + ' fattur' + (nInviate === 1 ? 'a' : 'e') + ' ancora da incassare</strong>. Se vengono pagate da gennaio in poi, l\'incasso entra nei ricavi del ' + (currentYear + 1) + ' (criterio di cassa).'
+    : 'Le fatture pagate da gennaio in poi entrano nei ricavi del ' + (currentYear + 1) + ', anche se emesse a dicembre (criterio di cassa).';
+  return '' +
+    '<div class="ics-banner cross-year-banner" role="status" id="cross-year-banner-root" style="background:rgba(245,166,35,.10);border-color:#f5a623;color:#b67400">' +
+      '<span class="icon">⏳</span>' +
+      '<span class="msg"><strong>Fine anno ' + currentYear + ':</strong> ' + msgCore + ' Promemoria art. 1 c. 64 L. 190/2014.</span>' +
+      '<span class="actions">' +
+        '<button class="primary" type="button" onclick="window.dismissCrossYearReminder && window.dismissCrossYearReminder()">Ho capito</button>' +
+      '</span>' +
+    '</div>';
+}
+
+function dismissCrossYearReminder() {
+  if (!currentProfile || !currentYear) return;
+  try {
+    localStorage.setItem('calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear, '1');
+  } catch (_e) { /* best-effort */ }
+  var el = document.getElementById('cross-year-banner-root');
+  if (el) el.remove();
+}
+if (typeof window !== 'undefined') {
+  window.dismissCrossYearReminder = dismissCrossYearReminder;
+  window.buildCrossYearReminderBannerHtml = buildCrossYearReminderBannerHtml;
 }
 
 function renderScadenziario() {
