@@ -65,7 +65,7 @@ function isNumericYearSuffix(value) {
 }
 
 function getProfileMetaSnapshot(profile) {
-  const prefix = 'calcoliPIVA_' + profile + '_';
+  const prefix = window.StorageKeys.profilePrefix(profile);
   const snapshot = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -84,7 +84,7 @@ function getProfileMetaSnapshot(profile) {
 
 function applyProfileMetaSnapshot(profile, meta) {
   if (!profile || !meta) return;
-  const prefix = 'calcoliPIVA_' + profile + '_';
+  const prefix = window.StorageKeys.profilePrefix(profile);
   for (const key of PROFILE_META_KEYS) {
     if (meta[key] === undefined) continue;
     localStorage.setItem(prefix + key, JSON.stringify(meta[key]));
@@ -284,7 +284,7 @@ async function syncAllFromCloud(profile) {
       const year = docSnap.id;
       if (!isNumericYearSuffix(year)) return;
       const cloudData = docSnap.data();
-      const key = 'calcoliPIVA_' + profile + '_' + year;
+      const key = window.StorageKeys.yearData(profile, year);
       const localRaw = localStorage.getItem(key);
       const localData = localRaw ? JSON.parse(localRaw) : null;
       const merged = mergeYearData(localData, cloudData);
@@ -312,7 +312,7 @@ async function syncAllToCloud(profile) {
   if (!firebaseReady || !db || !_fs) return;
   try {
     setSyncStatus('syncing');
-    const prefix = 'calcoliPIVA_' + profile + '_';
+    const prefix = window.StorageKeys.profilePrefix(profile);
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);

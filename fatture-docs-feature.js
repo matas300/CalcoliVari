@@ -201,8 +201,12 @@
     return invoice && invoice.data ? String(invoice.data) : todayIso();
   }
 
+  const _StorageKeysFatt = (typeof window !== 'undefined' && window.StorageKeys) ? window.StorageKeys
+    : (typeof require !== 'undefined' ? require('./storage-keys.js') : null);
+  if (!_StorageKeysFatt) throw new Error('fatture-docs-feature.js requires StorageKeys — load storage-keys.js first');
+
   function getFattureEmesseStorageKey(profile = currentProfile) {
-    return `calcoliPIVA_${profile || 'default'}_fattureEmesse`;
+    return _StorageKeysFatt.fattureEmesse(profile || 'default');
   }
 
   function loadFattureEmesse(profile = currentProfile) {
@@ -746,7 +750,7 @@
         || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem && sessionStorage.getItem('calcoliPIVA_profile'));
       var year = (typeof window !== 'undefined' && window.currentYear) || new Date().getFullYear();
       if (profile && year) {
-        var raw = localStorage.getItem('calcoliPIVA_' + profile + '_' + year);
+        var raw = localStorage.getItem(_StorageKeysFatt.yearData(profile, year));
         if (raw) {
           var parsed = JSON.parse(raw);
           if (parsed && parsed.settings && parsed.settings.regime) return parsed.settings.regime;
@@ -2091,7 +2095,7 @@ ${dettaglioLinee.join('\n')}
   // Adesione una tantum, retroattiva alle fatture ancora nel cassetto.
 
   function _adeConservationFlagKey(profile) {
-    return 'calcoliPIVA_' + (profile || '_global') + '_adeConservationAcknowledged';
+    return _StorageKeysFatt.adeConservationAcknowledged(profile);
   }
   function isAdeConservationAcknowledged() {
     try {

@@ -858,13 +858,14 @@ function isClosedFiscalYear(year) {
 }
 
 // ═══════════════════ Storage ═══════════════════
-function storageKey(y) { return 'calcoliPIVA_' + currentProfile + '_' + (y || currentYear); }
+// Wrapper sopra StorageKeys (UMD). Mantengono firma legacy (default a currentProfile/Year)
+// e fallback a 'default' invece di '_global' del modulo per backward compat con dati esistenti.
+function storageKey(y) { return window.StorageKeys.yearData(currentProfile, y || currentYear); }
 function profileStorageKey(profile = currentProfile) {
-  return 'calcoliPIVA_profile_' + (profile || 'default');
+  return window.StorageKeys.profileFiscal(profile || 'default');
 }
-
 function clientiStorageKey(profile = currentProfile) {
-  return 'calcoliPIVA_' + (profile || 'default') + '_clienti';
+  return window.StorageKeys.clienti(profile || 'default');
 }
 
 function getProfileFiscalDefaults(profile = currentProfile) {
@@ -1326,7 +1327,7 @@ function syncProfileFieldsToSettings(settings, year) {
 function syncProfileFiscalToStoredYears() {
   const profile = getProfileFiscalData();
   if (data && data.settings) syncProfileFieldsToSettings(data.settings, currentYear);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
@@ -1623,9 +1624,9 @@ function loadYearData(y) {
 
 function migrateProfileFiscalToSettings() {
   if (!currentProfile) return;
-  const flagKey = `calcoliPIVA_${currentProfile}_profileFiscalMigrated`;
+  const flagKey = window.StorageKeys.profileFiscalMigrated(currentProfile);
   if (localStorage.getItem(flagKey) === '1') return;
-  const srcKey = `calcoliPIVA_${currentProfile}_profileFiscal`;
+  const srcKey = window.StorageKeys.profileFiscalLegacy(currentProfile);
   const raw = localStorage.getItem(srcKey);
   if (!raw) { localStorage.setItem(flagKey, '1'); return; }
   let src; try { src = JSON.parse(raw); } catch { src = null; }
@@ -1707,7 +1708,7 @@ function saveYearData(year, yearData) {
 
 function getStoredYears(maxYear = currentYear) {
   const years = new Set([maxYear]);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
     if (!key.startsWith(prefix)) continue;
@@ -1720,7 +1721,7 @@ function getStoredYears(maxYear = currentYear) {
 
 function getAllStoredYears() {
   const years = new Set([currentYear]);
-  const prefix = 'calcoliPIVA_' + currentProfile + '_';
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i) || '';
     if (!key.startsWith(prefix)) continue;
@@ -1888,7 +1889,7 @@ function propagateAnagraficaAttivitaAcrossYears() {
   if (!currentProfile || !data || !data.settings) return;
   const ana = data.settings.anagrafica || {};
   const att = data.settings.attivita || {};
-  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
@@ -1906,7 +1907,7 @@ function propagateAnagraficaAttivitaAcrossYears() {
 // C4: al login, raccogli anagrafica/attivita da ogni anno (first-non-empty-wins) e propaga
 function backfillAnagraficaAttivitaFromAllYears() {
   if (!currentProfile) return;
-  const prefix = `calcoliPIVA_${currentProfile}_`;
+  const prefix = window.StorageKeys.profilePrefix(currentProfile);
   const mergedAna = { ...(data.settings.anagrafica || {}) };
   const mergedAtt = { ...(data.settings.attivita || {}) };
   const fillFrom = (src, target) => {
@@ -2000,7 +2001,7 @@ function getGiorniIncassoProfile() {
   try {
     var profile = (typeof currentProfile !== 'undefined') ? currentProfile : null;
     if (!profile) return null;
-    var raw = localStorage.getItem('calcoliPIVA_' + profile + '_giorniIncasso');
+    var raw = localStorage.getItem(window.StorageKeys.giorniIncasso(profile));
     if (raw === null || raw === '') return null;
     var parsed;
     try { parsed = JSON.parse(raw); } catch (_) { parsed = raw; }
@@ -2015,7 +2016,7 @@ function setGiorniIncassoProfile(val) {
     if (!profile) return;
     var n = parseFloat(val);
     if (!isFinite(n)) n = 30;
-    localStorage.setItem('calcoliPIVA_' + profile + '_giorniIncasso', JSON.stringify(n));
+    localStorage.setItem(window.StorageKeys.giorniIncasso(profile), JSON.stringify(n));
     if (typeof syncProfileMetaToCloud === 'function') {
       try { syncProfileMetaToCloud(profile); } catch (_) {}
     }
@@ -2092,14 +2093,14 @@ function getFattureFromYearData(yearData, month, year) {
 // Helper: get all fattureEmesse for the current profile (from FattureStorico or localStorage)
 function _getFattureEmesse(profile) {
   if (window.FattureStorico) return window.FattureStorico.load(profile);
-  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  const key = window.StorageKeys.fattureEmesse(profile);
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; }
 }
 
 // Helper: save updated list back
 function _saveFattureEmesse(profile, list) {
   if (window.FattureStorico) { window.FattureStorico.save(profile, list); return; }
-  const key = `calcoliPIVA_${profile}_fattureEmesse`;
+  const key = window.StorageKeys.fattureEmesse(profile);
   localStorage.setItem(key, JSON.stringify(list));
 }
 
@@ -5763,14 +5764,14 @@ function exportScadenzeIcs(year) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   try {
-    localStorage.setItem('calcoliPIVA_' + currentProfile + '_icsExported_' + y, String(Date.now()));
+    localStorage.setItem(window.StorageKeys.icsExported(currentProfile, y), String(Date.now()));
   } catch (e) { /* ignore quota errors */ }
   if (typeof renderRiepilogo === 'function') renderRiepilogo();
 }
 
 function isIcsDownloaded(profile, year) {
   try {
-    return !!localStorage.getItem('calcoliPIVA_' + profile + '_icsExported_' + year);
+    return !!localStorage.getItem(window.StorageKeys.icsExported(profile, year));
   } catch (e) { return false; }
 }
 
@@ -5803,7 +5804,7 @@ function buildCrossYearReminderBannerHtml() {
   if (!currentProfile) return '';
   if (S().regime !== 'forfettario') return ''; // solo per forfettario (criterio cassa)
   // dismiss flag: una volta dismissed nel mese corrente, non riappare
-  var flagKey = 'calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear;
+  var flagKey = window.StorageKeys.crossYearReminderDismissed(currentProfile, currentYear);
   try { if (localStorage.getItem(flagKey) === '1') return ''; } catch (_e) { /* best-effort */ }
   // Conta fatture 'inviata' (emesse ma non ancora pagate)
   var nInviate = 0;
@@ -5832,7 +5833,7 @@ function buildCrossYearReminderBannerHtml() {
 function dismissCrossYearReminder() {
   if (!currentProfile || !currentYear) return;
   try {
-    localStorage.setItem('calcoliPIVA_' + currentProfile + '_crossYearReminderDismissed_' + currentYear, '1');
+    localStorage.setItem(window.StorageKeys.crossYearReminderDismissed(currentProfile, currentYear), '1');
   } catch (_e) { /* best-effort */ }
   var el = document.getElementById('cross-year-banner-root');
   if (el) el.remove();
@@ -6643,7 +6644,7 @@ function exportData() {
   const allData = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key.startsWith('calcoliPIVA_' + currentProfile + '_')) allData[key] = JSON.parse(localStorage.getItem(key));
+    if (key.startsWith(window.StorageKeys.profilePrefix(currentProfile))) allData[key] = JSON.parse(localStorage.getItem(key));
   }
   const profileKey = profileStorageKey(currentProfile);
   if (localStorage.getItem(profileKey)) allData[profileKey] = JSON.parse(localStorage.getItem(profileKey));
@@ -6658,7 +6659,7 @@ function importData(e) {
   const reader = new FileReader();
   reader.onload = ev => {
     const allData = JSON.parse(ev.target.result);
-    const prefix = 'calcoliPIVA_' + currentProfile + '_';
+    const prefix = window.StorageKeys.profilePrefix(currentProfile);
     const profileKey = profileStorageKey(currentProfile);
     for (const [key, val] of Object.entries(allData)) {
       if (key.startsWith(prefix) || key === profileKey) localStorage.setItem(key, JSON.stringify(val));

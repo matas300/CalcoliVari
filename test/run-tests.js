@@ -114,6 +114,7 @@ require('./dichiarazione-cassa-non-gestita.test.js');
 require('./dichiarazione-rr-gs-acconti-rx-clamp.test.js');
 require('./fatture-mark-stato-tz.test.js');
 require('./app-context.test.js');
+require('./storage-keys.test.js');
 
 Promise.all(asyncQueue).then(function () {
   console.log('\n' + passed + '/' + total + ' tests passed, ' + failed + ' failed');
