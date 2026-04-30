@@ -178,7 +178,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 |---|---|
 | `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
 | `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
-| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: INPS sezione I (artigiani/commercianti) or sezione II (gestione separata). Aliquota GS fallback 26.07% (REG-2 fix 2026-04-29, Circ. INPS 26/2025 + 8/2026) |
+| `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: sezione I (artigiani/commercianti) con RR7 acconti versati lett da pagamenti, o sezione II (gestione separata) con RR21 simmetrico (v3 fix 2026-04-30). Aliquota GS fallback 26.07% (Circ. INPS 26/2025 + 8/2026). Warning `RR_CASSA_NON_GESTITA` se inpsMode fuori whitelist (CASSE-1) e `RR_RIDUZIONE35_VERIFICA` se riduzione35 attiva (deve essere comunicata a INPS, art. 1 c. 77 L. 190/2014) |
 | `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
 | `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
 | `buildQuadroRW(contiEsteri)` | Quadro RW: conti esteri, immobili, criptovalute. Calcola IVAFE (2‰ finanziari), IVIE (4‰ prima casa / 10,6‰ altri), IC (2‰ cripto, L. 197/2022). Sanitize: `valoreFinale<0 → 0+warning`, `quotaPossesso` clampata in [0,1]+warning. `icRigoDovuto` e `totali.icTotale` esposti in PDF/CSV (C-A3 v2 fix 2026-04-29) |
