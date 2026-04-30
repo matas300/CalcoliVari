@@ -124,6 +124,10 @@
   const esc = _HtmlUtilsFatt.escapeHtml;
   const xmlEscape = _HtmlUtilsFatt.xmlEscape;
 
+  const AppContext = (typeof window !== 'undefined' && window.AppContext) ? window.AppContext
+    : (typeof require !== 'undefined' ? require('./app-context.js') : null);
+  if (!AppContext) throw new Error('fatture-docs-feature.js requires AppContext — load app-context.js first');
+
   const round2 = (typeof MathUtils !== 'undefined' && MathUtils.round2)
     ? MathUtils.round2
     : function (value) {
@@ -412,7 +416,7 @@
   let _fattureFilter = 'tutte';
 
   function invoicesForYear(year) {
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     const all = window.FattureStorico ? window.FattureStorico.load(profile) : loadFattureEmesse(profile);
     return all.filter(inv => Number(inv.annoProgressivo) === Number(year));
   }
@@ -756,10 +760,7 @@
 
   function renderStep3Html() {
     const draft = currentDraft();
-    const isForfettarioRegime = (() => {
-      try { return (typeof getSettings === 'function') && getSettings().regime === 'forfettario'; }
-      catch (_e) { return false; }
-    })();
+    const isForfettarioRegime = AppContext.getSettings().regime === 'forfettario';
     if (isForfettarioRegime && Number(draft.ritenuta) > 0) {
       _clearRitenutaForForfettario(draft);
     }
@@ -1100,8 +1101,8 @@
     // Fonte: Circ. AdE 9/E 2019 §4.1. Il committente non deve operare ritenuta;
     // se la trattiene per errore, il forfettario perde liquidità.
     try {
-      var settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
-      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+      var settingsRef = AppContext.getSettings();
+      if (settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
         errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura e comunicare al committente la dichiarazione sostitutiva di non assoggettamento.");
       }
     } catch (_e) { /* getSettings non disponibile: skip */ }
@@ -1248,7 +1249,7 @@
       state.numberAuto = true;
       // Pre-fill progressivo via FattureStorico per coerenza con storico unificato
       const annoOggi = new Date().getFullYear();
-      const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
       const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
       state.draft.numero = window.FattureStorico ? window.FattureStorico.formatNumero(annoOggi, prog) : (annoOggi + '/001');
@@ -1588,8 +1589,8 @@
     }
     // C-A2 bypass: blocca ritenuta su forfettario anche dai path preview/download XML
     try {
-      const settingsRef = (typeof getSettings === 'function') ? getSettings() : null;
-      if (settingsRef && settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
+      const settingsRef = AppContext.getSettings();
+      if (settingsRef.regime === 'forfettario' && Number(draft.ritenuta) > 0) {
         errors.push("Il regime forfettario è esonerato dalla ritenuta d'acconto (art. 1 c. 67 L. 190/2014). Rimuovere la ritenuta dalla fattura prima di scaricare/visualizzare l'XML.");
       }
     } catch (_e) { /* settings non disponibili: skip */ }
@@ -2094,23 +2095,20 @@ ${dettaglioLinee.join('\n')}
   }
   function isAdeConservationAcknowledged() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       return localStorage.getItem(_adeConservationFlagKey(profile)) === '1';
     } catch (_e) { return false; }
   }
   function acknowledgeAdeConservation() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       localStorage.setItem(_adeConservationFlagKey(profile), '1');
     } catch (_e) { /* best-effort */ }
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
   }
   function resetAdeConservationAck() {
     try {
-      const profile = (typeof window.currentProfile === 'string' && window.currentProfile)
-        || sessionStorage.getItem('calcoliPIVA_profile');
+      const profile = AppContext.getProfile();
       localStorage.removeItem(_adeConservationFlagKey(profile));
     } catch (_e) { /* best-effort */ }
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
@@ -2252,7 +2250,7 @@ ${dettaglioLinee.join('\n')}
   }
 
   function _findOriginale(id) {
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const profile = AppContext.getProfile();
     const fatture = loadFattureEmesse(profile);
     return fatture.find(f => f.id === id);
   }
@@ -2343,9 +2341,8 @@ ${dettaglioLinee.join('\n')}
     let orig = getSavedInvoiceById(fatturaOriginaleId);
     if (!orig && window.FattureStorico) {
       const profiles = [
-        (typeof window.getProfile === 'function' ? window.getProfile() : null),
-        sessionStorage.getItem('currentProfile'),
-        sessionStorage.getItem('calcoliPIVA_profile')
+        AppContext.getProfile(),
+        sessionStorage.getItem('currentProfile')
       ].filter(Boolean);
       for (const p of profiles) {
         const storico = window.FattureStorico.load(p) || [];
@@ -2362,7 +2359,7 @@ ${dettaglioLinee.join('\n')}
       return;
     }
     const annoOggi = new Date().getFullYear();
-    const profile = (typeof window.getProfile === 'function') ? window.getProfile() : sessionStorage.getItem('calcoliPIVA_profile');
+    const profile = AppContext.getProfile();
     const fattureStorico = window.FattureStorico ? window.FattureStorico.load(profile) : [];
     const prog = window.FattureStorico ? window.FattureStorico.nextProgressivo(annoOggi, fattureStorico) : 1;
     const draft = {
@@ -2577,9 +2574,7 @@ ${dettaglioLinee.join('\n')}
   function hardDeleteFattura(id) {
     const settings = (typeof data !== 'undefined' && data && data.settings) ? data.settings : {};
     if ((parseInt(settings.devHardDelete, 10) || 0) !== 1) return;
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
@@ -2632,9 +2627,7 @@ ${dettaglioLinee.join('\n')}
 
   // Quick actions on BOZZA rows in the main Fatture card
   function quickMarkInviataFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
@@ -2656,9 +2649,7 @@ ${dettaglioLinee.join('\n')}
     if (typeof recalcAll === 'function') recalcAll();
   }
   function quickDeleteBozzaFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
@@ -2678,9 +2669,7 @@ ${dettaglioLinee.join('\n')}
     });
   }
   function quickMarkPagataFromCard(id) {
-    const profile = (typeof window.getProfile === 'function')
-      ? window.getProfile()
-      : (currentProfile || sessionStorage.getItem('calcoliPIVA_profile'));
+    const profile = AppContext.getProfile();
     if (!profile) return;
     const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
     const all = store.load(profile);
