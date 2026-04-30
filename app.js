@@ -1,3 +1,14 @@
+// ═══════════════════ Aritmetica condivisa (math-utils.js) ═══════════════════
+const _MathUtils = (typeof window !== 'undefined' && window.MathUtils)
+  ? window.MathUtils
+  : (typeof MathUtils !== 'undefined' ? MathUtils
+    : (typeof require !== 'undefined' ? require('./math-utils.js') : null));
+if (!_MathUtils) throw new Error('app.js requires MathUtils — load math-utils.js first');
+const ceil2 = _MathUtils.ceil2;
+const euroToCents = _MathUtils.euroToCents;
+const centsToEuro = _MathUtils.centsToEuro;
+const splitAmountByWeights = _MathUtils.splitAmountByWeights;
+
 // ═══════════════════ Profili / Login ═══════════════════
 const PROFILE_HASHES = {
   'd9b5e452afd6cdea8583147634c3f85a0ba60fc17ad5e6f069a99d3b4ec35194': 'Mattia',
@@ -2961,12 +2972,7 @@ function getEffectiveNetto() {
 }
 
 // ═══════════════════ Formatting ═══════════════════
-function ceil2(n) {
-  if (n === undefined || n === null || isNaN(n)) return n;
-  const scaled = Math.abs(Number(n)) * 100;
-  const rounded = Math.ceil(scaled - 1e-9) / 100;
-  return Number(n) < 0 ? -rounded : rounded;
-}
+// ceil2 importato da math-utils.js (vedi top-of-file)
 
 function getCSSVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -4093,25 +4099,7 @@ function buildPagamentiSection(options) {
   return h;
 }
 
-function euroToCents(amount) {
-  return Math.max(Math.round((parseFloat(amount) || 0) * 100), 0);
-}
-
-function centsToEuro(cents) {
-  return cents / 100;
-}
-
-function splitAmountByWeights(amount, weights) {
-  const totalCents = euroToCents(amount);
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
-  let assigned = 0;
-  return weights.map((weight, idx) => {
-    if (idx === weights.length - 1) return centsToEuro(totalCents - assigned);
-    const share = Math.floor(totalCents * weight / totalWeight);
-    assigned += share;
-    return centsToEuro(share);
-  });
-}
+// euroToCents / centsToEuro / splitAmountByWeights importati da math-utils.js (vedi top-of-file)
 
 function buildAccontoPlan(baseAmount) {
   const base = centsToEuro(euroToCents(baseAmount));

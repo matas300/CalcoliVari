@@ -124,11 +124,13 @@
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
 
-  function round2(value) {
-    const n = parseFloat(value);
-    if (!Number.isFinite(n)) return 0;
-    return Math.round((n + Number.EPSILON) * 100) / 100;
-  }
+  const round2 = (typeof MathUtils !== 'undefined' && MathUtils.round2)
+    ? MathUtils.round2
+    : function (value) {
+        const n = parseFloat(value);
+        if (!Number.isFinite(n)) return 0;
+        return Math.round((n + Number.EPSILON) * 100) / 100;
+      };
 
   function todayIso() {
     const d = new Date();
