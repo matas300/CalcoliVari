@@ -3077,14 +3077,12 @@ function getProfileRegimeHistory() {
     .sort((a, b) => a.year - b.year);
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+const _HtmlUtils = (typeof window !== 'undefined' && window.HtmlUtils)
+  ? window.HtmlUtils
+  : (typeof HtmlUtils !== 'undefined' ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null));
+if (!_HtmlUtils) throw new Error('app.js requires HtmlUtils — load html-utils.js first');
+const escapeHtml = _HtmlUtils.escapeHtml;
 
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;

@@ -59,14 +59,9 @@
 
   // ── Utility ──────────────────────────────────────────────────────────────────
 
-  function escHtml(s) {
-    if (s == null) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  const _HtmlUtilsDich = (typeof HtmlUtils !== 'undefined') ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null);
+  const escHtml = _HtmlUtilsDich.escapeHtml;
 
   function fmtEur(val) {
     return (val || 0).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });

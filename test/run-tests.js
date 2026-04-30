@@ -69,6 +69,7 @@ global.expect = expect;
 
 // Load test files
 require('./math-utils.test.js');
+require('./html-utils.test.js');
 require('./dichiarazione-engine.test.js');
 require('./dichiarazione-quadro-lm-completo.test.js');
 require('./dichiarazione-quadro-rr-completo.test.js');

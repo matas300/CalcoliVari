@@ -119,10 +119,10 @@
     previewUrl: null
   };
 
-  function esc(value) {
-    if (typeof escapeHtml === 'function') return escapeHtml(value);
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  }
+  const _HtmlUtilsFatt = (typeof HtmlUtils !== 'undefined') ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null);
+  const esc = _HtmlUtilsFatt.escapeHtml;
+  const xmlEscape = _HtmlUtilsFatt.xmlEscape;
 
   const round2 = (typeof MathUtils !== 'undefined' && MathUtils.round2)
     ? MathUtils.round2
@@ -156,16 +156,6 @@
   function parseMaybeNumber(value) {
     const n = parseFloat(String(value ?? '').replace(',', '.'));
     return Number.isFinite(n) ? n : 0;
-  }
-
-  function xmlEscape(value) {
-    return String(value ?? '').replace(/[&<>"']/g, ch => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&apos;'
-    }[ch]));
   }
 
   function buildAnagraficaXml(cliente) {
