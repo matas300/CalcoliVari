@@ -3122,13 +3122,15 @@ function buildForfettarioLimitBar(totale, limite, year) {
   const remaining = Math.max(0, safeLimit - totale);
   const over = totale > safeLimit;
   // v3-LIMITE-ALERT: alert proattivo a soglie 80%, 95%, 100%, 117,6% (~100k decadenza immediata)
-  // Norma: art. 1 c. 71 L. 190/2014 (decadenza anno succ. se ≥ limite); D.L. 50/2017 art. 1-bis (decadenza immediata se > limite + 15.000 €).
+  // Norma: art. 1 c. 71 L. 190/2014 come modificato da L. 197/2022 art. 1 c. 54 lett. a:
+  //   - decadenza anno successivo se ricavi > limite (oggi 85.000 €)
+  //   - decadenza immediata se ricavi > 100.000 € (= limite + 15.000 €) — IVA retroattiva
   const decadenzaImmediata = safeLimit + 15000;
   let alertHtml = '';
   if (totale > decadenzaImmediata) {
     alertHtml = `<div class="limit-alert critical" role="alert" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(220,53,69,.12);border:1px solid #dc3545;color:#dc3545;font-size:13px">
       <strong>⚠ Decadenza forfettario IMMEDIATA</strong><br>
-      Hai superato il limite di ${fmt(decadenzaImmediata)} (limite + 15.000 €). Il regime forfettario decade <b>nell'anno corrente</b> con applicazione retroattiva dell'IVA su tutte le operazioni dal superamento (D.L. 50/2017 art. 1-bis, Circ. AdE 9/E 2019). Contatta il commercialista subito.
+      Hai superato il limite di ${fmt(decadenzaImmediata)} (limite + 15.000 €). Il regime forfettario decade <b>nell'anno corrente</b> con applicazione retroattiva dell'IVA su tutte le operazioni dal superamento (art. 1 c. 71 L. 190/2014 come modificato da L. 197/2022; Circ. AdE 9/E 2019). Contatta il commercialista subito.
     </div>`;
   } else if (over) {
     alertHtml = `<div class="limit-alert high" role="alert" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(245,166,35,.12);border:1px solid #f5a623;color:#b67400;font-size:13px">
