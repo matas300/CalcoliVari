@@ -903,13 +903,34 @@ function recalcAll() {
 // exportData / importData estratte in app-export.js (window.exportData / window.importData).
 
 // ═══════════════════ Init ═══════════════════
-document.getElementById('yearDisplay').textContent = currentYear;
-updateProfileAvatar();
-if (checkSession()) {
-  loadProfileFiscalData();
-  loadData();
-  recalcAll();
-  loadProfileExternalFiscalData(currentProfile).then(() => recalcAll());
+// Differito a DOMContentLoaded: chiama funzioni che vivono in moduli IIFE
+// caricati DOPO app.js (loadData/loadProfileFiscalData → app-storage.js,
+// recalcAll → renderCalcolo/renderCalendar/renderAccantonamento/... in
+// app-calcolo.js / app-calendar.js / app-accantonamento.js / ecc.).
+// Senza il defer, l'esecuzione top-level di app.js troverebbe undefined.
+function _initApp() {
+  var yEl = document.getElementById('yearDisplay');
+  if (yEl) yEl.textContent = currentYear;
+  if (typeof updateProfileAvatar === 'function') updateProfileAvatar();
+  if (typeof checkSession === 'function' && checkSession()) {
+    if (typeof loadProfileFiscalData === 'function') loadProfileFiscalData();
+    if (typeof loadData === 'function') loadData();
+    if (typeof recalcAll === 'function') recalcAll();
+    if (typeof loadProfileExternalFiscalData === 'function') {
+      loadProfileExternalFiscalData(currentProfile).then(function () {
+        if (typeof recalcAll === 'function') recalcAll();
+      });
+    }
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initApp);
+} else {
+  // DOM già parsed (script in fondo al body): differisce di un microtask
+  // perché gli script <script> dopo questo DEVONO comunque essere caricati.
+  // Con script sincroni non c'è nessun gap: setTimeout 0 ci dà la garanzia
+  // che TUTTE le tag <script> seguenti abbiano eseguito la propria IIFE.
+  setTimeout(_initApp, 0);
 }
 
 document.addEventListener('click', (e) => {
