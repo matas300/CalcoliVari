@@ -1174,7 +1174,7 @@
       if (statoCorrente === 'bozza') {
         draft.stato = 'inviata';
         if (!draft.dataInvioSdi) {
-          draft.dataInvioSdi = new Date().toISOString().slice(0, 10);
+          draft.dataInvioSdi = todayIso();
         }
       }
     } else {
@@ -2706,8 +2706,8 @@ ${dettaglioLinee.join('\n')}
     const idx = all.findIndex(f => f.id === id);
     if (idx < 0) return;
     if ((all[idx].stato || 'bozza') !== 'inviata') return;
-    const today = new Date();
-    const iso = today.toISOString().slice(0, 10);
+    const iso = todayIso();
+    const today = new Date(iso + 'T00:00:00');
     all[idx].stato = 'pagata';
     all[idx].dataPagamento = iso;
     all[idx].pagMese = today.getMonth() + 1;
