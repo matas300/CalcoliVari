@@ -14,12 +14,23 @@ I file `.json` qui dentro sono `gitignore`-d (non finiscono in repo). Solo i `.j
 
 ## Wipe (dopo il backup)
 
-Dalla schermata di login c'è il pulsante "Wipe profilo". Oppure manualmente da console:
+**IMPORTANTE**: serve cancellare in **due posti**, altrimenti al primo login la sync Firebase ripopola tutto da cloud.
 
+### 1. Firestore (Firebase Console)
+1. Apri https://console.firebase.google.com/ → tuo progetto → **Firestore Database**
+2. Naviga a `profiles` → clicca sul documento **`Mattia`**
+3. Menu ⋮ del documento → **Delete document** → conferma "Also delete all subcollections"
+4. Questo cancella `profiles/Mattia` + tutte le sub-collections (`years/*`, `meta/main`, `meta/clienti`, `meta/fattureEmesse`, ecc.) in cascata.
+
+### 2. localStorage (browser)
+Apri DevTools (F12) → Console → incolla:
 ```js
 Object.keys(localStorage).filter(k => k.startsWith('calcoliPIVA_Mattia_')).forEach(k => localStorage.removeItem(k));
+sessionStorage.clear();
 location.reload();
 ```
+
+Dopo il reload, login come Mattia partirà con localStorage vuoto e Firestore vuoto → setup fresh.
 
 ## Restore SOLO tasse accantonate (dopo il wipe + ricreata config base)
 
