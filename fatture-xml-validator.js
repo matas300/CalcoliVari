@@ -52,9 +52,23 @@
 
   function parseErrors(json) {
     if (!json) return [];
-    if (Array.isArray(json.errors)) return json.errors.slice();
-    if (json.error) return [json.error];
-    if (json.message && (json.valid === false || json.success === false)) return [json.message];
+    function fmt(e) {
+      if (e == null) return '';
+      if (typeof e === 'string' || typeof e === 'number') return String(e);
+      // Object: extract code + message in formato "code: message" o solo uno dei due
+      var code = e.code != null ? String(e.code) : '';
+      var message = e.message || e.description || e.detail || e.text || '';
+      var field = e.field || e.path || '';
+      var parts = [];
+      if (code) parts.push('cod. ' + code);
+      if (message) parts.push(message);
+      if (field) parts.push('@' + field);
+      return parts.length ? parts.join(' — ') : JSON.stringify(e);
+    }
+    if (Array.isArray(json.errors)) return json.errors.map(fmt).filter(Boolean);
+    if (Array.isArray(json.data && json.data.errors)) return json.data.errors.map(fmt).filter(Boolean);
+    if (json.error) return [fmt(json.error)];
+    if (json.message && (json.valid === false || json.success === false)) return [fmt(json.message)];
     return [];
   }
 
