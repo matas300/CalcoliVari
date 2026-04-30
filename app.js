@@ -20,6 +20,19 @@ const isHoliday = _DateUtils.isHoliday;
 const pad2 = _DateUtils.pad2;
 const parseIsoDate = _DateUtils.parseIsoDate;
 
+// ═══════════════════ HTML helpers (html-utils.js) ═══════════════════
+// Top-level const = script-global binding accessibile da altri script
+// (app-storage.js, app-calendar.js, app-fatture.js, app-profilo.js, app-spese.js
+// chiamano escapeHtml() bare-name). Ripristinato dopo essere stato spostato
+// per errore in app-calcolo.js durante Sprint 5.3.
+const _HtmlUtilsApp = (typeof window !== 'undefined' && window.HtmlUtils)
+  ? window.HtmlUtils
+  : (typeof HtmlUtils !== 'undefined' ? HtmlUtils
+    : (typeof require !== 'undefined' ? require('./html-utils.js') : null));
+if (!_HtmlUtilsApp) throw new Error('app.js requires HtmlUtils — load html-utils.js first');
+const escapeHtml = _HtmlUtilsApp.escapeHtml;
+const xmlEscape = _HtmlUtilsApp.xmlEscape;
+
 // ═══════════════════ Profili / Login ═══════════════════
 const PROFILE_HASHES = {
   'd9b5e452afd6cdea8583147634c3f85a0ba60fc17ad5e6f069a99d3b4ec35194': 'Mattia',
