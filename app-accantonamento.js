@@ -14,12 +14,70 @@
   function getFattureForAccantonamentoForYear(year) {
     const items = [];
     const perc = getEffectiveTaxRateForYear(year);
+
+    // Path moderno: usa unified store (FattureSelectors). Esclude:
+    //   - bozze (non emesse)
+    //   - stornate (TD01 totalmente annullata da NC)
+    //   - NC dirette (TD04): il loro netto è già scontato dall'originale via ncTotaleImporto
+    // Importo: getNettoEffettivo = importo - ncTotaleImporto (gestisce NC parziali)
+    if (typeof window !== 'undefined' && window.FattureSelectors && currentProfile) {
+      const taxable = window.FattureSelectors.all(currentProfile).filter(f =>
+        f.stato !== 'bozza' &&
+        f.stato !== 'stornata' &&
+        f.tipoDocumento !== 'TD04' &&
+        Number(f.pagAnno) === year
+      );
+
+      // 1. Cross-year: emesse in anni precedenti, incassate nell'anno corrente.
+      //    Label: mese di EMISSIONE + anno di emissione (es. "Gennaio 2024").
+      const crossCounts = {};
+      taxable
+        .filter(f => Number(f.issuedYear) && Number(f.issuedYear) < year)
+        .forEach(f => {
+          const netto = window.FattureSelectors.getNettoEffettivo(f);
+          if (netto <= 0) return;
+          const issuedM = Number(f.issuedMonth) || Number(f.pagMese) || 1;
+          const issuedY = Number(f.issuedYear);
+          const idx = crossCounts[issuedM] = (crossCounts[issuedM] || 0) + 1;
+          const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+          items.push({
+            label: MONTHS[issuedM-1] + ' ' + issuedY + (desc ? ' - ' + desc : ''),
+            mese: issuedM, anno: issuedY, importo: netto, rate: perc,
+            isCrossYear: true,
+            key: 'cross_' + issuedY + '_' + issuedM + '_' + idx
+          });
+        });
+
+      // 2. Same-year: emesse E incassate nell'anno (no duplicazione cross-year).
+      //    Label: mese di EMISSIONE (es. "Febbraio"). Key per pagMese (compat saved keys).
+      const sameYear = taxable.filter(f => Number(f.issuedYear) === year);
+      for (let m = 1; m <= 12; m++) {
+        let idx = 0;
+        sameYear
+          .filter(f => Number(f.pagMese) === m)
+          .forEach(f => {
+            idx++;
+            const netto = window.FattureSelectors.getNettoEffettivo(f);
+            if (netto <= 0) return;
+            const issuedM = Number(f.issuedMonth) || m;
+            const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
+            items.push({
+              label: MONTHS[issuedM-1] + (desc ? ' - ' + desc : ''),
+              mese: m, anno: year, importo: netto, rate: perc,
+              key: 'cur_' + m + '_' + idx
+            });
+          });
+      }
+      return items;
+    }
+
+    // Legacy fallback (pre-migration / no FattureSelectors)
     const yearData = year === currentYear ? data : loadYearData(year);
     if (!yearData) return items;
 
-    // 1. Fatture di anni precedenti pagate in questo anno (cross-year) — in testa
+    // 1. Fatture di anni precedenti pagate in questo anno (cross-year)
     const crossYear = getCrossYearInvoicesForYear(year);
-    const crossCounts = {}; // per-month index for stable keys
+    const crossCounts = {};
     for (const inv of crossYear) {
       const idx = crossCounts[inv.mese] = (crossCounts[inv.mese] || 0) + 1;
       items.push({
@@ -30,17 +88,17 @@
       });
     }
 
-    // 2. Fatture emesse in questo anno e pagate in questo anno (o senza data pagamento = assunto nello stesso anno)
+    // 2. Fatture emesse in questo anno e pagate in questo anno
     for (let m = 1; m <= 12; m++) {
       let idx = 0;
       for (const f of getFattureFromYearData(yearData, m, year)) {
         idx++;
         if (f.importo <= 0) continue;
-        if (f.pagAnno && f.pagAnno !== year) continue; // deferred to another year
+        if (f.pagAnno && f.pagAnno !== year) continue;
         items.push({
           label: MONTHS[m-1] + (f.desc ? ' - ' + f.desc : ''),
           mese: m, anno: year, importo: f.importo, rate: perc,
-          key: 'cur_' + m + '_' + idx // stable key: month + index within month
+          key: 'cur_' + m + '_' + idx
         });
       }
     }
