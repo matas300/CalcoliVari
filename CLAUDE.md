@@ -5,11 +5,46 @@ Single-page web app for Italian freelancers (Partita IVA) to track income, taxes
 
 ## Architecture
 - **index.html** — Shell: login screen, tab navigation (8 visible tabs + 1 hidden), picker popups
-- **app.js** — All application logic (~3500 lines). Sections delimited by `// ═══` headers
+- **app.js** — Profili/Login + init + recalcAll glue (~947 righe dopo refactor Sprint 5+6, era 6502)
 - **style.css** — Dark theme, CSS variables, responsive (mobile bottom nav with safe-area support)
 - **firebase-sync.js** — Firebase Firestore sync module (bidirectional merge)
 - **tax-engine.js** — Standalone tax computation engine (forfettario scenarios, method comparison, Fiscozen integration)
 - **ateco-coefficienti.js** — Tabella ufficiale DM 23/1/2015 (9 gruppi ATECO con coefficiente 40-86%). Esposta come `window.ATECO_COEFFICIENTI`. Usata dal dropdown "Gruppo ATECO" nel profilo fiscale per autofillare il `coefficiente`.
+
+### Moduli applicativi (estratti da app.js — Sprint 5+6, refactor 2026-04-30)
+Ogni modulo è un IIFE che dichiara funzioni e le espone via `window.*` per backward-compat con onclick inline. State locale (es. `_yearDataCache`, `pickerMonth`) vive nello scope IIFE. **Loading order in `index.html` è critico**: tutti caricati DOPO `app.js` perché usano globali script-binding (`data`, `currentYear`, `currentProfile`).
+
+| Modulo | Responsabilità | Funzioni |
+|---|---|---:|
+| `app-storage.js` | load/save yearData, profilo fiscale, INPS, clienti CRUD | 77 |
+| `app-calendar.js` | Render Calendar + Scadenziario + payment date picker | 56 |
+| `app-accantonamento.js` | Render Accantonamento + CRUD pagamenti + quick-pay modal | 31 |
+| `app-calc.js` | Engine forfettario/ordinario, getEffectiveTaxRate, calcInps | 30 |
+| `app-stats.js` | Totali, percentuali, label aliquote | 18 |
+| `app-fatture-helpers.js` | getFatture* / cross-year / migration utilities | 12 |
+| `app-calcolo.js` | Render: Calcolo (home dashboard) + Riepilogo + tabella mensile | 9 |
+| `app-budget.js` | Budget helpers + renderBudget | 6 |
+| `app-fatture.js` | Render: Fatture (vista mensile legacy) | 5 |
+| `app-spese.js` | renderSpese + renderClienti | 3 |
+| `app-shell.js` | Sidebar drawer + tab navigation + mobile labels | — |
+| `app-charts.js` | drawDonut + drawMiniBars (SVG) | 2 |
+| `app-profilo.js` | Render Profilo personale/P.IVA + edit inline | 6 |
+| `app-export.js` | exportData / importData (JSON profilo) | 2 |
+| `app-ui-utils.js` | showAppConfirm modal | 1 |
+
+### Moduli utility condivisi (Sprint 1+2, modulari UMD — funzionano in Node + browser)
+| Modulo | API |
+|---|---|
+| `math-utils.js` | toNumber, ceil2, round2, euroToCents, centsToEuro, splitAmountByWeights |
+| `html-utils.js` | escapeHtml, xmlEscape |
+| `format-utils.js` | formatEur, formatEurOrDash, formatPdfMoney, formatPct |
+| `date-utils.js` | todayIso (TZ-safe), pad2, parseIsoDate, parseDateParts, addDaysIso, getEaster, isHoliday, buildRolledDueDate |
+| `app-context.js` | getProfile/getYear/getSettings con fallback chain |
+| `storage-keys.js` | yearData, profileFiscal, fattureEmesse, clienti |
+| `forfettario-rules.js` | getRiduzioneFactor, BOLLO_THRESHOLD (77.47), ACCONTO_THRESHOLD_NONE/SINGLE, isBolloDovuto |
+| `fatture-validators.js` | resolveCliente, validateRitenutaForfettario, validateClienteIT |
+| `fatture-state-machine.js` | markInviata, markPagata, markBozza |
+| `fatture-xml-helpers.js` | sanitizeProgressivoInvio, isValidPartitaIvaIT/CodiceFiscale, modalitaToCodiceMP, fmtXmlNum, buildAnagraficaXml + costanti XML_NAMESPACE/XML_FORFETTARIO_REGIME |
 
 ## Key Concepts
 
