@@ -4,3 +4,4 @@ node_modules/
 .cloudflare-dist/
 _download_extracted.txt
 .claude/worktrees/
+backup/*.json
