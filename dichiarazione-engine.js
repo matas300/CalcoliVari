@@ -211,17 +211,59 @@
         });
       }
 
+      // v3-RIDUZIONE35: la riduzione 35% è un'agevolazione INPS che richiede
+      // comunicazione formale all'ente (art. 1 c. 77 L. 190/2014). L'app la
+      // applica al calcolo se attiva, ma non può sapere se il contribuente
+      // l'ha effettivamente comunicata. Warning informativo per evitare
+      // discrepanze tra calcolo app e F24 precompilati INPS.
+      if ((settings.riduzione35 == 1 || settings.riduzione35 === true)
+          && (settings.inpsMode === 'artigiani_commercianti' || settings.inpsMode === 'artcom')) {
+        rrWarnings.push({
+          severity: 'warning',
+          code: 'RR_RIDUZIONE35_VERIFICA',
+          message: 'Riduzione 35% INPS attiva: verifica di averla comunicata formalmente all\'INPS al momento dell\'iscrizione (art. 1 c. 77 L. 190/2014). Se non comunicata, gli F24 precompilati INPS non la applicheranno e i versamenti reali differiranno dal calcolo dell\'app.'
+        });
+      }
+
+      // v3-RR21-GS: helper condiviso per leggere acconti contributi versati da pagamenti
+      function readAccontiContributiVersati() {
+        var pagamenti = (yearData && Array.isArray(yearData.pagamenti)) ? yearData.pagamenti : [];
+        var tot = 0;
+        for (var i = 0; i < pagamenti.length; i++) {
+          var p = pagamenti[i];
+          if (!p || p.tipo !== 'contributi') continue;
+          var keys = Array.isArray(p.linkedKeys) ? p.linkedKeys : [];
+          var match = false;
+          for (var j = 0; j < keys.length; j++) {
+            if (/^contributi_acc[12]_/.test(String(keys[j]))) { match = true; break; }
+          }
+          if (match) tot += parseFloat(p.importo) || 0;
+        }
+        return Math.round(tot * 100) / 100;
+      }
+
       if (settings.inpsMode === 'gestione_separata') {
         // REG-2: aliquota Gestione Separata esclusivo 2024-2026 = 26,07% (Circ. INPS 26/2025 + 8/2026)
         var aliqGs = parseFloat(settings.aliqContributi) || 26.07;
-        var contrib = Math.round(reddito * (aliqGs / 100) * 100) / 100;
+        var contribGs = Math.round(reddito * (aliqGs / 100) * 100) / 100;
+        // v3-RR21-GS: legge acconti versati da pagamenti (stesso pattern di RR7 sez. I)
+        var rr21Source = 'computed';
+        var rr21Value;
+        if (overrides.RR21_value != null) {
+          rr21Value = parseFloat(overrides.RR21_value) || 0;
+          rr21Source = 'override';
+        } else {
+          rr21Value = readAccontiContributiVersati();
+        }
+        var saldoGs = Math.round((contribGs - rr21Value) * 100) / 100;
         return {
           sezI: null,
           sezII: {
             RR19: rigo(reddito, 'Reddito imponibile gestione separata'),
-            RR20: rigo(contrib, 'Contributi gestione separata'),
-            RR21: rigo(0, 'Contributi già versati'),
-            RR22: rigo(Math.max(0, contrib), 'Saldo contributi')
+            RR20: rigo(contribGs, 'Contributi gestione separata'),
+            RR21: rigo(rr21Value, 'Acconti contributi GS già versati', rr21Source),
+            RR22: rigo(Math.max(0, saldoGs), 'Saldo contributi (max 0, RR20 − RR21)'),
+            RR22_credito: rigo(saldoGs < 0 ? -saldoGs : 0, 'Contributi a credito (se RR20 − RR21 < 0)')
           },
           _warnings: rrWarnings
         };
@@ -320,11 +362,21 @@
     },
     buildQuadroRX: function(yearData, settings, precedente, overrides) {
       overrides = overrides || {};
-      var eccedenza = 0;
+      var eccedenzaRaw = 0;
       if (precedente && precedente.eccedenza != null) {
-        eccedenza = parseFloat(precedente.eccedenza) || 0;
+        eccedenzaRaw = parseFloat(precedente.eccedenza) || 0;
       } else if (settings.creditoAnnoPrecedente != null) {
-        eccedenza = parseFloat(settings.creditoAnnoPrecedente) || 0;
+        eccedenzaRaw = parseFloat(settings.creditoAnnoPrecedente) || 0;
+      }
+      // v3-RX-CLAMP: un credito d'imposta non può essere negativo.
+      var eccedenza = Math.max(0, eccedenzaRaw);
+      var rxWarnings = [];
+      if (eccedenzaRaw < 0) {
+        rxWarnings.push({
+          severity: 'warning',
+          code: 'RX_ECCEDENZA_NEGATIVA',
+          message: 'Eccedenza anno precedente negativa (' + eccedenzaRaw + '): clampata a 0. Verifica l\'input — un credito d\'imposta non può essere negativo.'
+        });
       }
 
       function rigo(val, desc, src) {
@@ -336,7 +388,8 @@
         RX2: rigo(0, 'Importo chiesto a rimborso'),
         RX3: rigo(0, 'Importo portato in compensazione'),
         RX4: rigo(eccedenza, 'Importo portato al periodo successivo'),
-        eccedenza: eccedenza
+        eccedenza: eccedenza,
+        _warnings: rxWarnings
       };
     },
     buildQuadroRW: function(contiEsteri) {
@@ -546,6 +599,28 @@
       }
       if (!fp.dataNascita) {
         errors.push({ code: 'DATA_NASCITA_MANCANTE', message: 'Data di nascita obbligatoria', quadro: 'Frontespizio', rigo: 'dataNascita', severity: 'error' });
+      }
+      // v3-INTEGRATIVA: warning su tipoDichiarazione integrativa/correttiva
+      if (fp.tipoDichiarazione === 'integrativa') {
+        warnings.push({
+          code: 'DICHIARAZIONE_INTEGRATIVA',
+          message: 'Dichiarazione integrativa: l\'app NON calcola il delta automatico rispetto alla dichiarazione originaria. Verifica tu i righi che modifichi e barra la casella corretta sul software AdE (1=ravvedimento, 2=correttiva favorevole entro termine, 3=integrativa entro l\'anno successivo). Art. 2 c. 8 DPR 322/1998.',
+          quadro: 'Frontespizio', rigo: 'tipoDichiarazione', severity: 'warning'
+        });
+      } else if (fp.tipoDichiarazione === 'correttiva') {
+        warnings.push({
+          code: 'DICHIARAZIONE_CORRETTIVA',
+          message: 'Dichiarazione correttiva nei termini: l\'app non calcola il delta automatico. Trasmetti via Entratel/Fisconline entro la scadenza ordinaria del modello.',
+          quadro: 'Frontespizio', rigo: 'tipoDichiarazione', severity: 'warning'
+        });
+      }
+      // v3-RX-CLAMP propagazione warnings
+      if (dich.quadroRX && dich.quadroRX._warnings && dich.quadroRX._warnings.length) {
+        dich.quadroRX._warnings.forEach(function (w) {
+          var entry = { code: w.code || 'RX_WARN', message: w.message, quadro: 'RX', rigo: 'RX1', severity: w.severity || 'warning' };
+          if (entry.severity === 'error') errors.push(entry);
+          else warnings.push(entry);
+        });
       }
       if (rw.righi && rw.righi.length > 0) {
         rw.righi.forEach(function(r, i) {

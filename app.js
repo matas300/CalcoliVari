@@ -666,10 +666,11 @@ const F24_GUIDE = {
       'Sezione <b>Versamenti</b> > <b>Mod. F24</b>: cerca l\'F24 per il saldo eccedenza',
       'Se l\'INPS non ha ancora generato l\'F24, puoi compilarlo manualmente:',
       'Nella sezione <b>INPS</b> del modello F24 indica: codice sede, causale contributo, matricola INPS, periodo (mm/aaaa), importo',
+      'Causali contributo: <b>AP</b> (artigiani — saldo) / <b>AF</b> (commercianti — saldo) / <b>P10/CF</b> (gestione separata)',
       'Il saldo = contributi effettivi anno precedente - acconti gia versati',
       'Scadenza: <b>30 giugno</b> (insieme al saldo imposta)'
     ],
-    note: 'Se il saldo e negativo, hai un credito. Puoi usarlo in compensazione nei prossimi F24. Verifica sempre sul Cassetto Previdenziale i dati esatti.'
+    note: 'Causali ufficiali INPS: AP/AF (artigiani/commercianti — saldo eccedenza), APR/APF con riduzione 35%, P10 (GS professionisti senza altra gestione), CF (GS collaboratori). Verifica sempre sul Cassetto Previdenziale i dati esatti. Se il saldo e negativo, hai un credito utilizzabile in compensazione.'
   },
   contributi_acc1: {
     titolo: '1° Acconto Contributi INPS (eccedenza)',
@@ -681,10 +682,11 @@ const F24_GUIDE = {
       'Vai su <b>inps.it</b> > Cassetto Previdenziale > <b>Versamenti</b> > <b>Mod. F24</b>',
       'Cerca l\'F24 precompilato per l\'acconto eccedenza. Se non disponibile:',
       'Compila manualmente la sezione <b>INPS</b> del modello F24 con i dati della tua posizione',
+      'Causali contributo: <b>AP</b> (artigiani — 1° acconto) / <b>AF</b> (commercianti — 1° acconto) / <b>P10/CF</b> (gestione separata)',
       'Importo: 40% dei contributi variabili dell\'anno precedente (storico) o previsti (previsionale)',
       'Scadenza: <b>30 giugno</b>, insieme al saldo e al primo acconto imposta'
     ],
-    note: 'Se i contributi variabili sono sotto la soglia di 51,65 EUR, non e dovuto alcun acconto.'
+    note: 'Se i contributi variabili sono sotto la soglia di 51,65 EUR, non e dovuto alcun acconto. Causali ufficiali INPS: AP/AF (artigiani/commercianti), APR/APF con riduzione 35%, P10/CF per gestione separata.'
   },
   contributi_acc2: {
     titolo: '2° Acconto Contributi INPS (eccedenza)',
@@ -695,10 +697,11 @@ const F24_GUIDE = {
       'Il secondo acconto INPS si paga con F24',
       'Vai su <b>inps.it</b> > Cassetto Previdenziale > <b>Versamenti</b> > <b>Mod. F24</b>',
       'Scarica l\'F24 precompilato o compilalo manualmente',
+      'Causali contributo: <b>AP</b> (artigiani — 2° acconto) / <b>AF</b> (commercianti — 2° acconto) / <b>P10/CF</b> (gestione separata)',
       'Importo: 60% dei contributi variabili',
       'Scadenza: <b>30 novembre</b>'
     ],
-    note: 'Il secondo acconto non e rateizzabile. Se sotto soglia (51,65 EUR totali) non e dovuto; se sotto 257,52 EUR si versa tutto a novembre come unico acconto.'
+    note: 'Il secondo acconto non e rateizzabile. Se sotto soglia (51,65 EUR totali) non e dovuto; se sotto 257,52 EUR (inclusivo) si versa tutto a novembre come unico acconto. Causali INPS: AP/AF (artigiani/commercianti), APR/APF con riduzione 35%, P10/CF per gestione separata.'
   },
   camera: {
     titolo: 'Diritto Annuale Camera di Commercio',
@@ -3114,16 +3117,41 @@ document.addEventListener('click', e => {
 
 function buildForfettarioLimitBar(totale, limite, year) {
   const safeLimit = limite > 0 ? limite : 85000;
-  const pct = Math.min(100, (totale / safeLimit) * 100);
+  const pctRaw = (totale / safeLimit) * 100;
+  const pct = Math.min(100, pctRaw);
   const remaining = Math.max(0, safeLimit - totale);
   const over = totale > safeLimit;
+  // v3-LIMITE-ALERT: alert proattivo a soglie 80%, 95%, 100%, 117,6% (~100k decadenza immediata)
+  // Norma: art. 1 c. 71 L. 190/2014 (decadenza anno succ. se ≥ limite); D.L. 50/2017 art. 1-bis (decadenza immediata se > limite + 15.000 €).
+  const decadenzaImmediata = safeLimit + 15000;
+  let alertHtml = '';
+  if (totale > decadenzaImmediata) {
+    alertHtml = `<div class="limit-alert critical" role="alert" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(220,53,69,.12);border:1px solid #dc3545;color:#dc3545;font-size:13px">
+      <strong>⚠ Decadenza forfettario IMMEDIATA</strong><br>
+      Hai superato il limite di ${fmt(decadenzaImmediata)} (limite + 15.000 €). Il regime forfettario decade <b>nell'anno corrente</b> con applicazione retroattiva dell'IVA su tutte le operazioni dal superamento (D.L. 50/2017 art. 1-bis, Circ. AdE 9/E 2019). Contatta il commercialista subito.
+    </div>`;
+  } else if (over) {
+    alertHtml = `<div class="limit-alert high" role="alert" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(245,166,35,.12);border:1px solid #f5a623;color:#b67400;font-size:13px">
+      <strong>⚠ Limite forfettario superato — uscita dal regime nel ${year + 1}</strong><br>
+      Hai superato ${fmt(safeLimit)}. Resterai forfettario fino al ${year}, ma dal 1° gennaio ${year + 1} sarai automaticamente in regime ordinario (art. 1 c. 71 L. 190/2014). Pianifica IVA, fatturazione e contabilità ordinaria.
+    </div>`;
+  } else if (pctRaw >= 95) {
+    alertHtml = `<div class="limit-alert warn" role="alert" style="margin-top:10px;padding:10px 12px;border-radius:6px;background:rgba(245,166,35,.12);border:1px solid #f5a623;color:#b67400;font-size:13px">
+      <strong>Attenzione — molto vicino al limite (${pctRaw.toFixed(1)}%)</strong><br>
+      Mancano <b>${fmt(remaining)}</b> al limite di ${fmt(safeLimit)}. Valuta se rinviare incassi al ${year + 1} per restare in forfettario.
+    </div>`;
+  } else if (pctRaw >= 80) {
+    alertHtml = `<div class="limit-alert info" role="status" style="margin-top:10px;padding:8px 12px;border-radius:6px;background:rgba(46,170,220,.10);border:1px solid #2eaadc;color:#2eaadc;font-size:12px">
+      <strong>Hai superato l'80% del limite forfettario (${pctRaw.toFixed(1)}%)</strong> — restano ${fmt(remaining)} di ${fmt(safeLimit)}. Monitora il fatturato per evitare lo sforamento involontario.
+    </div>`;
+  }
   return `<div class="panel forfettario-limit-panel" style="grid-column:1/-1">
     <div class="limit-row"><span class="limit-label">Fatturato ${year}</span><span class="limit-value">${fmt(totale)}</span></div>
     <div class="limit-row"><span class="limit-label">${over ? 'Oltre il limite' : 'Mancante al limite'} (${fmt(safeLimit)})</span><span class="limit-value ${over ? 'over' : ''}">${fmt(over ? totale - safeLimit : remaining)}</span></div>
     <div class="limit-bar-track${over ? ' over' : ''}">
       <div class="limit-bar-fill" style="width:${pct.toFixed(1)}%"></div>
       <span class="limit-bar-pct">${pct.toFixed(1)}%</span>
-    </div>
+    </div>${alertHtml}
   </div>`;
 }
 
