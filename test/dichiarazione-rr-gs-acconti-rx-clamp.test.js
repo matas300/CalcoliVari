@@ -57,6 +57,44 @@ describe('v3-RR21-GS — acconti GS letti da pagamenti (parità con RR7)', funct
   });
 });
 
+describe('v3-RIDUZIONE35-BUG1 — riduzione 35% NON si applica a GS', function () {
+  test('GS con riduzione35=1 NON applica fattore 0.65 ai contributi RR (vale solo art-comm)', function () {
+    var settings = { inpsMode: 'gestione_separata', riduzione35: 1, aliqContributi: 26.07 };
+    var qLM = { LM4: { value: 10000 } };
+    var rr = Engine.buildQuadroRR({ pagamenti: [] }, settings, qLM, {});
+    // Atteso: 10000 * 26.07% = 2607.00 (NESSUNA riduzione)
+    // Bug pre-fix: applicherebbe 0.65 → 1694.55
+    expect(rr.sezII.RR20.value).toBe(2607);
+  });
+
+  test('LM3 (fallback-competenza) con riduzione35=1 + GS NON applica fattore 0.65 ai contributi deducibili', function () {
+    // yearData.pagamenti = undefined → forza il path fallback-competenza in buildQuadroLM
+    // (pagamenti: [] tornerebbe lm3=0 perché la somma è vuota, non testa il bug)
+    var settings = {
+      regime: 'forfettario',
+      inpsMode: 'gestione_separata',
+      riduzione35: 1,
+      aliqContributi: 26.07,
+      coefficiente: 78,
+      impostaSostitutiva: 15
+    };
+    var yearData = {
+      settings: settings,
+      fatture: { 1: [{ importo: 30000, mese: 1, anno: 2026, pagAnno: 2026, pagMese: 1 }] }
+      // pagamenti ASSENTE: forza il branch fallback-competenza
+    };
+    var qLM = Engine.buildQuadroLM(yearData, settings, {});
+    // LM2 = 30000 * 78% = 23400
+    // LM3 per GS = 23400 * 26.07% = 6100.38, NESSUNA riduzione 0.65 (è GS)
+    // Bug pre-fix: 6100.38 * 0.65 = 3965.25
+    // Verifica: il valore di LM3 deve essere ~6100 (non ~3965)
+    expect(qLM.LM3.source).toBe('fallback-competenza');
+    // Tolleranza per arrotondamenti e altre logiche di buildQuadroLM
+    expect(qLM.LM3.value).toBeGreaterThan(5500);
+    expect(qLM.LM3.value).toBeLessThan(6200);
+  });
+});
+
 describe('v3-RIDUZIONE35 — warning verifica comunicazione INPS', function () {
   test('riduzione35=1 + artigiani_commercianti → warning RR_RIDUZIONE35_VERIFICA', function () {
     var settings = {
