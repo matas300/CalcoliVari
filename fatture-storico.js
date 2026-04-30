@@ -232,16 +232,47 @@
   }
 
   function _markPagata(id, profile) {
-    const data = prompt('Data pagamento (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
-    if (!data) return;
+    // F3: validate ISO date format YYYY-MM-DD strict (no /, no DD-MM-YYYY)
+    const today = new Date().toISOString().slice(0, 10);
+    let data;
+    while (true) {
+      data = prompt('Data pagamento (formato YYYY-MM-DD, es. ' + today + '):', today);
+      if (data === null) return; // user cancelled
+      data = String(data).trim();
+      if (!data) return;
+      // strict ISO YYYY-MM-DD validation + valid calendar date check
+      const parts = data.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (parts) {
+        const y = parseInt(parts[1], 10), mo = parseInt(parts[2], 10), d = parseInt(parts[3], 10);
+        const dt = new Date(y, mo - 1, d);
+        if (dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d
+            && y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12) {
+          break; // valid
+        }
+      }
+      alert('Data non valida. Usa il formato YYYY-MM-DD (es. ' + today + '). Niente "/", "." o ordine giorno/mese/anno.');
+    }
     const fatture = load(profile);
     const idx = fatture.findIndex(f => f.id === id);
     if (idx < 0) return;
     fatture[idx].stato = 'pagata';
     fatture[idx].dataPagamento = data;
+    // F2: aggiorna pagMese/pagAnno coerentemente (parità con quickMarkPagataFromCard).
+    // Senza questo i selettori per-cassa (getByPagAnno, getByMonth, getCrossYearPaidIn)
+    // non vedono la fattura come incassata nell'anno giusto.
+    const dt2 = new Date(data + 'T00:00:00');
+    if (!isNaN(dt2.getTime())) {
+      fatture[idx].pagMese = dt2.getMonth() + 1;
+      fatture[idx].pagAnno = dt2.getFullYear();
+    }
     save(profile, fatture);
     const sel = document.getElementById('archivioAnnoSelect');
     renderStorico(Number(sel && sel.value) || new Date().getFullYear());
+    // F2: trigger ricalcolo dashboard / dichiarazione / scadenziario (parità con quickMarkPagataFromCard)
+    if (typeof window !== 'undefined') {
+      if (typeof window.renderFattureDocsSection === 'function') window.renderFattureDocsSection();
+      if (typeof window.recalcAll === 'function') window.recalcAll();
+    }
   }
 
   function _duplicate(f, profile) {
