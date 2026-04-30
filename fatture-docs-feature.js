@@ -41,7 +41,7 @@
     return /^[A-Z0-9]{16}$/i.test(String(cf || '').trim());
   }
   function applicaBolloSeDovuto(imponibile, marcaDaBollo) {
-    return marcaDaBollo && Number(imponibile) > 77.47;
+    return _FRFatt.isBolloDovuto(imponibile, marcaDaBollo);
   }
   // ─────────────────────────────────────────────────────────────────────────
   const DRAFT_TEMPLATE = {
@@ -127,6 +127,11 @@
   const AppContext = (typeof window !== 'undefined' && window.AppContext) ? window.AppContext
     : (typeof require !== 'undefined' ? require('./app-context.js') : null);
   if (!AppContext) throw new Error('fatture-docs-feature.js requires AppContext — load app-context.js first');
+
+  const _FRFatt = (typeof window !== 'undefined' && window.ForfettarioRules) ? window.ForfettarioRules
+    : (typeof require !== 'undefined' ? require('./forfettario-rules.js') : null);
+  if (!_FRFatt) throw new Error('fatture-docs-feature.js requires ForfettarioRules — load forfettario-rules.js first');
+  const BOLLO_THRESHOLD = _FRFatt.BOLLO_THRESHOLD;
 
   const round2 = (typeof MathUtils !== 'undefined' && MathUtils.round2)
     ? MathUtils.round2
@@ -386,7 +391,7 @@
   function syncBolloDefault() {
     const draft = currentDraft();
     const totals = computeDraftTotals(draft);
-    const thresholdHit = totals.subtotal + totals.contributoIntegrativo > 77.47;
+    const thresholdHit = totals.subtotal + totals.contributoIntegrativo > BOLLO_THRESHOLD;
     if (draft.bolloAuto !== false) {
       draft.marcaDaBollo = thresholdHit;
       const checkbox = document.getElementById('fatturaMarcaDaBollo');
@@ -1426,7 +1431,7 @@
     // totals.subtotal = imponibile (from computeDraftTotals)
     row('Imponibile', totals.subtotal || 0);
     if (totals.contributoIntegrativo) row('Contributo integrativo', totals.contributoIntegrativo);
-    if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > 77.47) row('Marca da bollo', 2);
+    if (invoice.marcaDaBollo && invoice.bolloAddebitato && (totals.subtotal || 0) > BOLLO_THRESHOLD) row('Marca da bollo', 2);
     if (Number(invoice.ritenuta) > 0) {
       doc.setTextColor.apply(doc, NEGATIVE);
       doc.text('Ritenuta', labelX, y);
@@ -1716,7 +1721,7 @@
     const emetteRimborsoBollo = !isNC
       && draft.marcaDaBollo === true
       && draft.bolloAddebitato === true
-      && (totals && (totals.subtotal || 0) > 77.47);
+      && (totals && (totals.subtotal || 0) > BOLLO_THRESHOLD);
     if (emetteRimborsoBollo) {
       lineNum++;
       dettaglioLinee.push(`    <DettaglioLinee>

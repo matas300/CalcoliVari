@@ -314,9 +314,12 @@
   const _FormatUtilsStorico = (typeof FormatUtils !== 'undefined') ? FormatUtils
     : (typeof require !== 'undefined' ? require('./format-utils.js') : null);
   const _formatEur = _FormatUtilsStorico.formatEur;
+  const _FRStorico = (typeof window !== 'undefined' && window.ForfettarioRules) ? window.ForfettarioRules
+    : (typeof require !== 'undefined' ? require('./forfettario-rules.js') : null);
+  const _BOLLO_THRESHOLD = _FRStorico ? _FRStorico.BOLLO_THRESHOLD : 77.47;
   function _calcTotale(f) {
     const imp = (f.righe || []).reduce((s, r) => s + (Number(r.quantita) || 0) * (Number(r.prezzoUnitario) || 0), 0);
-    const bollo = (f.marcaDaBollo && imp > 77.47) ? 2 : 0;
+    const bollo = (f.marcaDaBollo && imp > _BOLLO_THRESHOLD) ? 2 : 0;
     return imp + bollo + (Number(f.contributoIntegrativo) || 0) - (Number(f.ritenuta) || 0);
   }
 

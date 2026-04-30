@@ -536,7 +536,7 @@ function calcInailPremio(year, tassoPerMille) {
 // Imposta di bollo: 2€ per ogni fattura con importo > 77.47€
 // Scadenze: Q1 → 31/5, Q2 → 30/9, Q3 → 30/11, Q4 → 28/2 anno successivo
 // Se bollo trimestrale ≤ 5000€, si puo accorpare al trimestre successivo (L. 73/2022 art. 3)
-const BOLLO_SOGLIA = 77.47;
+const BOLLO_SOGLIA = window.ForfettarioRules.BOLLO_THRESHOLD;
 const BOLLO_IMPORTO = 2.00;
 const BOLLO_DIFFERIMENTO_SOGLIA = 5000; // EUR — L. 73/2022 art. 3
 const BOLLO_QUARTERS = [
@@ -2535,7 +2535,7 @@ function calcForfettarioValues(tot, settings, year) {
   const imponibile = tot * coeff;
   const inps = calcInpsContributions(imponibile, s, year);
   const cF = inps.cF, cV = inps.cV, cT = inps.cT;
-  const rid = s.riduzione35 == 1 && inps.mode === 'artigiani_commercianti' ? 0.65 : 1;
+  const rid = window.ForfettarioRules.getRiduzioneFactor({ riduzione35: s.riduzione35, inpsMode: inps.mode });
   const cFR = cF * rid, cVR = cV * rid, cTR = cFR + cVR;
   // Imposta sostitutiva: base = imponibile − contributi INPS effettivamente versati (deducibili)
   const tasse = Math.max((imponibile - cT) * imp, 0);
