@@ -538,8 +538,12 @@ function calcBolloPerQuarter(yearData, year) {
   });
 }
 
-// Applica L. 73/2022 art. 3: se Q1 <= 5000, accorpa a Q2; se Q1+Q2 cumulato <= 5000, accorpa a Q3.
-// Nessun differimento dopo Q3: Q4 ha la sua scadenza naturale (28/2 anno successivo).
+// Applica L. 73/2022 art. 3 (modifica D.M. 17/06/2014 art. 6 c. 2):
+// soglia 5.000 € cumulativa per differire il versamento bollo trimestrale.
+// - Q1 ≤ 5000 → accorpa a Q2
+// - Q1+Q2 cumulato ≤ 5000 → accorpa a Q3
+// - Q1+Q2+Q3 cumulato ≤ 5000 → accorpa a Q4 (scadenza 28/02 anno successivo)
+// D-M1 (audit 2026-05-01): aggiunto terzo step che mancava.
 // Gli override manuali bypassano il consolidamento sul trimestre interessato.
 function applyBolloDifferimento(quarters, hasManualOverride) {
   const result = quarters.map(q => ({
@@ -565,6 +569,15 @@ function applyBolloDifferimento(quarters, hasManualOverride) {
     result[2].deferredFromLabels.push(...result[1].deferredFromLabels, result[1].label);
     result[1].deferred = true;
     result[1].finalAmount = 0;
+  }
+  // Q3 (eventualmente cumulato con Q1+Q2) -> Q4 (D-M1 audit 2026-05-01)
+  if (!hasManualOverride(2) && !hasManualOverride(3)
+      && result[2].finalAmount > 0
+      && result[2].finalAmount <= BOLLO_DIFFERIMENTO_SOGLIA) {
+    result[3].finalAmount += result[2].finalAmount;
+    result[3].deferredFromLabels.push(...result[2].deferredFromLabels, result[2].label);
+    result[2].deferred = true;
+    result[2].finalAmount = 0;
   }
   return result;
 }

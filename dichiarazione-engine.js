@@ -555,11 +555,24 @@
         else if (redditoDip <= 50000) irpef = 28000 * 0.23 + (redditoDip - 28000) * 0.35;
         else irpef = 28000 * 0.23 + 22000 * 0.35 + (redditoDip - 50000) * 0.43;
         irpef = Math.round(irpef * 100) / 100;
+        // D-M3 (audit 2026-05-01): detrazione lavoro dipendente art. 13 c. 1 TUIR
+        // (testo aggiornato L. 207/2024 — soglie 2025+). Calcolo conservativo,
+        // formula semplificata per stima — la dichiarazione effettiva passa
+        // dal CU/730 del sostituto. Esposta separatamente per non confondere.
+        var detrazioneLavDip = 0;
+        if (redditoDip > 0 && redditoDip <= 15000) detrazioneLavDip = 1955; // detrazione fissa minima art. 13 c. 1 lett. a
+        else if (redditoDip <= 28000) detrazioneLavDip = 1910 + 1190 * ((28000 - redditoDip) / 13000);
+        else if (redditoDip <= 50000) detrazioneLavDip = 1910 * ((50000 - redditoDip) / 22000);
+        detrazioneLavDip = Math.max(0, Math.round(detrazioneLavDip * 100) / 100);
+        var irpefNetta = Math.max(0, Math.round((irpef - detrazioneLavDip) * 100) / 100);
         result.quadroRN = {
           redditoDipendente: redditoDip,
           irpefLorda: irpef,
+          detrazioneLavDip: detrazioneLavDip,
+          irpefNetta: irpefNetta,
           addizionaleRegionale: parseFloat(input.addizionaleRegionale) || 0,
-          addizionaleComunale: parseFloat(input.addizionaleComunale) || 0
+          addizionaleComunale: parseFloat(input.addizionaleComunale) || 0,
+          disclaimer: 'Stima: la dichiarazione effettiva è quella del sostituto d\'imposta (CU/730). Imposta sostitutiva forfettario e IRPEF dipendente sono cassetti distinti — non sommare.'
         };
         result.quadroRP = { oneriDetraibili: input.oneriDetraibili || [] };
         result.quadroRV = { addizionali: (parseFloat(input.addizionaleRegionale) || 0) + (parseFloat(input.addizionaleComunale) || 0) };

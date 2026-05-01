@@ -19,7 +19,7 @@ Ogni modulo è un IIFE che dichiara funzioni e le espone via `window.*` per back
 | `app-storage.js` | load/save yearData, profilo fiscale, INPS, clienti CRUD | 77 |
 | `app-calendar.js` | Render Calendar + Scadenziario + payment date picker | 56 |
 | `app-accantonamento.js` | Render Accantonamento + CRUD pagamenti + quick-pay modal | 31 |
-| `app-calc.js` | Engine forfettario/ordinario, getEffectiveTaxRate, calcInps | 30 |
+| `app-calc.js` | Engine forfettario/ordinario, getEffectiveTaxRate (`calcInpsContributions` vive in `app-storage.js` ma viene usato qui via script-globals) | 30 |
 | `app-stats.js` | Totali, percentuali, label aliquote | 18 |
 | `app-fatture-helpers.js` | getFatture* / cross-year / migration utilities | 12 |
 | `app-calcolo.js` | Render: Calcolo (home dashboard) + Riepilogo + tabella mensile | 9 |
@@ -292,6 +292,7 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
 - **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO - " hyphen ASCII, vedi C6), `tipoDocumento='TD04'`, `fatturaOriginaleId`. Propaga anche `ritenuta/aliquotaRitenuta/tipoRitenuta/causaleRitenuta` dall'originale (F5).
 - **`ImportoRitenuta` su TD04**: viene emesso col segno del documento (`fmtXmlNum(ritenuta * sign)`) così il bilancio con `ImportoPagamento` resta consistente. `AliquotaRitenuta` resta positiva (è una percentuale, non un importo).
 - **DatiBollo su TD04**: sempre escluso. Rationale: il bollo dell'originale resta a carico emittente (Risoluzione AdE 98/E del 2003); la NC non genera obbligo di bollo autonomo.
+- **Numerazione TD04**: serie unica condivisa con TD01 (`nextProgressivo` scansiona tutte le fatture dell'anno). Conforme art. 21 c. 2 lett. a DPR 633/72 (serie unica O distinta, purché coerente). Caveat audit C-M6 2026-05-01: scelta non parametrizzata, future flexibility via `settings.serieNC` se necessario.
 - No automated SdI submission — upload is always manual via the AdE portal
 
 ### NC TD04 — sync con fattura originale

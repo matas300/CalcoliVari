@@ -199,6 +199,41 @@ describe('FattureNCSync — arrotondamenti', function () {
   });
 });
 
+// ─── D-M2 (audit 2026-05-01): originale a 0 € ─────────────────────────────────
+
+describe('FattureNCSync — D-M2: originale con imponibile 0', function () {
+  test('originale 0€ + NC 0€ → tipoStorno=parziale, stato NON stornata', function () {
+    var orig = {
+      id: 'origZ', tipoDocumento: 'TD01', stato: 'inviata',
+      righe: [{ quantita: 1, prezzoUnitario: 0 }],
+      ncIds: [], ncTotaleImporto: 0
+    };
+    var nc = {
+      id: 'ncZ', tipoDocumento: 'TD04', stato: 'inviata',
+      fatturaOriginaleId: 'origZ',
+      righe: [{ quantita: 1, prezzoUnitario: 0 }]
+    };
+    NC.applyNCToOriginal(nc, [orig, nc]);
+    expect(nc.tipoStorno).toBe('parziale');
+    expect(orig.stato).toBe('inviata');
+  });
+
+  test('originale senza righe → tipoStorno=parziale, stato preservato', function () {
+    var orig = {
+      id: 'origE', tipoDocumento: 'TD01', stato: 'inviata',
+      righe: [], ncIds: [], ncTotaleImporto: 0
+    };
+    var nc = {
+      id: 'ncE', tipoDocumento: 'TD04', stato: 'inviata',
+      fatturaOriginaleId: 'origE',
+      righe: [{ quantita: 1, prezzoUnitario: 100 }]
+    };
+    NC.applyNCToOriginal(nc, [orig, nc]);
+    expect(nc.tipoStorno).toBe('parziale');
+    expect(orig.stato).toBe('inviata');
+  });
+});
+
 // ─── isNCDateValid ────────────────────────────────────────────────────────────
 
 describe('FattureNCSync.isNCDateValid — F4', function () {
