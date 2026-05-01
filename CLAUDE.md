@@ -212,7 +212,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 | Function | Description |
 |---|---|
 | `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
-| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
+| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva. **D-A2 (audit 2026-05-01)**: legge `yearData.fattureEmesse` (single source of truth) con fallback `yearData.fatture` legacy. **D-A1**: `pagamenti.length === 0` (default ensureDataShape) → fallback competenza, evita LM3=0 spurio |
 | `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: sezione I (artigiani/commercianti) con RR7 acconti versati lett da pagamenti, o sezione II (gestione separata) con RR21 simmetrico (v3 fix 2026-04-30). Aliquota GS fallback 26.07% (Circ. INPS 26/2025 + 8/2026). Warning `RR_CASSA_NON_GESTITA` se inpsMode fuori whitelist (CASSE-1) e `RR_RIDUZIONE35_VERIFICA` se riduzione35 attiva (deve essere comunicata a INPS, art. 1 c. 77 L. 190/2014) |
 | `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
 | `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
