@@ -40,18 +40,35 @@
       overrides = overrides || {};
       var year = yearData.year || new Date().getFullYear();
 
-      // Compute total ricavi (fatture paid in year)
+      // D-A2 (audit 2026-05-01): single source of truth `fattureEmesse` quando disponibile.
+      // Architettura post-2026-04-20 (CLAUDE.md "Fatture: single source of truth"):
+      // FattureSelectors è la API canonica. Per mantenere l'engine pure, accettiamo
+      // l'array già filtrato come `yearData.fattureEmesse`. Fallback su `yearData.fatture`
+      // (legacy monthly-keyed) per backward-compat con test e profili non migrati.
       var totalRicavi = 0;
-      var fatture = yearData.fatture || {};
-      Object.keys(fatture).forEach(function(mese) {
-        var lista = fatture[mese] || [];
-        lista.forEach(function(f) {
+      if (Array.isArray(yearData.fattureEmesse)) {
+        yearData.fattureEmesse.forEach(function (f) {
+          if (!f) return;
+          if (f.stato === 'bozza' || f.stato === 'annullata') return;
           var pagAnno = f.pagAnno != null ? f.pagAnno : year;
-          if (pagAnno === year) {
-            totalRicavi += (parseFloat(f.importo) || 0);
-          }
+          if (pagAnno !== year) return;
+          var imp = parseFloat(f.importo) || 0;
+          var ncTotal = parseFloat(f.ncTotaleImporto) || 0;
+          var sign = f.tipoDocumento === 'TD04' ? -1 : 1;
+          totalRicavi += (Math.abs(imp) - Math.max(0, ncTotal)) * sign;
         });
-      });
+      } else {
+        var fatture = yearData.fatture || {};
+        Object.keys(fatture).forEach(function (mese) {
+          var lista = fatture[mese] || [];
+          lista.forEach(function (f) {
+            var pagAnno = f.pagAnno != null ? f.pagAnno : year;
+            if (pagAnno === year) {
+              totalRicavi += (parseFloat(f.importo) || 0);
+            }
+          });
+        });
+      }
       totalRicavi = Math.round(totalRicavi * 100) / 100;
 
       var coeff = parseFloat(settings.coefficiente) || 0;
@@ -76,10 +93,15 @@
       // Override: overrides.LM3_value vince sempre.
       var lm3, lm3Source;
       var pagamenti = yearData.pagamenti;
+      // D-A1 (audit 2026-05-01): fallback competenza quando `pagamenti` è array vuoto.
+      // ensureDataShape inizializza sempre `pagamenti = []`, quindi prima il ramo
+      // Array.isArray restituiva sempre 0 per utenti che non tracciano F24 nell'app
+      // → LM3=0 → imposta sostitutiva sovrastimata. Ora il fallback per competenza
+      // copre anche array vuoto (pagamenti tracciabili ma nessuno registrato).
       if (overrides.LM3_value != null) {
         lm3 = parseFloat(overrides.LM3_value);
         lm3Source = 'override';
-      } else if (Array.isArray(pagamenti)) {
+      } else if (Array.isArray(pagamenti) && pagamenti.length > 0) {
         var sumContrib = 0;
         pagamenti.forEach(function (p) {
           if (p && p.tipo === 'contributi') {
@@ -533,11 +555,24 @@
         else if (redditoDip <= 50000) irpef = 28000 * 0.23 + (redditoDip - 28000) * 0.35;
         else irpef = 28000 * 0.23 + 22000 * 0.35 + (redditoDip - 50000) * 0.43;
         irpef = Math.round(irpef * 100) / 100;
+        // D-M3 (audit 2026-05-01): detrazione lavoro dipendente art. 13 c. 1 TUIR
+        // (testo aggiornato L. 207/2024 — soglie 2025+). Calcolo conservativo,
+        // formula semplificata per stima — la dichiarazione effettiva passa
+        // dal CU/730 del sostituto. Esposta separatamente per non confondere.
+        var detrazioneLavDip = 0;
+        if (redditoDip > 0 && redditoDip <= 15000) detrazioneLavDip = 1955; // detrazione fissa minima art. 13 c. 1 lett. a
+        else if (redditoDip <= 28000) detrazioneLavDip = 1910 + 1190 * ((28000 - redditoDip) / 13000);
+        else if (redditoDip <= 50000) detrazioneLavDip = 1910 * ((50000 - redditoDip) / 22000);
+        detrazioneLavDip = Math.max(0, Math.round(detrazioneLavDip * 100) / 100);
+        var irpefNetta = Math.max(0, Math.round((irpef - detrazioneLavDip) * 100) / 100);
         result.quadroRN = {
           redditoDipendente: redditoDip,
           irpefLorda: irpef,
+          detrazioneLavDip: detrazioneLavDip,
+          irpefNetta: irpefNetta,
           addizionaleRegionale: parseFloat(input.addizionaleRegionale) || 0,
-          addizionaleComunale: parseFloat(input.addizionaleComunale) || 0
+          addizionaleComunale: parseFloat(input.addizionaleComunale) || 0,
+          disclaimer: 'Stima: la dichiarazione effettiva è quella del sostituto d\'imposta (CU/730). Imposta sostitutiva forfettario e IRPEF dipendente sono cassetti distinti — non sommare.'
         };
         result.quadroRP = { oneriDetraibili: input.oneriDetraibili || [] };
         result.quadroRV = { addizionali: (parseFloat(input.addizionaleRegionale) || 0) + (parseFloat(input.addizionaleComunale) || 0) };

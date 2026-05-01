@@ -1539,8 +1539,36 @@
     return String(n).padStart(5, '0');
   }
 
+  // B (audit 2026-05-01): detect divergenza sanitize Latin-1 sull'identità cessionario
+  // (Denominazione/Nome/Cognome). Art. 21 DPR 633/72: generalità cessionario CORRETTE.
+  // Sanitize riscrive char fuori Latin-1 (es. CJK) → fattura formalmente alterata.
+  // Caso tipico per IT/UE: zero impatto. Caso clienti extra-UE con char nativi: warning.
+  // Non bloccante: l'utente decide se procedere o correggere l'anagrafica.
+  function _detectCessionarioSanitizeWarning(cliente) {
+    if (!cliente) return null;
+    const fields = [
+      ['Denominazione', cliente.denominazione || cliente.ragioneSociale || cliente.nome || ''],
+      ['Nome', cliente.nome || ''],
+      ['Cognome', cliente.cognome || '']
+    ];
+    const altered = [];
+    for (const [label, raw] of fields) {
+      const original = String(raw || '').trim();
+      if (!original) continue;
+      const sanitized = sanitizeXmlLatin1(original).trim();
+      if (sanitized !== original) {
+        altered.push(label + ' "' + original + '" → "' + sanitized + '"');
+      }
+    }
+    if (!altered.length) return null;
+    return 'L\'identità del cliente verrà alterata dalla sanitize Latin-1 richiesta da SdI '
+      + '(art. 21 DPR 633/72 — generalità cessionario): ' + altered.join('; ')
+      + '. Verifica che l\'anagrafica sia corretta prima di emettere.';
+  }
+
   function validateFatturaForXml(draft) {
     const errors = [];
+    const warnings = [];
     const profile = getProfileFiscalData();
     if (!String(profile.partitaIva || '').replace(/\D/g, '')) errors.push('Partita IVA del profilo mancante — configurala nel profilo fiscale.');
     if (!String(profile.indirizzo || '').trim()) errors.push('Indirizzo del cedente mancante nell\'anagrafica profilo.');
@@ -1566,11 +1594,22 @@
         const hasCF = isValidCodiceFiscale(String(cliente.codiceFiscale || '').trim());
         if (!hasPivaIT && !hasCF) errors.push('Cliente IT senza P.IVA valida né CF valido: SdI rifiuterà.');
       }
+      // C7 (audit 2026-05-01): replica check IPA anche sul path XML download.
+      // Senza questo, una NC verso PA con codiceSDI malformato bypassa la validate
+      // e produce XML che SdI rifiuta con EC02 (D.M. 55/2013 art. 2).
+      if (cliente.tipoCliente === 'PA') {
+        const ipa = String(cliente.codiceSDI || '').trim();
+        if (!/^[A-Z0-9]{6}$/i.test(ipa)) {
+          errors.push('Cliente PA: il Codice IPA deve essere 6 caratteri alfanumerici (D.M. 55/2013 art. 2).');
+        }
+      }
     }
     // C-A2 bypass: blocca ritenuta forfettario su preview/download XML (DUP-1 v2)
     const ritenutaErrXml = _ValidatorsFatt.validateRitenutaForfettario(draft, AppContext.getSettings(), { context: 'xml' });
     if (ritenutaErrXml) errors.push(ritenutaErrXml);
-    return { errors };
+    const sanitizeWarn = _detectCessionarioSanitizeWarning(draft.clienteSnapshot);
+    if (sanitizeWarn) warnings.push(sanitizeWarn);
+    return { errors, warnings };
   }
 
   function buildFatturaElettronicaXmlNC(noteCredit, fatturaOriginale) {
@@ -1659,12 +1698,18 @@
   }
 
   // NC — DatiFattureCollegate (XSD: dentro DatiGenerali, dopo DatiGeneraliDocumento).
+  // C8 (audit 2026-05-01): la Data deve essere ISO YYYY-MM-DD (XSD xs:date).
+  // Una fattura legacy/import con data malformata produrrebbe scarto SdI 00200/00400.
   function _buildXmlDatiFattureCollegate(isNC, fatturaOriginale) {
     if (!isNC || !fatturaOriginale) return '';
+    const dataOrig = String(fatturaOriginale.data || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataOrig)) {
+      throw new Error('NC: data fattura originale "' + dataOrig + '" non in formato ISO YYYY-MM-DD (XSD xs:date richiesto da SdI).');
+    }
     return '\n    <DatiFattureCollegate>\n' +
       '      <RiferimentoNumeroLinea>1</RiferimentoNumeroLinea>\n' +
       '      <IdDocumento>' + xmlEscape(String(fatturaOriginale.numero || '')) + '</IdDocumento>\n' +
-      '      <Data>' + xmlEscape(String(fatturaOriginale.data || '')) + '</Data>\n' +
+      '      <Data>' + xmlEscape(dataOrig) + '</Data>\n' +
       '    </DatiFattureCollegate>';
   }
 
@@ -1932,6 +1977,7 @@ ${dettaglioLinee.join('\n')}
     const draft = collectDraftFromState();
     const val = validateFatturaForXml(draft);
     if (val.errors.length) { showFatturaToast(val.errors[0], 'error'); return; }
+    if (val.warnings && val.warnings.length) showFatturaToast(val.warnings[0], 'warn');
     const xml = buildFatturaElettronicaXml(draft);
     const fileName = `IT${String(getProfileFiscalData().partitaIva).replace(/\D/g,'')}_${getXmlInvoiceProgressivo(draft)}.xml`;
     downloadTextFile(fileName, xml);
@@ -2019,7 +2065,7 @@ ${dettaglioLinee.join('\n')}
       'Attendi la <strong>ricevuta di presa in carico</strong>. Lo stato diventer\u00e0 <em>Consegnata</em> quando il cliente riceve la fattura.'));
     stepsWrap.appendChild(makeSdiStep(6,
       '<strong>Una volta sola, attiva la conservazione gratuita 15 anni</strong> dell\'AdE: senza adesione le fatture restano nel cassetto solo 2 anni. '
-      + '<button type="button" class="sdi-guide-link" style="background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;padding:0;font:inherit" onclick="window.showAdeConservationGuide && window.showAdeConservationGuide()">Vedi guida adesione &rarr;</button>'));
+      + '<button type="button" class="sdi-step-link-btn" onclick="window.showAdeConservationGuide && window.showAdeConservationGuide()">Vedi guida adesione &rarr;</button>'));
     guide.appendChild(stepsWrap);
 
     // Problems
@@ -2046,16 +2092,20 @@ ${dettaglioLinee.join('\n')}
     link.rel = 'noopener';
     link.className = 'btn-add sdi-portal-btn';
     link.textContent = 'Apri portale AdE';
+    const spacer = document.createElement('span');
+    spacer.className = 'sdi-actions-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
     const closeB = document.createElement('button');
     closeB.type = 'button';
     closeB.className = 'btn-ghost';
     closeB.textContent = 'Chiudi';
     closeB.onclick = function () { closeFatturaModal(); renderFattureDocsSection(); };
     actions.appendChild(link);
+    actions.appendChild(spacer);
     actions.appendChild(closeB);
     guide.appendChild(actions);
 
-    modalContent.innerHTML = '';
+    while (modalContent.firstChild) modalContent.removeChild(modalContent.firstChild);
     modalContent.appendChild(guide);
   }
 
@@ -2189,11 +2239,15 @@ ${dettaglioLinee.join('\n')}
     const ackBtn = document.createElement('button');
     ackBtn.type = 'button';
     ackBtn.className = 'btn-ghost';
-    ackBtn.textContent = 'Ho già aderito — non ricordarmelo più';
+    ackBtn.textContent = 'Ho già aderito';
+    ackBtn.title = 'Non ricordarmelo più';
     ackBtn.onclick = function () {
       acknowledgeAdeConservation();
       closeFatturaModal();
     };
+    const spacer = document.createElement('span');
+    spacer.className = 'sdi-actions-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
     const closeB = document.createElement('button');
     closeB.type = 'button';
     closeB.className = 'btn-ghost';
@@ -2201,6 +2255,7 @@ ${dettaglioLinee.join('\n')}
     closeB.onclick = function () { closeFatturaModal(); };
     actions.appendChild(link);
     actions.appendChild(ackBtn);
+    actions.appendChild(spacer);
     actions.appendChild(closeB);
     guide.appendChild(actions);
 
@@ -2235,6 +2290,9 @@ ${dettaglioLinee.join('\n')}
       if (validation.errors && validation.errors.length) {
         showFatturaToast(validation.errors[0], 'error');
         return;
+      }
+      if (validation.warnings && validation.warnings.length) {
+        showFatturaToast(validation.warnings[0], 'warn');
       }
       const xml = (saved.tipoDocumento === 'TD04' && saved.fatturaOriginaleId)
         ? buildFatturaElettronicaXmlNC(saved, _findOriginale(saved.fatturaOriginaleId))
@@ -2369,7 +2427,10 @@ ${dettaglioLinee.join('\n')}
       anno: annoOggi,
       clienteId: orig.clienteId,
       clienteSnapshot: { ...orig.clienteSnapshot },
-      righe: (orig.righe || []).map(r => ({ ...r, descrizione: 'STORNO \u2014 ' + r.descrizione })),
+      // C6 (audit 2026-05-01): hyphen ASCII invece di em-dash U+2014. L'em-dash
+      // \u00e8 fuori Latin-1 Supplement (XSD FatturaPA String*LatinType): sanitizeXmlLatin1
+      // lo riscriverebbe a "-" silenziosamente, divergendo UI/PDF da XML. Coerenza alla sorgente.
+      righe: (orig.righe || []).map(r => ({ ...r, descrizione: 'STORNO - ' + r.descrizione })),
       tipoDocumento: 'TD04',
       fatturaOriginaleId: orig.id,
       stato: 'bozza',

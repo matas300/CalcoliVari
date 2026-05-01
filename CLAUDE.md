@@ -19,7 +19,7 @@ Ogni modulo è un IIFE che dichiara funzioni e le espone via `window.*` per back
 | `app-storage.js` | load/save yearData, profilo fiscale, INPS, clienti CRUD | 77 |
 | `app-calendar.js` | Render Calendar + Scadenziario + payment date picker | 56 |
 | `app-accantonamento.js` | Render Accantonamento + CRUD pagamenti + quick-pay modal | 31 |
-| `app-calc.js` | Engine forfettario/ordinario, getEffectiveTaxRate, calcInps | 30 |
+| `app-calc.js` | Engine forfettario/ordinario, getEffectiveTaxRate (`calcInpsContributions` vive in `app-storage.js` ma viene usato qui via script-globals) | 30 |
 | `app-stats.js` | Totali, percentuali, label aliquote | 18 |
 | `app-fatture-helpers.js` | getFatture* / cross-year / migration utilities | 12 |
 | `app-calcolo.js` | Render: Calcolo (home dashboard) + Riepilogo + tabella mensile | 9 |
@@ -212,7 +212,7 @@ A small delta between the two views is **expected**, not a bug. Audit B1 documen
 | Function | Description |
 |---|---|
 | `buildFrontespizio(profile, year, input)` | Frontespizio section from anagrafica + tipoDichiarazione |
-| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva |
+| `buildQuadroLM(yearData, settings, overrides)` | Quadro LM: ricavi, reddito netto, imposta sostitutiva. **D-A2 (audit 2026-05-01)**: legge `yearData.fattureEmesse` (single source of truth) con fallback `yearData.fatture` legacy. **D-A1**: `pagamenti.length === 0` (default ensureDataShape) → fallback competenza, evita LM3=0 spurio |
 | `buildQuadroRR(yearData, settings, quadroLM, overrides)` | Quadro RR: sezione I (artigiani/commercianti) con RR7 acconti versati lett da pagamenti, o sezione II (gestione separata) con RR21 simmetrico (v3 fix 2026-04-30). Aliquota GS fallback 26.07% (Circ. INPS 26/2025 + 8/2026). Warning `RR_CASSA_NON_GESTITA` se inpsMode fuori whitelist (CASSE-1) e `RR_RIDUZIONE35_VERIFICA` se riduzione35 attiva (deve essere comunicata a INPS, art. 1 c. 77 L. 190/2014) |
 | `buildQuadroRS(yearData, settings, overrides)` | Quadro RS: spese deducibili |
 | `buildQuadroRX(yearData, settings, precedente, overrides)` | Quadro RX: crediti d'imposta, compensazioni |
@@ -282,12 +282,17 @@ Tutti i colori sono token CSS in `:root` (dark) e `html[data-theme="light"]` (li
   - **NR-3** (post-audit v2 2026-04-29): cliente UE → strip prefisso paese duplicato da `IdCodice` (es. `DE123456789` con `IdPaese=DE` → `IdCodice=123456789`). Regex case-insensitive con fallback al valore originale (FatturaPA v1.2 §2.1.2.6)
   - **A-A7 v2** (post-audit v2 2026-04-29): `emetteRimborsoBollo` rispetta soglia 77,47 € (D.M. 17/06/2014 art. 6) — coerente con `applicaBolloSeDovuto` per evitare XML con riga rimborso senza `<DatiBollo>`
   - **NR-10** (post-audit v2 2026-04-29): `_resolveRegimeForPdf()` con fallback chain `getSettings → localStorage → throw esplicito`. Mai PDF con dicitura forfettario silenziosamente assente. Esposta `window.__resolveRegimeForPdf` per test
+  - **C6** (audit NC 2026-05-01): `'STORNO - '` con hyphen ASCII (era em-dash U+2014). L'em-dash è fuori Latin-1 Supplement: `sanitizeXmlLatin1` lo riscriveva silenziosamente, divergendo UI/PDF da XML
+  - **C7** (audit NC 2026-05-01): replicato check IPA 6-char alfanum (D.M. 55/2013 art. 2) anche in `validateFatturaForXml`. Prima solo in `validateDraftForInvio`: una NC verso PA con codiceSDI malformato bypassava il path XML download
+  - **C8** (audit NC 2026-05-01): `_buildXmlDatiFattureCollegate` valida formato ISO YYYY-MM-DD su `fatturaOriginale.data` con throw esplicito (XSD xs:date). Evita scarto SdI 00200/00400 silenzioso da fattura legacy con data malformata
+  - **B** (audit 2026-05-01): warning non-bloccante a save/preview/download XML se `sanitizeXmlLatin1` altera identità cessionario (Denominazione/Nome/Cognome) — art. 21 DPR 633/72. `validateFatturaForXml` ritorna `{ errors, warnings }`; toast `data-tone="warn"` al primo warning. Helper `_detectCessionarioSanitizeWarning(cliente)`
 - **`MODALITA_TO_MP` map** + **`modalitaToCodiceMP(str)`**: fuzzy-match payment method → MP01–MP15, default MP05 (bonifico)
 - **`showXmlPreviewModal(invoice)`** + **`previewFatturaXml()`**: anteprima XML in-app con pre-scrollabile, indent 2 spazi, bottoni "Copia negli appunti" + "Scarica XML"; bottone "Anteprima XML" accanto a "Scarica XML" nel modal fattura
 - **`showSdiUploadGuide(fileName)`**: 4-step guide per upload manuale sul portale AdE "Fatture e Corrispettivi"
-- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO — "), `tipoDocumento='TD04'`, `fatturaOriginaleId`. Propaga anche `ritenuta/aliquotaRitenuta/tipoRitenuta/causaleRitenuta` dall'originale (F5).
+- **`openNotaCreditoModal(fatturaOriginaleId)`**: apre modal NC TD04 prefillato con dati fattura originale (righe con prefisso "STORNO - " hyphen ASCII, vedi C6), `tipoDocumento='TD04'`, `fatturaOriginaleId`. Propaga anche `ritenuta/aliquotaRitenuta/tipoRitenuta/causaleRitenuta` dall'originale (F5).
 - **`ImportoRitenuta` su TD04**: viene emesso col segno del documento (`fmtXmlNum(ritenuta * sign)`) così il bilancio con `ImportoPagamento` resta consistente. `AliquotaRitenuta` resta positiva (è una percentuale, non un importo).
 - **DatiBollo su TD04**: sempre escluso. Rationale: il bollo dell'originale resta a carico emittente (Risoluzione AdE 98/E del 2003); la NC non genera obbligo di bollo autonomo.
+- **Numerazione TD04**: serie unica condivisa con TD01 (`nextProgressivo` scansiona tutte le fatture dell'anno). Conforme art. 21 c. 2 lett. a DPR 633/72 (serie unica O distinta, purché coerente). Caveat audit C-M6 2026-05-01: scelta non parametrizzata, future flexibility via `settings.serieNC` se necessario.
 - No automated SdI submission — upload is always manual via the AdE portal
 
 ### NC TD04 — sync con fattura originale

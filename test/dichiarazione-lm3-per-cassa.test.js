@@ -71,8 +71,22 @@ describe('C4 — LM3 contributi deducibili per cassa (art. 1 c. 64 L. 190/2014)'
     expect(q.LM3.source).toBe('fallback-competenza');
   });
 
-  test('pagamenti=[] (array vuoto, decisione esplicita) → LM3=0 source=pagamenti', function () {
+  // D-A1 (audit 2026-05-01): array vuoto è il default da `ensureDataShape`,
+  // NON una decisione esplicita dell'utente. Trattarlo come "pagamenti=0 cassa"
+  // produceva LM3=0 → imposta sostitutiva sovrastimata per chiunque non
+  // tracciasse F24 nell'app. Ora array vuoto → fallback competenza.
+  test('pagamenti=[] (default ensureDataShape, non explicit) → fallback competenza', function () {
     var y = mkYd({ pagamenti: [] });
+    var q = DE.buildQuadroLM(y, y.settings, {});
+    expect(q.LM3.source).toBe('fallback-competenza');
+    expect(q.LM3.value).toBe(4000);
+  });
+
+  test('pagamenti con SOLO entry non-contributi (es. tasse) → cassa, LM3=0', function () {
+    // Caso "user sta tracciando F24 ma non ha ancora pagato contributi": cassa esplicita.
+    var y = mkYd({ pagamenti: [
+      { data: '2025-06-30', tipo: 'tasse', importo: 1500 }
+    ]});
     var q = DE.buildQuadroLM(y, y.settings, {});
     expect(q.LM3.value).toBe(0);
     expect(q.LM3.source).toBe('pagamenti');

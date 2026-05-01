@@ -5,6 +5,10 @@
   'use strict';
 
   // ═══════════════════ Calculations ═══════════════════
+  // D-M4 (audit 2026-05-01): allinea convenzione di arrotondamento al
+  // tax-engine (ceil2 fiscalmente prudente). Senza ceil2 il dashboard "competenza"
+  // mostrava centesimi in drift rispetto a buildForfettarioScenario "cassa".
+  const _ceil2 = (x) => Math.ceil(x * 100) / 100;
   function calcForfettarioValues(tot, settings, year) {
     const s = settings || {};
     const coeff = s.coefficiente / 100, imp = s.impostaSostitutiva / 100;
@@ -14,8 +18,8 @@
     const rid = window.ForfettarioRules.getRiduzioneFactor({ riduzione35: s.riduzione35, inpsMode: inps.mode });
     const cFR = cF * rid, cVR = cV * rid, cTR = cFR + cVR;
     // Imposta sostitutiva: base = imponibile − contributi INPS effettivamente versati (deducibili)
-    const tasse = Math.max((imponibile - cT) * imp, 0);
-    const tasseR = Math.max((imponibile - cTR) * imp, 0);
+    const tasse = _ceil2(Math.max((imponibile - cT) * imp, 0));
+    const tasseR = _ceil2(Math.max((imponibile - cTR) * imp, 0));
     const n = tot - cT - tasse, nR = tot - cTR - tasseR;
     return {
       totale: tot, imponibile, tasse, tasseR, cF, cV, cT, cFR, cVR, cTR, n, nR, inpsMode: inps.mode,

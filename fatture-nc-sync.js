@@ -60,7 +60,16 @@
     }
 
     var origImp = _sommaRighe(orig);
-    var tipoStorno = (orig.ncTotaleImporto + TOLERANZA_TOTALE >= origImp) ? 'totale' : 'parziale';
+    // D-M2 (audit 2026-05-01): se l'originale ha imponibile <= 0 (fattura
+    // corrotta, legacy senza righe, o solo descrittiva), la formula
+    // `ncTotaleImporto + tolleranza >= origImp` ritornerebbe 'totale' anche
+    // per NC da 0 €. Trattiamo come 'parziale' senza promuovere a 'stornata'.
+    var tipoStorno;
+    if (origImp <= 0) {
+      tipoStorno = 'parziale';
+    } else {
+      tipoStorno = (orig.ncTotaleImporto + TOLERANZA_TOTALE >= origImp) ? 'totale' : 'parziale';
+    }
     nc.tipoStorno = tipoStorno;
 
     if (tipoStorno === 'totale' && orig.stato !== 'stornata') {
