@@ -15,6 +15,22 @@
     return null;
   }
 
+  // D-A2 (audit 2026-05-01): la dichiarazione legge `fattureEmesse` come single
+  // source of truth (CLAUDE.md "Fatture: single source of truth"). Inietta
+  // l'array nel yearData prima di passarlo all'engine pure (che fa fallback su
+  // yearData.fatture per backcompat con test).
+  function _enrichYearDataForEngine(yd) {
+    if (!yd) return yd;
+    if (typeof window === 'undefined' || !window.FattureSelectors) return yd;
+    try {
+      var profile = (window.AppContext && typeof window.AppContext.getProfile === 'function')
+        ? window.AppContext.getProfile() : null;
+      if (!profile) return yd;
+      var fatt = window.FattureSelectors.all(profile) || [];
+      return Object.assign({}, yd, { fattureEmesse: fatt });
+    } catch (_e) { return yd; }
+  }
+
   function getDichiarazione() {
     var yd = getYearData();
     return (yd && yd.dichiarazione) ? yd.dichiarazione : {};
@@ -30,7 +46,7 @@
       contiEsteri: dich.contiEsteri || [],
       overrides: dich.overrides || {}
     };
-    return window.DichiarazioneEngine.buildDichiarazione(_year, yd, input);
+    return window.DichiarazioneEngine.buildDichiarazione(_year, _enrichYearDataForEngine(yd), input);
   }
 
   // ── Steps definition ────────────────────────────────────────────────────────
@@ -253,7 +269,7 @@
     var settings = yd.settings || {};
     var dich = yd.dichiarazione || {};
     var overrides = dich.overrides || {};
-    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(yd, settings, overrides) : {};
+    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(_enrichYearDataForEngine(yd), settings, overrides) : {};
 
     var html = '<div class="dich-step-content"><h2>Quadro LM &mdash; Regime forfettario</h2>';
 
@@ -288,8 +304,9 @@
     var settings = yd.settings || {};
     var dich = yd.dichiarazione || {};
     var overrides = dich.overrides || {};
-    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(yd, settings, overrides) : {};
-    var rr = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRR(yd, settings, lm, overrides) : {};
+    var ydEnriched = _enrichYearDataForEngine(yd);
+    var lm = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroLM(ydEnriched, settings, overrides) : {};
+    var rr = window.DichiarazioneEngine ? window.DichiarazioneEngine.buildQuadroRR(ydEnriched, settings, lm, overrides) : {};
 
     var html = '<div class="dich-step-content"><h2>Quadro RR &mdash; Contributi previdenziali</h2>';
 

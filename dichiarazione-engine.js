@@ -40,18 +40,35 @@
       overrides = overrides || {};
       var year = yearData.year || new Date().getFullYear();
 
-      // Compute total ricavi (fatture paid in year)
+      // D-A2 (audit 2026-05-01): single source of truth `fattureEmesse` quando disponibile.
+      // Architettura post-2026-04-20 (CLAUDE.md "Fatture: single source of truth"):
+      // FattureSelectors è la API canonica. Per mantenere l'engine pure, accettiamo
+      // l'array già filtrato come `yearData.fattureEmesse`. Fallback su `yearData.fatture`
+      // (legacy monthly-keyed) per backward-compat con test e profili non migrati.
       var totalRicavi = 0;
-      var fatture = yearData.fatture || {};
-      Object.keys(fatture).forEach(function(mese) {
-        var lista = fatture[mese] || [];
-        lista.forEach(function(f) {
+      if (Array.isArray(yearData.fattureEmesse)) {
+        yearData.fattureEmesse.forEach(function (f) {
+          if (!f) return;
+          if (f.stato === 'bozza' || f.stato === 'annullata') return;
           var pagAnno = f.pagAnno != null ? f.pagAnno : year;
-          if (pagAnno === year) {
-            totalRicavi += (parseFloat(f.importo) || 0);
-          }
+          if (pagAnno !== year) return;
+          var imp = parseFloat(f.importo) || 0;
+          var ncTotal = parseFloat(f.ncTotaleImporto) || 0;
+          var sign = f.tipoDocumento === 'TD04' ? -1 : 1;
+          totalRicavi += (Math.abs(imp) - Math.max(0, ncTotal)) * sign;
         });
-      });
+      } else {
+        var fatture = yearData.fatture || {};
+        Object.keys(fatture).forEach(function (mese) {
+          var lista = fatture[mese] || [];
+          lista.forEach(function (f) {
+            var pagAnno = f.pagAnno != null ? f.pagAnno : year;
+            if (pagAnno === year) {
+              totalRicavi += (parseFloat(f.importo) || 0);
+            }
+          });
+        });
+      }
       totalRicavi = Math.round(totalRicavi * 100) / 100;
 
       var coeff = parseFloat(settings.coefficiente) || 0;
@@ -76,10 +93,15 @@
       // Override: overrides.LM3_value vince sempre.
       var lm3, lm3Source;
       var pagamenti = yearData.pagamenti;
+      // D-A1 (audit 2026-05-01): fallback competenza quando `pagamenti` è array vuoto.
+      // ensureDataShape inizializza sempre `pagamenti = []`, quindi prima il ramo
+      // Array.isArray restituiva sempre 0 per utenti che non tracciano F24 nell'app
+      // → LM3=0 → imposta sostitutiva sovrastimata. Ora il fallback per competenza
+      // copre anche array vuoto (pagamenti tracciabili ma nessuno registrato).
       if (overrides.LM3_value != null) {
         lm3 = parseFloat(overrides.LM3_value);
         lm3Source = 'override';
-      } else if (Array.isArray(pagamenti)) {
+      } else if (Array.isArray(pagamenti) && pagamenti.length > 0) {
         var sumContrib = 0;
         pagamenti.forEach(function (p) {
           if (p && p.tipo === 'contributi') {
