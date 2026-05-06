@@ -63,7 +63,7 @@
     const pagCell = `<div class="pag-cell">
       <select class="pag-mese" onchange="setPagMese(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
         <option value="">Mese...</option>
-        ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}" ${f.pagMese === (i+1) ? 'selected' : ''}>${ms}</option>`).join('')}
+        ${MONTHS.map((ms, i) => `<option value="${i+1}" ${f.pagMese === (i+1) ? 'selected' : ''}>${ms}</option>`).join('')}
       </select>
       <input type="number" class="pag-anno fatt-input-anno" value="${f.pagAnno || ''}" placeholder="${currentYear}" min="2020" max="2040"
         onchange="setPagAnno(${m},${fi},this.value)" ${pagCellDisabled ? 'disabled' : ''}>
@@ -131,7 +131,7 @@
             <td data-label="Tassato nel"><div class="pag-cell">
               <select class="pag-mese" onchange="setPagMese(${m},0,this.value)" disabled>
                 <option value="">Mese...</option>
-                ${MONTHS_SHORT.map((ms, i) => `<option value="${i+1}">${ms}</option>`).join('')}
+                ${MONTHS.map((ms, i) => `<option value="${i+1}">${ms}</option>`).join('')}
               </select>
               <input type="number" class="pag-anno fatt-input-anno" value="" placeholder="${currentYear}" min="2020" max="2040"
                 onchange="setPagAnno(${m},0,this.value)" disabled>
