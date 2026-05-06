@@ -82,22 +82,16 @@
       window.DichiarazioneUI.mount('tab-dichiarazione', currentYear);
     }
 
-    // Render card A (fatture emesse) quando si passa a fatture
+    // Render card A (fatture emesse) quando si passa a fatture.
+    // F1 fix 2026-05-06: rimosso il trigger automatico di
+    // FattureMigration.migrateLegacyYear. La migrazione promuoveva ogni riga
+    // di data.fatture[M] a fattura sintetica `pagata` con progressivo: 0,
+    // generando fatture-ghost con numerazione duplicata (irregolarità art. 21
+    // DPR 633/72). Profili già migrati (Mattia/Peru) hanno _fattureMigratedAt
+    // settato e non sono toccati. La funzione FattureMigration.migrateLegacyYear
+    // resta esposta per chiamate manuali (tooling/recovery) ma non gira più
+    // automaticamente.
     if (tab === 'fatture') {
-      // Migrazione legacy one-shot per-anno (unificazione store)
-      if (window.FattureMigration && typeof window.FattureMigration.migrateLegacyYear === 'function') {
-        try {
-          for (var y = 2020; y <= new Date().getFullYear() + 1; y++) {
-            var yd = loadYearData(y);
-            if (yd && yd.fatture && !yd._fattureMigratedAt) {
-              var res = window.FattureMigration.migrateLegacyYear(currentProfile, y, yd);
-              if (res.migrated > 0) console.log('[fatture-migration] anno', y, '→', res.migrated, 'righe migrate');
-              yd._fattureMigratedAt = new Date().toISOString();
-              saveYearData(y, yd);
-            }
-          }
-        } catch (err) { console.warn('[fatture-migration] errore', err); }
-      }
       if (typeof window.renderFattureDocsSection === 'function') {
         window.renderFattureDocsSection();
       }

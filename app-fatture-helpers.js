@@ -58,8 +58,14 @@
   // Returns legacy-shaped objects {importo, pagMese, pagAnno, desc, id, origine, stato, tipoDocumento}
   // used by callers that haven't been refactored yet (e.g. getAllFattureForBudget uses yearData directly).
   function getFatture(month) {
-    if (window.FattureSelectors) {
-      return window.FattureSelectors.getByMonth(currentProfile, currentYear, month).map(f => {
+    // F1 fix 2026-05-06: aggrega legacy data.fatture[M] + fatture wizard
+    // (escludendo legacy-migrated per evitare duplicati con la sorgente legacy
+    // ancora in data.fatture[M] post-migrazione).
+    const legacyRows = getFattureFromYearData(data, month);
+    if (!window.FattureSelectors) return legacyRows;
+    const wizardRows = window.FattureSelectors.getByMonth(currentProfile, currentYear, month)
+      .filter(f => f.origine !== 'legacy-migrated')
+      .map(f => {
         const imp = window.FattureSelectors.getImportoSigned(f);
         const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
         const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
@@ -74,16 +80,22 @@
           tipoDocumento: f.tipoDocumento
         };
       });
-    }
-    // Fallback to legacy store (pre-migration)
-    return getFattureFromYearData(data, month);
+    return [...legacyRows, ...wizardRows];
   }
 
   // getFattureIssued: come getFatture ma filtrata per mese di EMISSIONE (issuedMonth).
   // Usata dal tab Fatture per raggruppare le fatture nel mese in cui sono state fatte.
   function getFattureIssued(month) {
-    if (window.FattureSelectors && typeof window.FattureSelectors.getByIssuedMonth === 'function') {
-      return window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month).map(f => {
+    // F1 fix 2026-05-06: aggrega come getFatture, raggruppando per mese di
+    // EMISSIONE (issuedMonth). Esclude wizard rows con origine='legacy-migrated'
+    // perché già presenti come legacy in data.fatture[M].
+    const legacyRows = getFattureFromYearData(data, month);
+    if (!window.FattureSelectors || typeof window.FattureSelectors.getByIssuedMonth !== 'function') {
+      return legacyRows;
+    }
+    const wizardRows = window.FattureSelectors.getByIssuedMonth(currentProfile, currentYear, month)
+      .filter(f => f.origine !== 'legacy-migrated')
+      .map(f => {
         const imp = window.FattureSelectors.getImportoSigned(f);
         const desc = (f.righe && f.righe[0] && f.righe[0].descrizione) || f.numero || '';
         const cliente = f.clienteSnapshot ? (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome || '')) : '';
@@ -98,8 +110,7 @@
           tipoDocumento: f.tipoDocumento
         };
       });
-    }
-    return getFattureFromYearData(data, month);
+    return [...legacyRows, ...wizardRows];
   }
 
   // Id lookup per posizione nel tab Fatture (raggruppato per issuedMonth).
@@ -111,14 +122,13 @@
 
   function setFatturaImporto(month, idx, val) {
     const imp = parseFloat(val) || 0;
-    let id = _getFatturaIdAt(month, idx);
-    if (!id && window.FattureStorico) {
-      // No existing row — create a new legacy-migrated entry on first write
-      addFattura(month);
-      id = _getFatturaIdAt(month, idx);
-    }
+    const id = _getFatturaIdAt(month, idx);
     if (!id) {
-      // Fallback: legacy store
+      // Vista mensile "Incassi manuali": scrive SOLO nel legacy store data.fatture[M].
+      // Niente più auto-creazione di fatture sintetiche in fattureEmesse (bug F1
+      // fix 2026-05-06: prima questa stessa funzione promuoveva un incasso a
+      // fattura `pagata` con numero progressivo, generando fatture-ghost nello
+      // storico — irregolarità ai sensi art. 21 DPR 633/72).
       if (!data.fatture[month]) data.fatture[month] = [{ importo: 0, pagMese: null, pagAnno: null, desc: '' }];
       if (data.fatture[month][idx] === undefined) data.fatture[month][idx] = { importo: 0, pagMese: null, pagAnno: null, desc: '' };
       data.fatture[month][idx].importo = imp;
@@ -174,52 +184,12 @@
   }
 
   function addFattura(month) {
-    if (window.FattureStorico) {
-      const list = _getFattureEmesse(currentProfile);
-      const prog = window.FattureStorico.nextProgressivo(currentYear, list);
-      const pad = n => String(n).padStart(2, '0');
-      const newFatt = {
-        id: 'fat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
-        numero: window.FattureStorico.formatNumero(currentYear, prog),
-        anno: currentYear,
-        annoProgressivo: currentYear,
-        progressivo: prog,
-        data: `${currentYear}-${pad(month)}-01`,
-        clienteId: '',
-        clienteSnapshot: null,
-        righe: [{ descrizione: '', quantita: 1, prezzoUnitario: 0, iva: 0 }],
-        contributoIntegrativo: 0,
-        marcaDaBollo: false,
-        bolloAddebitato: false,
-        note: '',
-        modalitaPagamento: '',
-        scadenzaPagamento: '',
-        incassata: false,
-        dataIncasso: '',
-        issuedMonth: month,
-        issuedYear: currentYear,
-        stato: 'pagata',
-        tipoDocumento: 'TD01',
-        dataInvioSdi: null,
-        dataPagamento: null,
-        fatturaOriginaleId: null,
-        ritenuta: 0,
-        aliquotaRitenuta: 0,
-        tipoRitenuta: '',
-        causaleRitenuta: '',
-        ncIds: [],
-        ncTotaleImporto: 0,
-        pagMese: month,
-        pagAnno: currentYear,
-        origine: 'legacy-migrated'
-      };
-      list.unshift(newFatt);
-      _saveFattureEmesse(currentProfile, list);
-    } else {
-      if (!data.fatture[month]) data.fatture[month] = [];
-      data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
-      saveData();
-    }
+    // F1 fix 2026-05-06: aggiunge una riga SOLO nel legacy store data.fatture[M].
+    // Per creare una fattura vera (con numerazione, cliente, ecc.) usare il
+    // wizard "+ Nuova fattura" che chiama openFatturaModal/saveFatturaDraft.
+    if (!data.fatture[month]) data.fatture[month] = [];
+    data.fatture[month].push({ importo: 0, pagMese: null, pagAnno: null, desc: '' });
+    saveData();
     recalcAll();
   }
 
