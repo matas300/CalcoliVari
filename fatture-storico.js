@@ -70,6 +70,22 @@
     return a + '/' + String(p).padStart(3, '0');
   }
 
+  // resolveDisplayNumero: formato visualizzato per UI/PDF/storico.
+  // Per fatture con progressivo > 0 → "YYYY/NNN" via formatNumero.
+  // Per fatture migrate (legacy-migrated, progressivo: 0) o senza numerazione →
+  // ricade su inv.numero salvato (em-dash per migrate) o placeholder "—".
+  // Bug fixato: prima il render usava formatNumero(anno, 0) che ritornava
+  // YYYY/001 per via di Number(0) || 1 → tutte le fatture migrate apparivano
+  // con lo stesso numero (irregolarità ai sensi art. 21 DPR 633/72).
+  function resolveDisplayNumero(inv) {
+    if (!inv || typeof inv !== 'object') return '—';
+    var p = Number(inv.progressivo);
+    if (Number.isFinite(p) && p > 0) {
+      return formatNumero(inv.annoProgressivo, p);
+    }
+    return inv.numero || '—';
+  }
+
   function getCurrentProfile() {
     return (typeof window.getProfile === 'function')
       ? window.getProfile()
@@ -378,6 +394,7 @@
     save,
     nextProgressivo,
     formatNumero,
+    resolveDisplayNumero,
     storageKey,
     renderStorico,
     renderAnnoFilter,

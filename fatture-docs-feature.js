@@ -456,9 +456,9 @@
           else if (cliente) clienteDataLine = cliente;
           else if (dataDoc) clienteDataLine = dataDoc;
           else clienteDataLine = '—';
-          const numero = window.FattureStorico
-            ? window.FattureStorico.formatNumero(inv.annoProgressivo, inv.progressivo)
-            : (inv.annoProgressivo + '/' + inv.progressivo);
+          const numero = (window.FattureStorico && window.FattureStorico.resolveDisplayNumero)
+            ? window.FattureStorico.resolveDisplayNumero(inv)
+            : (inv.numero || '—');
           const statoCorrente = inv.stato || 'bozza';
           const isBozza = statoCorrente === 'bozza';
           const isInviata = statoCorrente === 'inviata';

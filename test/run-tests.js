@@ -120,6 +120,7 @@ require('./fatture-validators.test.js');
 require('./fatture-state-machine.test.js');
 require('./fatture-xml-helpers.test.js');
 require('./accantonamento-bugfix.test.js');
+require('./fatture-storico-display-numero.test.js');
 require('./app-bootstrap.test.js');
 
 Promise.all(asyncQueue).then(function () {
