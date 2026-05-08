@@ -10,12 +10,17 @@
   // ────────────────────────────────────────────────────────────────────────────────
   // Render: Clienti
   // ────────────────────────────────────────────────────────────────────────────────
-  function renderClienteTableRow(cliente) {
+  function renderClienteTableRow(cliente, defaultId) {
     const id = escapeHtml(cliente.id);
     const nome = escapeHtml(cliente.nome || 'Senza nome');
     const piva = escapeHtml(cliente.partitaIva || '—');
     const citta = escapeHtml(cliente.citta || '—');
+    const isDefault = cliente.id === defaultId;
+    const starClass = isDefault ? 'cliente-star is-default' : 'cliente-star';
+    const starTitle = isDefault ? 'Cliente di default — clicca per togliere' : 'Imposta come cliente di default per nuove fatture';
+    const starGlyph = isDefault ? '★' : '☆';
     return `<div class="clienti-table-row" data-client-id="${id}" onclick="openClienteModal('${id}')">
+      <button type="button" class="${starClass}" title="${starTitle}" aria-label="${starTitle}" aria-pressed="${isDefault}" onclick="event.stopPropagation(); toggleClienteDefault('${id}')">${starGlyph}</button>
       <div class="nome">${nome}</div>
       <div class="piva">${piva}</div>
       <div class="citta">${citta}</div>
@@ -51,14 +56,16 @@
       h += `<div class="clienti-empty">${list.length === 0 ? 'Nessun cliente salvato. Crea il primo per usarlo nelle fatture.' : 'Nessun cliente corrisponde al filtro corrente.'}</div>`;
     } else {
       h += `<div class="clienti-table">`;
+      const defaultId = typeof getClienteDefaultId === 'function' ? getClienteDefaultId() : '';
       h += `<div class="clienti-table-header">
+        <div></div>
         <div>Nome</div>
         <div>P.IVA</div>
         <div>Citta</div>
         <div></div>
       </div>`;
       for (const cliente of filtered) {
-        h += renderClienteTableRow(cliente);
+        h += renderClienteTableRow(cliente, defaultId);
       }
       h += `</div>`;
     }

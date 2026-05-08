@@ -308,7 +308,10 @@
     const year = parseDateParts(issueDate)?.year || currentYear;
     const nextNumero = getNextInvoiceNumberForYear(year);
     const clienteList = typeof getClienti === 'function' ? getClienti() : [];
-    const firstCliente = clienteList[0] || null;
+    const defaultId = typeof getClienteDefaultId === 'function' ? getClienteDefaultId() : '';
+    const firstCliente = (defaultId && clienteList.find(c => c.id === defaultId))
+      || clienteList[0]
+      || null;
     return normalizeFatturaEmessa({
       id: `fatt_${Date.now().toString(36)}`,
       numero: `${nextNumero}/${year}`,

@@ -76,6 +76,40 @@
     return normalized;
   }
 
+  // ─── Cliente di default (pre-selezionato nel wizard nuova fattura) ───
+  function _clienteDefaultIdKey(profile = currentProfile) {
+    return `calcoliPIVA_${profile || 'default'}_clienteDefaultId`;
+  }
+  function getClienteDefaultId(profile = currentProfile) {
+    if (!profile) return '';
+    const raw = localStorage.getItem(_clienteDefaultIdKey(profile));
+    if (!raw) return '';
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'string' ? parsed : '';
+    } catch {
+      return typeof raw === 'string' ? raw : '';
+    }
+  }
+  function setClienteDefaultId(id, profile = currentProfile) {
+    if (!profile) return;
+    const value = String(id || '');
+    if (value) {
+      localStorage.setItem(_clienteDefaultIdKey(profile), JSON.stringify(value));
+    } else {
+      localStorage.removeItem(_clienteDefaultIdKey(profile));
+    }
+    if (profile === currentProfile && typeof syncProfileMetaToCloud === 'function') {
+      syncProfileMetaToCloud(profile);
+    }
+  }
+  function toggleClienteDefault(id) {
+    if (!id) return;
+    const current = getClienteDefaultId();
+    setClienteDefaultId(current === id ? '' : id);
+    if (typeof renderClienti === 'function') renderClienti();
+  }
+
   function setClientiSearch(value) {
     clientiUiState.search = String(value || '');
     renderClienti();
@@ -1219,6 +1253,9 @@
     window.normalizeCliente = normalizeCliente;
     window.getClienti = getClienti;
     window.saveClienti = saveClienti;
+    window.getClienteDefaultId = getClienteDefaultId;
+    window.setClienteDefaultId = setClienteDefaultId;
+    window.toggleClienteDefault = toggleClienteDefault;
     window.setClientiSearch = setClientiSearch;
     window.addCliente = addCliente;
     window.openClienteModal = openClienteModal;
