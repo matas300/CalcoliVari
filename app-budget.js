@@ -147,6 +147,7 @@
     h += `</select>`;
 
     // Show current base info
+    const tasseMensili = base.lordo > 0 ? base.lordo - base.netto : 0;
     if (base.month) {
       h += `<span style="font-size:.82rem;color:var(--text2)">
         ${MONTHS_SHORT[base.month-1]} ${base.year}: ${fmt(base.lordo)} lordo
@@ -159,8 +160,10 @@
 
     h += `</div></div>`;
 
-    h += `<div style="margin:16px 0 12px;font-size:.88rem;color:var(--text2)">
-      Netto mensile: <b style="color:var(--green)">${fmt(nettoMensile)}</b></div>`;
+    h += `<div style="margin:16px 0 12px;font-size:.88rem;color:var(--text2);display:flex;flex-wrap:wrap;gap:18px;align-items:baseline">
+      <span>Netto mensile: <b style="color:var(--green)">${fmt(nettoMensile)}</b></span>
+      ${base.lordo > 0 ? `<span>Tasse + contributi da accantonare: <b style="color:var(--color-warning,#f0a020)">${fmt(tasseMensili)}</b> <span style="font-size:.72rem;color:var(--text2)">(${fmtPct(base.rate)} di ${fmt(base.lordo)})</span></span>` : ''}
+    </div>`;
 
     h += `<div class="budget-header"><span>Voce</span><span>Importo mensile (€)</span><span>%</span><span style="text-align:center;font-size:.65rem">Auto</span><span></span></div>`;
 
