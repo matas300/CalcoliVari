@@ -154,7 +154,7 @@
   function _buildRow(f, profile) {
     const tr = document.createElement('tr');
     const cells = [
-      f.numero || '\u2014',
+      resolveDisplayNumero(f),
       _formatDate(f.data),
       (f.clienteSnapshot && (f.clienteSnapshot.denominazione || (f.clienteSnapshot.nome + ' ' + (f.clienteSnapshot.cognome || '')).trim())) || '\u2014',
       _formatEur(_calcTotale(f)),

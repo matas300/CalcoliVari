@@ -39,6 +39,13 @@
     if (m) return { progressivo: parseInt(m[1], 10), anno: parseInt(m[2], 10) };
     m = s.match(/(\d{4})\s*\/\s*(\d+)$/);
     if (m) return { anno: parseInt(m[1], 10), progressivo: parseInt(m[2], 10) };
+    // Caso "intero puro" (es. <Numero>1</Numero>): progressivo dal numero,
+    // anno verrà preso dalla data del documento. Evita progressivo=0 e
+    // collisioni di display (vedi bug Peru 2026-05-08: 3 fatture con numero
+    // "1"/"2"/"3" venivano viste come "2026/001" identico per il fallback
+    // resolveDisplayNumero).
+    m = s.match(/^\d+$/);
+    if (m) return { progressivo: parseInt(s, 10), anno: 0 };
     return { progressivo: 0, anno: 0 };
   }
 
