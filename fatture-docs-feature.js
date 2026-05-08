@@ -557,6 +557,7 @@
           '<div class="fatture-card-title">Fatture ' + year + '</div>' +
           '<div class="fatture-card-actions">' +
             '<button type="button" class="btn btn-ghost" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">Archivio</button>' +
+            '<button type="button" class="btn btn-ghost" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
             '<button type="button" class="btn btn-ghost" onclick="document.getElementById(\'inputImportXmlNuove\').click()" title="Importa XML FatturaPA">📄 Importa XML</button>' +
             '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
@@ -1008,6 +1009,15 @@
       draft.clienteId = value;
       const cliente = typeof getClienteById === 'function' ? getClienteById(value) : null;
       draft.clienteSnapshot = cliente;
+      // Auto-fill descrizione prima riga con descrizioneStandard del cliente,
+      // solo se la prima riga è vuota (non sovrascrivi mai testo già digitato).
+      if (cliente && cliente.descrizioneStandard) {
+        if (!Array.isArray(draft.righe) || draft.righe.length === 0) {
+          draft.righe = [{ descrizione: cliente.descrizioneStandard, quantita: 1, prezzoUnitario: 0, iva: 0 }];
+        } else if (!draft.righe[0].descrizione || !String(draft.righe[0].descrizione).trim()) {
+          draft.righe[0].descrizione = cliente.descrizioneStandard;
+        }
+      }
     } else if (field === 'incassata') {
       draft.incassata = !!value;
       const incEl = document.getElementById('fatturaDataIncasso');

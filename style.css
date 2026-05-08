@@ -5248,6 +5248,7 @@ html[data-theme="light"] .dich-conto-estero {
 .fatture-table-head {
   display: flex;
   align-items: center;
+  gap: 4px;
   padding: 6px 12px;
   font-size: 10px;
   color: var(--color-text-muted);

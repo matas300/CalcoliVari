@@ -125,6 +125,7 @@ require('./fatture-legacy-wipe.test.js');
 require('./fatture-firebase-strip-backup.test.js');
 require('./fatture-quick-paid-inline.test.js');
 require('./fatture-import-xml-numero-puro.test.js');
+require('./cliente-descrizione-standard.test.js');
 require('./app-bootstrap.test.js');
 
 Promise.all(asyncQueue).then(function () {

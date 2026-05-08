@@ -49,6 +49,7 @@
       citta: normalizeClienteField(item.citta),
       provincia: normalizeClienteField(item.provincia).toUpperCase(),
       nazione: normalizeClienteField(item.nazione, 'IT').toUpperCase() || 'IT',
+      descrizioneStandard: normalizeClienteField(item.descrizioneStandard),
       note: normalizeClienteField(item.note)
     };
   }
@@ -212,7 +213,16 @@
         <hr>
 
         <div class="cliente-section">
-          <div class="cliente-section-label">Note</div>
+          <div class="cliente-section-label">Riga predefinita fattura</div>
+          <div class="cliente-field">
+            <label>Descrizione standard (riempie automaticamente la prima riga del wizard nuova fattura)</label>
+            <textarea rows="2" placeholder="Es. Consulenza informatica mese corrente" ${on('descrizioneStandard')}>${esc(cliente.descrizioneStandard)}</textarea>
+          </div>
+        </div>
+        <hr>
+
+        <div class="cliente-section">
+          <div class="cliente-section-label">Note interne</div>
           <div class="cliente-field">
             <textarea rows="3" ${on('note')}>${esc(cliente.note)}</textarea>
           </div>
