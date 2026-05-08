@@ -915,7 +915,7 @@ function recalcAll() {
   renderCalcolo();
   renderRiepilogo();
   renderCalendar();
-  renderFatture();
+  if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
   renderAccantonamento();
   renderScadenziario();
   renderBudget();

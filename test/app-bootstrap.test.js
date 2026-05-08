@@ -79,7 +79,7 @@ describe('app bootstrap (jsdom)', function () {
           var win = dom.window;
           var required = [
             'recalcAll', 'loadData', 'saveData', 'loadYearData', 'saveYearData',
-            'renderCalcolo', 'renderRiepilogo', 'renderCalendar', 'renderFatture',
+            'renderCalcolo', 'renderRiepilogo', 'renderCalendar', 'renderFattureDocsSection',
             'renderAccantonamento', 'renderScadenziario', 'renderBudget', 'renderClienti',
             'switchToTab', 'changeYear', 'doLogin', 'S', 'getProfileFiscalData'
           ];

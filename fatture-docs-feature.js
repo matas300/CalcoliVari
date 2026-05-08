@@ -415,6 +415,16 @@
     renderFattureDocsSection();
   }
 
+  // Format ISO date YYYY-MM-DD → DD/MM (anno corrente) o DD/MM/YY (cross-year).
+  function _formatDataIso(iso, currentYearNum) {
+    if (!iso) return '—';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '—';
+    const [, y, mo, d] = m;
+    if (Number(y) === currentYearNum) return `${d}/${mo}`;
+    return `${d}/${mo}/${y.slice(2)}`;
+  }
+
   function renderFattureDocsSection() {
     const el = document.getElementById('fattureDocsContent');
     if (!el) return;
@@ -436,47 +446,79 @@
     const escHtml = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+    const headerHtml =
+      '<div class="fatture-table-head">' +
+        '<span class="ft-num">Numero</span>' +
+        '<span class="ft-cliente">Cliente</span>' +
+        '<span class="ft-emessa">Emessa</span>' +
+        '<span class="ft-incassata">Incassata</span>' +
+        '<span class="ft-importo">Importo</span>' +
+        '<span class="ft-stato">Stato</span>' +
+        '<span class="ft-azione">Azione</span>' +
+      '</div>';
+
     const rowsHtml = filtered.length === 0
       ? '<div class="fatture-empty">Nessuna fattura per il filtro selezionato.</div>'
       : filtered.map(inv => {
-          const badgeClass = inv.stato || 'bozza';
-          const badgeLabel = (inv.stato || 'bozza').toUpperCase();
+          const statoCorrente = inv.stato || 'bozza';
+          const isBozza = statoCorrente === 'bozza';
+          const isInviata = statoCorrente === 'inviata';
+          const isPagata = statoCorrente === 'pagata';
+          const isNC = inv.tipoDocumento === 'TD04';
+
+          const numero = (window.FattureStorico && window.FattureStorico.resolveDisplayNumero)
+            ? window.FattureStorico.resolveDisplayNumero(inv)
+            : (inv.numero || '—');
+
           const snap = inv.clienteSnapshot || {};
           const clienteRaw = snap.denominazione
             || [snap.nome, snap.cognome].filter(Boolean).join(' ')
             || snap.nome
             || inv.cessionarioRagione
             || '';
-          const cliente = clienteRaw ? escHtml(clienteRaw) : '';
-          const dataDoc = inv.data
-            ? new Date(inv.data).toLocaleDateString('it-IT')
-            : (inv.dataDocumento ? new Date(inv.dataDocumento).toLocaleDateString('it-IT') : '');
-          let clienteDataLine;
-          if (cliente && dataDoc) clienteDataLine = cliente + ' — ' + dataDoc;
-          else if (cliente) clienteDataLine = cliente;
-          else if (dataDoc) clienteDataLine = dataDoc;
-          else clienteDataLine = '—';
-          const numero = (window.FattureStorico && window.FattureStorico.resolveDisplayNumero)
-            ? window.FattureStorico.resolveDisplayNumero(inv)
-            : (inv.numero || '—');
-          const statoCorrente = inv.stato || 'bozza';
-          const isBozza = statoCorrente === 'bozza';
-          const isInviata = statoCorrente === 'inviata';
-          let rowActions = '';
-          if (isBozza) {
-            rowActions = '<button type="button" class="fatture-row-action" title="Segna come inviata" onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come inviata">✉</button>' +
-              '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza" onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Elimina bozza">×</button>';
-          } else if (isInviata) {
-            rowActions = '<button type="button" class="fatture-row-action" title="Segna come pagata" onclick="event.stopPropagation(); window.quickMarkPagataFromCard && window.quickMarkPagataFromCard(\'' + escHtml(inv.id) + '\')" aria-label="Segna come pagata">€</button>';
+          const cliente = clienteRaw
+            ? escHtml(clienteRaw)
+            : (isBozza ? '<span class="muted">(non assegnato)</span>' : '—');
+
+          const dataEmessa = _formatDataIso(inv.data || inv.dataDocumento || '', year);
+
+          let dataIncassataCellHtml;
+          const dataPagIso = inv.dataPagamento || '';
+          if (isPagata && dataPagIso) {
+            dataIncassataCellHtml = '<span class="ft-data-paid">' + escHtml(_formatDataIso(dataPagIso, year)) + '</span>';
+          } else {
+            dataIncassataCellHtml = '<span class="ft-data-empty">—</span>';
           }
+
+          const totLordo = inv.totaleDocument || 0;
+          const importoCellClass = isNC ? 'ft-importo ft-importo-nc' : 'ft-importo';
+          const badgeLabel = statoCorrente.toUpperCase();
+          const badgeClass = 'fatture-badge ' + statoCorrente;
+
+          let azioneHtml = '<span class="ft-no-action">—</span>';
+          if (isBozza) {
+            azioneHtml =
+              '<button type="button" class="fatture-row-action" title="Segna inviata"' +
+                ' onclick="event.stopPropagation(); window.quickMarkInviataFromCard && window.quickMarkInviataFromCard(\'' + escHtml(inv.id) + '\')"' +
+                ' aria-label="Segna inviata">✉</button>' +
+              '<button type="button" class="fatture-row-action is-danger" title="Elimina bozza"' +
+                ' onclick="event.stopPropagation(); window.quickDeleteBozzaFromCard && window.quickDeleteBozzaFromCard(\'' + escHtml(inv.id) + '\')"' +
+                ' aria-label="Elimina bozza">×</button>';
+          } else if (isInviata) {
+            azioneHtml =
+              '<button type="button" class="fatture-row-action ft-action-pay" title="Segna pagata"' +
+                ' onclick="event.stopPropagation(); window.quickMarkPagataInlineFromCard && window.quickMarkPagataInlineFromCard(\'' + escHtml(inv.id) + '\')"' +
+                ' aria-label="Segna pagata">€</button>';
+          }
+
           return '<div class="fatture-row" data-id="' + escHtml(inv.id) + '" role="button" tabindex="0">' +
-            '<div class="fatture-num">' + escHtml(numero) + '</div>' +
-            '<div class="fatture-client">' + clienteDataLine + '</div>' +
-            '<div class="fatture-amount">' + fmtEur(inv.totaleDocument || 0) + '</div>' +
-            '<div class="fatture-row-end">' +
-              '<span class="fatture-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>' +
-              rowActions +
-            '</div>' +
+            '<span class="ft-num">' + escHtml(numero) + '</span>' +
+            '<span class="ft-cliente">' + cliente + '</span>' +
+            '<span class="ft-emessa ft-data">' + escHtml(dataEmessa) + '</span>' +
+            '<span class="ft-incassata ft-data" data-cell="incassata">' + dataIncassataCellHtml + '</span>' +
+            '<span class="' + importoCellClass + '">' + (isNC ? '−' : '') + fmtEur(Math.abs(totLordo)) + '</span>' +
+            '<span class="ft-stato"><span class="' + badgeClass + '">' + escHtml(badgeLabel) + '</span></span>' +
+            '<span class="ft-azione">' + azioneHtml + '</span>' +
           '</div>';
         }).join('');
 
@@ -484,11 +526,9 @@
       ? '<div class="fatture-summary">' + nInviate + ' da incassare · ' + fmtEur(totInviate) + '<span class="muted"> su ' + cTutte + ' emesse quest\'anno</span></div>'
       : '';
 
-    // F4: banner cross-year a dicembre (replicato anche qui per visibilità)
     const crossYearBannerHtml = (typeof window !== 'undefined' && typeof window.buildCrossYearReminderBannerHtml === 'function')
       ? (window.buildCrossYearReminderBannerHtml() || '') : '';
 
-    // F1: banner conservazione AdE — visibile finché l'utente non conferma l'adesione
     const ackedConservation = (typeof isAdeConservationAcknowledged === 'function')
       ? isAdeConservationAcknowledged() : true;
     const conservationBanner = ackedConservation ? '' :
@@ -496,9 +536,20 @@
       + '<div style="flex:1;min-width:200px"><strong>Conservazione AdE 15 anni</strong> — gratis, una sola volta. Senza adesione AdE conserva le fatture solo 2 anni e poi le cancella (rischio reale in caso di accertamento).</div>'
       + '<div style="display:flex;gap:8px;flex-shrink:0">'
       + '<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="window.showAdeConservationGuide && window.showAdeConservationGuide()">Come aderire</button>'
-      + '<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="window.acknowledgeAdeConservation && window.acknowledgeAdeConservation()" title="Ho già aderito o non voglio essere ricordato">Già fatto</button>'
+      + '<button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="window.acknowledgeAdeConservation && window.acknowledgeAdeConservation()" title="Ho già aderito">Già fatto</button>'
       + '</div>'
       + '</div>';
+
+    // Progress fatturato (era in incassoSection — ora integrato qui)
+    const lim = (typeof S === 'function' && S().limiteForfettario) || 85000;
+    const totFatturato = sumTotali(all.filter(i => (i.stato || 'bozza') !== 'bozza'));
+    const pct = lim > 0 ? Math.min(totFatturato / lim * 100, 100) : 0;
+    const progressColor = pct > 90 ? '#e53935' : (pct > 70 ? '#f0a020' : '#3c8f91');
+    const progressHtml =
+      '<div class="fatture-progress">' +
+        '<div class="fatture-progress-row"><span>Fatturato ' + year + '</span><span class="fatture-progress-amount">' + fmtEur(totFatturato) + ' / ' + fmtEur(lim) + '</span></div>' +
+        '<div class="fatture-progress-bar"><div class="fatture-progress-fill" style="width:' + pct.toFixed(1) + '%;background:' + progressColor + '"></div></div>' +
+      '</div>';
 
     const markup =
       '<div class="fatture-card">' +
@@ -506,9 +557,8 @@
           '<div class="fatture-card-title">Fatture ' + year + '</div>' +
           '<div class="fatture-card-actions">' +
             '<button type="button" class="btn btn-ghost" onclick="window.openArchivioFatture && window.openArchivioFatture()" title="Archivio fatture (tutti gli anni)">Archivio</button>' +
-            '<button type="button" class="btn btn-ghost" onclick="openFatturaDaCalendarioPicker()" title="Fattura mensile da calendario">+ Da calendario</button>' +
-            '<button type="button" class="btn btn-ghost" onclick="document.getElementById(\'inputImportXmlNuove\').click()" title="Importa fatture XML FatturaPA (stato: inviata)">📄 Importa da XML</button>' +
-          '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
+            '<button type="button" class="btn btn-ghost" onclick="document.getElementById(\'inputImportXmlNuove\').click()" title="Importa XML FatturaPA">📄 Importa XML</button>' +
+            '<button type="button" class="btn btn-primary" onclick="openFatturaModal()">+ Nuova fattura</button>' +
           '</div>' +
         '</div>' +
         summaryHtml +
@@ -520,13 +570,15 @@
           '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='pagata') + '" onclick="window.setFattureFilter(\'pagata\')">Pagate (' + cPagate + ')</button>' +
           '<button type="button" role="tab" class="fatture-filter-btn" aria-selected="' + (stato==='bozza') + '" onclick="window.setFattureFilter(\'bozza\')">Bozze (' + cBozze + ')</button>' +
         '</div>' +
-        '<div class="fatture-list">' + rowsHtml + '</div>' +
+        '<div class="fatture-list">' + headerHtml + rowsHtml + '</div>' +
+        progressHtml +
       '</div>';
 
     el['inner' + 'HTML'] = markup;
 
     el.querySelectorAll('.fatture-row').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.fatture-pagata-inline-form')) return;
         const id = row.getAttribute('data-id');
         if (typeof openFatturaModal === 'function') openFatturaModal(id);
       });
@@ -2752,9 +2804,96 @@ ${dettaglioLinee.join('\n')}
     if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
     if (typeof recalcAll === 'function') recalcAll();
   }
+  function quickMarkPagataInlineFromCard(id) {
+    const safeId = String(id || '').replace(/"/g, '\\"');
+    const row = document.querySelector('.fatture-row[data-id="' + safeId + '"]');
+    if (!row) return;
+    const cell = row.querySelector('span[data-cell="incassata"]');
+    if (!cell) return;
+    if (cell.querySelector('.fatture-pagata-inline-form')) return;
+
+    const today = (typeof todayIso === 'function')
+      ? todayIso()
+      : new Date().toISOString().slice(0, 10);
+
+    while (cell.firstChild) cell.removeChild(cell.firstChild);
+
+    const wrapper = document.createElement('span');
+    wrapper.className = 'fatture-pagata-inline-form';
+
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.className = 'ft-date-input';
+    input.value = today;
+
+    const btnOk = document.createElement('button');
+    btnOk.type = 'button';
+    btnOk.className = 'ft-btn-ok';
+    btnOk.title = 'Conferma';
+    btnOk.textContent = 'OK';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'ft-btn-cancel';
+    btnCancel.title = 'Annulla';
+    btnCancel.textContent = '×';
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(btnOk);
+    wrapper.appendChild(btnCancel);
+    cell.appendChild(wrapper);
+
+    function close() {
+      while (cell.firstChild) cell.removeChild(cell.firstChild);
+      const empty = document.createElement('span');
+      empty.className = 'ft-data-empty';
+      empty.textContent = '—';
+      cell.appendChild(empty);
+    }
+
+    function commit() {
+      const isoDate = input.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+        input.style.borderColor = '#e53935';
+        return;
+      }
+      const profile = AppContext.getProfile();
+      if (!profile) return;
+      const store = window.FattureStorico || { load: loadFattureEmesse, save: saveFattureEmesse };
+      const all = store.load(profile);
+      const idx = all.findIndex(f => f.id === id);
+      if (idx < 0) return;
+      if ((all[idx].stato || 'bozza') !== 'inviata') return;
+      if (window.FattureStateMachine) {
+        window.FattureStateMachine.markPagata(all[idx], { date: isoDate });
+      } else {
+        const d = new Date(isoDate + 'T00:00:00');
+        all[idx].stato = 'pagata';
+        all[idx].dataPagamento = isoDate;
+        all[idx].pagMese = d.getMonth() + 1;
+        all[idx].pagAnno = d.getFullYear();
+      }
+      store.save(profile, all);
+      if (typeof renderFattureDocsSection === 'function') renderFattureDocsSection();
+      if (typeof recalcAll === 'function') recalcAll();
+    }
+
+    btnOk.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
+    btnCancel.addEventListener('click', (e) => { e.stopPropagation(); close(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+    [input, btnOk, btnCancel].forEach(node => {
+      node.addEventListener('click', (e) => e.stopPropagation());
+    });
+    setTimeout(() => input.focus(), 0);
+  }
+
   window.quickMarkInviataFromCard = quickMarkInviataFromCard;
   window.quickDeleteBozzaFromCard = quickDeleteBozzaFromCard;
   window.quickMarkPagataFromCard = quickMarkPagataFromCard;
+  window.quickMarkPagataInlineFromCard = quickMarkPagataInlineFromCard;
 
   if (currentProfile && document.getElementById('fattureDocsContent')) renderFattureDocsSection();
 
