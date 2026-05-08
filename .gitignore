@@ -5,4 +5,5 @@ node_modules/
 _download_extracted.txt
 .claude/worktrees/
 .codex-temp/
+.superpowers/
 backup/*.json
