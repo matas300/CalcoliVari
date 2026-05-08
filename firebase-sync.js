@@ -53,9 +53,17 @@ async function initFirebase() {
 }
 
 // Clean data for Firestore: strip undefined values (Firestore rejects them)
+// e campi locali-only (es. _fattureManualeWipedBackup è grosso e sensibile,
+// non va sincronizzato cross-device — resta nel localStorage del device che
+// ha eseguito il wipe come safety net).
 function cleanForFirestore(obj) {
-  return JSON.parse(JSON.stringify(obj));
+  const cloned = JSON.parse(JSON.stringify(obj));
+  if (cloned && typeof cloned === 'object' && '_fattureManualeWipedBackup' in cloned) {
+    delete cloned._fattureManualeWipedBackup;
+  }
+  return cloned;
 }
+if (typeof window !== 'undefined') window.cleanForFirestore = cleanForFirestore;
 
 function isNumericYearSuffix(value) {
   const normalized = String(value || '').trim();
