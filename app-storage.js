@@ -694,6 +694,21 @@
     out.settings.inpsCategoria = getInpsCategory(out.settings);
     syncOfficialInpsValues(out.settings, targetYear);
     migrateFattureFor(out);
+
+    // Wipe one-time del legacy data.fatture[m] (vecchia tabella mensile rimossa).
+    // I dati validi sono in fattureEmesse (wizard + XML import). Backup conservato
+    // localmente per safety; non syncato su Firebase (vedi cleanForFirestore).
+    if (!out._fattureManualeWiped) {
+      const hasLegacyEntries = out.fatture && Object.keys(out.fatture).some(k =>
+        Array.isArray(out.fatture[k]) && out.fatture[k].length > 0
+      );
+      if (hasLegacyEntries) {
+        out._fattureManualeWipedBackup = JSON.parse(JSON.stringify(out.fatture));
+        out.fatture = {};
+        out._fattureManualeWiped = new Date().toISOString();
+      }
+    }
+
     if (!out.settings.anagrafica) out.settings.anagrafica = {
       codiceFiscale: '', cognome: '', nome: '', sesso: '', dataNascita: '',
       comuneNascita: '', provNascita: '',
