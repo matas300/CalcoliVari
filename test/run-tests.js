@@ -123,6 +123,7 @@ require('./accantonamento-bugfix.test.js');
 require('./fatture-storico-display-numero.test.js');
 require('./fatture-legacy-wipe.test.js');
 require('./fatture-firebase-strip-backup.test.js');
+require('./fatture-quick-paid-inline.test.js');
 require('./app-bootstrap.test.js');
 
 Promise.all(asyncQueue).then(function () {
